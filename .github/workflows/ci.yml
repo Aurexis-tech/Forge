@@ -1,0 +1,67 @@
+# Aurexis Forge — CI
+#
+# Runs the verification layer on every push and pull request. The test
+# suite is hermetic (tests/setup.ts stamps placeholder secrets and
+# replaces real fetch with a throwing vi.fn), so this workflow needs
+# NO secrets configured on the repo to pass.
+#
+# Pinned to major action versions; superseded runs cancel via the
+# concurrency group; npm dependency cache lives at the setup-node step.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Cancel an in-flight CI run on the same ref when a newer commit lands —
+# saves CI minutes and keeps the latest commit's result authoritative.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck-and-test:
+    name: typecheck + test
+    runs-on: ubuntu-latest
+
+    # Explicit shell so PowerShell defaults on hosted runners can't sneak
+    # in if the runner image ever changes.
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Default Node 20 LTS — the project pins no `engines` or
+          # `.nvmrc`, and 20 is the current Active LTS line that the
+          # Next.js 14.2.x + Vitest 2.x toolchain supports cleanly.
+          node-version: '20'
+          # Reads package-lock.json automatically to key the cache.
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+        # The hermetic setup in tests/setup.ts stamps placeholder env
+        # vars (ANTHROPIC_API_KEY, E2B_API_KEY, Supabase URL+keys,
+        # APP_ENC_KEY) and replaces globalThis.fetch with a throwing
+        # vi.fn, so we deliberately pass NO env / secrets here.
+
+      # NOTE: a `lint` script exists in package.json (`next lint`) but
+      # the repo has no ESLint config yet, so `next lint` prompts
+      # interactively on first run and would hang CI. Enable this step
+      # after adding an .eslintrc / eslint.config.js:
+      #
+      # - name: Lint
+      #   run: npm run lint

@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* SVG flag icons (used in the currency picker on /governance). Renders the
+   same on Windows, Mac, and Linux — emoji flags do not. */
+@import 'flag-icons/css/flag-icons.min.css';
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #05060a;
+  color: #e7ecf3;
+  min-height: 100%;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle scanline / grain overlay so the dark backdrop never feels flat. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(
+      circle at 50% -10%,
+      rgba(255, 154, 77, 0.06),
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 90% 110%,
+      rgba(79, 212, 240, 0.05),
+      transparent 50%
+    );
+  mix-blend-mode: screen;
+}
+
+/* Focus ring tuned to the brand palette. */
+:focus-visible {
+  outline: 2px solid #ff9a4d;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* --- Landing-page motion ---------------------------------------------
+   Used by the public marketing hero (components/landing). Long-period,
+   gentle motion that the prefers-reduced-motion override above cancels
+   automatically. */
+
+@keyframes forge-aurora-a {
+  0%   { transform: translate3d(0,    0,   0) scale(1); }
+  100% { transform: translate3d(6%, -4%, 0) scale(1.05); }
+}
+@keyframes forge-aurora-b {
+  0%   { transform: translate3d(0,   0,   0) scale(1); }
+  100% { transform: translate3d(-4%, 5%, 0) scale(1.08); }
+}
+
+/* The ignition flare on hero demo completion. The hero applies this
+   class to a fixed overlay; it triggers a single bright pulse + fade. */
+@keyframes forge-ignition {
+  0%   { opacity: 0;   filter: blur(0px); }
+  18%  { opacity: 0.9; filter: blur(28px); }
+  100% { opacity: 0;   filter: blur(40px); }
+}
+.forge-ignition-active {
+  animation: forge-ignition 1500ms ease-out forwards;
+}
+
+/* Soft scale-in on the live-agent card materialisation. */
+@keyframes forge-card-rise {
+  0%   { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.97); }
+  100% { opacity: 1; transform: translate3d(0,  0px, 0) scale(1.00); }
+}
+.forge-card-rise {
+  animation: forge-card-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Breathing pulse for the WebGL-off molten glow. Scale-only so it
+   composites cheaply on the GPU; the parallax translate sits on the
+   same element via `transform: translate3d(...)` and is preserved by
+   running `scale` here on a separate animation channel through the
+   `transform: ... scale(...)` notation inside the keyframe. */
+@keyframes forge-breathe {
+  0%, 100% {
+    transform:
+      translate3d(calc(-50% + var(--parallax-x, 0px)), calc(-50% + var(--parallax-y, 0px)), 0)
+      scale(0.97);
+  }
+  50% {
+    transform:
+      translate3d(calc(-50% + var(--parallax-x, 0px)), calc(-50% + var(--parallax-y, 0px)), 0)
+      scale(1.04);
+  }
+}
+.forge-breathe {
+  animation: forge-breathe 6200ms ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* CSS ember — rises from below the core, sways horizontally, fades
+   out near the top. The seeds in components/landing/CssEmbers.tsx
+   stagger each ember's start so the ring looks alive without
+   thundering. Uses CSS custom properties (--ember-sway, --ember-lift)
+   that the component sets per-ember. */
+@keyframes forge-css-ember {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.8);
+  }
+  12% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 0.85;
+    transform: translate3d(var(--ember-sway, 0px), calc(var(--ember-lift, 30vmin) * -1), 0) scale(0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(var(--ember-sway, 0px) * 0.6), calc(var(--ember-lift, 30vmin) * -1.05), 0) scale(0.5);
+  }
+}
+.forge-css-ember {
+  animation-name: forge-css-ember;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+  will-change: transform, opacity;
+}

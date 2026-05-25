@@ -1,0 +1,36 @@
+# dependencies
+node_modules
+.pnp
+.pnp.js
+
+# next
+.next
+out
+build
+dist
+
+# env
+.env
+.env*.local
+.env.local
+.env.development.local
+.env.production.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# editor
+.vscode
+.idea
+.DS_Store
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts.bak
+
+# Claude Code — local-only settings (per-user permission allowlist).
+# `.claude/settings.json` (without .local) is fine to commit if a shared
+# team config is added later; this rule only excludes the local override.
+.claude/settings.local.json
