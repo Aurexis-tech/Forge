@@ -36,6 +36,20 @@ import { GenerateOrchestrationPanel } from '@/components/system/GenerateOrchestr
 import { ReviewOrchestrationPanel } from '@/components/system/ReviewOrchestrationPanel';
 import { OrchestrationPlanSchema } from '@/lib/engine/system/planner/schema';
 import { SystemSpecSchema } from '@/lib/engine/system/spec';
+import { SoftwareConfirmedPanel } from '@/components/software/SoftwareConfirmedPanel';
+import { SoftwareReviewPanel } from '@/components/software/SoftwareReviewPanel';
+import { ApprovedSoftwarePlanPanel } from '@/components/software/ApprovedSoftwarePlanPanel';
+import { GenerateSoftwarePlanPanel } from '@/components/software/GenerateSoftwarePlanPanel';
+import { ReviewSoftwarePlanPanel } from '@/components/software/ReviewSoftwarePlanPanel';
+import { SoftwareBuildPlanSchema } from '@/lib/engine/software/planner/schema';
+import { SoftwareSpecSchema } from '@/lib/engine/software/spec';
+import { InfraConfirmedPanel } from '@/components/infra/InfraConfirmedPanel';
+import { InfraReviewPanel } from '@/components/infra/InfraReviewPanel';
+import { ApprovedInfraPlanPanel } from '@/components/infra/ApprovedInfraPlanPanel';
+import { GenerateInfraPlanPanel } from '@/components/infra/GenerateInfraPlanPanel';
+import { ReviewInfraPlanPanel } from '@/components/infra/ReviewInfraPlanPanel';
+import { ProvisioningPlanSchema } from '@/lib/engine/infra/planner/schema';
+import { InfraSpecSchema } from '@/lib/engine/infra/spec';
 import { requireProjectOwnership, requireUser } from '@/lib/auth';
 import { deriveJourney } from '@/lib/journey';
 import { getProjectSpend } from '@/lib/engine/governance/ledger';
@@ -337,23 +351,32 @@ export default async function ProjectDetailPage({
       <SpecArea projectId={project.id} spec={spec} />
 
       {/*
-        Phase 2 (Systems) gate: the AGENT planner / build / push /
-        deploy / runtime panels are AgentSpec-only. SystemSpec gets its
-        own orchestration-plan area below, and stops there for now —
-        build/sandbox/deploy/runtime for systems land in a later phase.
-        The planner persistence also refuses to load a system spec
-        server-side as defence in depth (see lib/engine/planner/
-        persistence.ts and lib/engine/system/planner/persistence.ts).
+        Phase 2/3/4 gates: the AGENT planner / build / push / deploy /
+        runtime panels are AgentSpec-only. SystemSpec gets its own
+        orchestration-plan area below; SoftwareSpec gets its own
+        build-plan area; InfraSpec (Phase 4) gets its own provisioning-
+        plan area and STOPS after approval — generation, preview, and
+        provisioning stay closed for kind='infrastructure'. The three
+        sibling planner persistences refuse a confirmed infrastructure
+        spec with 409 as defence in depth.
       */}
       {spec?.status === 'confirmed' && spec.kind === 'system' ? (
         <SystemPlanArea projectId={project.id} plan={plan} />
       ) : null}
 
-      {spec?.status === 'confirmed' && spec.kind !== 'system' ? (
+      {spec?.status === 'confirmed' && spec.kind === 'software' ? (
+        <SoftwarePlanArea projectId={project.id} plan={plan} />
+      ) : null}
+
+      {spec?.status === 'confirmed' && spec.kind === 'infrastructure' ? (
+        <InfraPlanArea projectId={project.id} plan={plan} />
+      ) : null}
+
+      {spec?.status === 'confirmed' && spec.kind === 'agent' ? (
         <PlanArea projectId={project.id} plan={plan} />
       ) : null}
 
-      {plan?.status === 'approved' && spec?.kind !== 'system' ? (
+      {plan?.status === 'approved' && spec?.kind === 'agent' ? (
         <BuildArea projectId={project.id} build={build} files={files} />
       ) : null}
 
@@ -503,10 +526,37 @@ function SpecArea({
     }
 
     case 'awaiting_review': {
-      // Phase 2: branch on the spec's `kind` discriminator. System
-      // specs render the SystemReviewPanel (which knows about
-      // sub-agents and coordination); agents continue to render the
-      // unchanged AgentSpec review.
+      // Phase 2/3/4: branch on the spec's `kind` discriminator. Each
+      // kind has its own review panel + schema; agents continue to
+      // render the unchanged AgentSpec review.
+      if (spec.kind === 'infrastructure') {
+        const parsedInfra = InfraSpecSchema.safeParse(spec.structured_spec);
+        if (!parsedInfra.success) {
+          return (
+            <GenerateSpecPanel
+              projectId={projectId}
+              failedMessage="Saved infrastructure spec failed validation. Re-run extraction."
+            />
+          );
+        }
+        return (
+          <InfraReviewPanel projectId={projectId} spec={parsedInfra.data} />
+        );
+      }
+      if (spec.kind === 'software') {
+        const parsedSw = SoftwareSpecSchema.safeParse(spec.structured_spec);
+        if (!parsedSw.success) {
+          return (
+            <GenerateSpecPanel
+              projectId={projectId}
+              failedMessage="Saved software spec failed validation. Re-run extraction."
+            />
+          );
+        }
+        return (
+          <SoftwareReviewPanel projectId={projectId} spec={parsedSw.data} />
+        );
+      }
       if (spec.kind === 'system') {
         const parsedSys = SystemSpecSchema.safeParse(spec.structured_spec);
         if (!parsedSys.success) {
@@ -534,6 +584,32 @@ function SpecArea({
     }
 
     case 'confirmed': {
+      if (spec.kind === 'infrastructure') {
+        const parsedInfra = InfraSpecSchema.safeParse(spec.structured_spec);
+        if (!parsedInfra.success) {
+          return (
+            <GlassPanel className="border-dashed">
+              <p className="text-sm text-rose-300">
+                Confirmed infrastructure spec failed validation against the current schema.
+              </p>
+            </GlassPanel>
+          );
+        }
+        return <InfraConfirmedPanel spec={parsedInfra.data} />;
+      }
+      if (spec.kind === 'software') {
+        const parsedSw = SoftwareSpecSchema.safeParse(spec.structured_spec);
+        if (!parsedSw.success) {
+          return (
+            <GlassPanel className="border-dashed">
+              <p className="text-sm text-rose-300">
+                Confirmed software spec failed validation against the current schema.
+              </p>
+            </GlassPanel>
+          );
+        }
+        return <SoftwareConfirmedPanel spec={parsedSw.data} />;
+      }
       if (spec.kind === 'system') {
         const parsedSys = SystemSpecSchema.safeParse(spec.structured_spec);
         if (!parsedSys.success) {
@@ -641,6 +717,159 @@ function SystemPlanArea({
 
     default:
       return <GenerateOrchestrationPanel projectId={projectId} />;
+  }
+}
+
+// Phase 3: software build-plan area. Mirrors SystemPlanArea — routes
+// to the /software/plan/* endpoints and renders the
+// SoftwareBuildPlanView. Only invoked when spec.kind === 'software'.
+function SoftwarePlanArea({
+  projectId,
+  plan,
+}: {
+  projectId: string;
+  plan: Plan | null;
+}) {
+  const isSoftwarePlan = !plan || plan.kind === 'software';
+
+  if (!plan || plan.status === 'pending' || !isSoftwarePlan) {
+    return <GenerateSoftwarePlanPanel projectId={projectId} />;
+  }
+
+  switch (plan.status) {
+    case 'planning':
+      return (
+        <GlassPanel>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-cyan shadow-cyan" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-cyan">
+              planning…
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Deriving the schema / API / UI / auth task graph and grounding it
+            against the template. Refresh if it stalls.
+          </p>
+        </GlassPanel>
+      );
+
+    case 'failed':
+      return (
+        <GenerateSoftwarePlanPanel
+          projectId={projectId}
+          failedMessage="The previous build-plan attempt failed. You can retry."
+        />
+      );
+
+    case 'awaiting_review': {
+      const parsed = SoftwareBuildPlanSchema.safeParse(plan.plan);
+      if (!parsed.success) {
+        return (
+          <GenerateSoftwarePlanPanel
+            projectId={projectId}
+            failedMessage="Saved software build plan failed validation. Re-run planning."
+          />
+        );
+      }
+      return (
+        <ReviewSoftwarePlanPanel projectId={projectId} plan={parsed.data} />
+      );
+    }
+
+    case 'approved': {
+      const parsed = SoftwareBuildPlanSchema.safeParse(plan.plan);
+      if (!parsed.success) {
+        return (
+          <GlassPanel className="border-dashed">
+            <p className="text-sm text-rose-300">
+              Approved software build plan failed validation against the current schema.
+            </p>
+          </GlassPanel>
+        );
+      }
+      return <ApprovedSoftwarePlanPanel plan={parsed.data} />;
+    }
+
+    default:
+      return <GenerateSoftwarePlanPanel projectId={projectId} />;
+  }
+}
+
+// Phase 4: infrastructure provisioning-plan area. Mirrors
+// SoftwarePlanArea — routes to the /infra/plan/* endpoints and renders
+// the ProvisioningPlanView. Only invoked when spec.kind ===
+// 'infrastructure'. Infrastructure STOPS after approval — there's no
+// downstream generation / preview / provisioning panel for this kind.
+function InfraPlanArea({
+  projectId,
+  plan,
+}: {
+  projectId: string;
+  plan: Plan | null;
+}) {
+  const isInfraPlan = !plan || plan.kind === 'infrastructure';
+
+  if (!plan || plan.status === 'pending' || !isInfraPlan) {
+    return <GenerateInfraPlanPanel projectId={projectId} />;
+  }
+
+  switch (plan.status) {
+    case 'planning':
+      return (
+        <GlassPanel>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-cyan shadow-cyan" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-cyan">
+              composing modules…
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Deriving the network → data → compute → observability provisioning
+            DAG and grounding it against the closed module catalog. Refresh if
+            it stalls.
+          </p>
+        </GlassPanel>
+      );
+
+    case 'failed':
+      return (
+        <GenerateInfraPlanPanel
+          projectId={projectId}
+          failedMessage="The previous provisioning-plan attempt failed. You can retry."
+        />
+      );
+
+    case 'awaiting_review': {
+      const parsed = ProvisioningPlanSchema.safeParse(plan.plan);
+      if (!parsed.success) {
+        return (
+          <GenerateInfraPlanPanel
+            projectId={projectId}
+            failedMessage="Saved provisioning plan failed validation. Re-run planning."
+          />
+        );
+      }
+      return (
+        <ReviewInfraPlanPanel projectId={projectId} plan={parsed.data} />
+      );
+    }
+
+    case 'approved': {
+      const parsed = ProvisioningPlanSchema.safeParse(plan.plan);
+      if (!parsed.success) {
+        return (
+          <GlassPanel className="border-dashed">
+            <p className="text-sm text-rose-300">
+              Approved provisioning plan failed validation against the current schema.
+            </p>
+          </GlassPanel>
+        );
+      }
+      return <ApprovedInfraPlanPanel plan={parsed.data} />;
+    }
+
+    default:
+      return <GenerateInfraPlanPanel projectId={projectId} />;
   }
 }
 

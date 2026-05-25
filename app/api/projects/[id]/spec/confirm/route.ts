@@ -5,6 +5,10 @@ import { loadLatestSpec, confirmSpec } from '@/lib/engine/spec/persistence';
 import { AgentSpecSchema } from '@/lib/engine/spec/schema';
 import { confirmSystemSpec } from '@/lib/engine/system/persistence';
 import { SystemSpecSchema } from '@/lib/engine/system/spec';
+import { confirmSoftwareSpec } from '@/lib/engine/software/persistence';
+import { SoftwareSpecSchema } from '@/lib/engine/software/spec';
+import { confirmInfraSpec } from '@/lib/engine/infra/persistence';
+import { InfraSpecSchema } from '@/lib/engine/infra/spec';
 
 export const runtime = 'nodejs';
 
@@ -34,9 +38,59 @@ export async function POST(_req: Request, { params }: RouteContext) {
     );
   }
 
-  // Phase 2: branch on the spec's `kind` discriminator. Each kind has
-  // its own Zod schema + confirm helper; the state machine itself
+  // Phase 2/3/4: branch on the spec's `kind` discriminator. Each kind
+  // has its own Zod schema + confirm helper; the state machine itself
   // (pending → ... → confirmed) is shared.
+  if (spec.kind === 'infrastructure') {
+    const validation = InfraSpecSchema.safeParse(spec.structured_spec);
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          error: 'stored InfraSpec no longer matches the current schema',
+          detail: validation.error.issues.slice(0, 4),
+        },
+        { status: 422 },
+      );
+    }
+    try {
+      const confirmed = await confirmInfraSpec(supabase, spec);
+      return NextResponse.json({
+        status: 'confirmed',
+        kind: 'infrastructure',
+        spec: confirmed,
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'failed to confirm infrastructure spec';
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  if (spec.kind === 'software') {
+    const validation = SoftwareSpecSchema.safeParse(spec.structured_spec);
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          error: 'stored SoftwareSpec no longer matches the current schema',
+          detail: validation.error.issues.slice(0, 4),
+        },
+        { status: 422 },
+      );
+    }
+    try {
+      const confirmed = await confirmSoftwareSpec(supabase, spec);
+      return NextResponse.json({
+        status: 'confirmed',
+        kind: 'software',
+        spec: confirmed,
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'failed to confirm software spec';
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
   if (spec.kind === 'system') {
     const validation = SystemSpecSchema.safeParse(spec.structured_spec);
     if (!validation.success) {

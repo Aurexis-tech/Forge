@@ -1,32 +1,32 @@
-// DB helpers for the Phase 2 orchestration planner. Same shape as
-// lib/engine/planner/persistence.ts; both modules write into the SAME
-// `plans` table distinguished by the `kind` discriminator added in
-// supabase/migrations/0013_system_plans.sql.
+// DB helpers for the Phase 3 software planner. Same shape as
+// lib/engine/system/planner/persistence.ts; all three planners write
+// into the SAME `plans` table distinguished by the `kind` column
+// (extended in supabase/migrations/0015_software_plans.sql to include
+// 'software').
 
 import type { LLMUsage } from '@/lib/engine/llm';
 import type { ForgeSupabase } from '@/lib/supabase';
 import type { Plan, PlanFeedback, Project, Spec } from '@/lib/types';
-import { SystemSpecSchema, type SystemSpec } from '../spec';
+import { SoftwareSpecSchema, type SoftwareSpec } from '../spec';
 import {
-  OrchestrationPlanSchema,
-  type OrchestrationPlan,
+  SoftwareBuildPlanSchema,
+  type SoftwareBuildPlan,
 } from './schema';
-import { summariseOrchestrationPlan } from './plan';
+import { summariseSoftwareBuildPlan } from './plan';
 
-export interface ProjectAndConfirmedSystemSpec {
+export interface ProjectAndConfirmedSoftwareSpec {
   project: Project;
   spec: Spec;
-  parsedSpec: SystemSpec;
+  parsedSpec: SoftwareSpec;
 }
 
-// Mirror of the agent planner's loadProjectWithConfirmedSpec — same
-// fail-shape, but validates the confirmed spec against the SystemSpec
-// schema and rejects 'agent' kinds so the system planner can't be
-// pointed at an AgentSpec by mistake.
-export async function loadProjectWithConfirmedSystemSpec(
+// Mirror of the agent + system planners' "load confirmed spec" guard.
+// Rejects misroutes with a clear 409 so a /software/plan/* route can't
+// be pointed at an agent or system project by mistake.
+export async function loadProjectWithConfirmedSoftwareSpec(
   supabase: ForgeSupabase,
   projectId: string,
-): Promise<ProjectAndConfirmedSystemSpec | { error: string; status: number }> {
+): Promise<ProjectAndConfirmedSoftwareSpec | { error: string; status: number }> {
   const { data: project, error: projErr } = await supabase
     .from('projects')
     .select('*')
@@ -50,10 +50,17 @@ export async function loadProjectWithConfirmedSystemSpec(
       status: 409,
     };
   }
-  if (spec.kind === 'software') {
+  if (spec.kind === 'agent') {
     return {
       error:
-        "this project's spec is a SoftwareSpec (Phase 3). Software is review-only in this phase — code generation is not implemented yet.",
+        "this project's spec is an AgentSpec (Phase 1). Use /api/projects/[id]/plan for agent plans.",
+      status: 409,
+    };
+  }
+  if (spec.kind === 'system') {
+    return {
+      error:
+        "this project's spec is a SystemSpec (Phase 2). Use /api/projects/[id]/system/plan for system plans.",
       status: 409,
     };
   }
@@ -64,18 +71,17 @@ export async function loadProjectWithConfirmedSystemSpec(
       status: 409,
     };
   }
-  if (spec.kind !== 'system') {
+  if (spec.kind !== 'software') {
     return {
-      error:
-        "this project's spec is an AgentSpec (Phase 1). Use /api/projects/[id]/plan for agent plans.",
+      error: "unsupported spec kind '" + spec.kind + "'",
       status: 409,
     };
   }
 
-  const parsed = SystemSpecSchema.safeParse(spec.structured_spec);
+  const parsed = SoftwareSpecSchema.safeParse(spec.structured_spec);
   if (!parsed.success) {
     return {
-      error: 'stored SystemSpec no longer matches the current schema',
+      error: 'stored SoftwareSpec no longer matches the current schema',
       status: 422,
     };
   }
@@ -83,11 +89,8 @@ export async function loadProjectWithConfirmedSystemSpec(
   return { project: project as Project, spec, parsedSpec: parsed.data };
 }
 
-// Latest plan row scoped to kind='system'. Phase 1's loadLatestPlan
-// stays unchanged; the system path uses this explicitly so a stray
-// agent plan row (impossible by current code paths, but cheap to be
-// defensive about) can't slip into the system flow.
-export async function loadLatestSystemPlan(
+// Latest plan row scoped to kind='software'.
+export async function loadLatestSoftwarePlan(
   supabase: ForgeSupabase,
   projectId: string,
 ): Promise<Plan | null> {
@@ -95,7 +98,7 @@ export async function loadLatestSystemPlan(
     .from('plans')
     .select('*')
     .eq('project_id', projectId)
-    .eq('kind', 'system')
+    .eq('kind', 'software')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -103,17 +106,12 @@ export async function loadLatestSystemPlan(
   return (data as Plan | null) ?? null;
 }
 
-// Reuse the latest plan row when it's safe (pending / failed /
-// awaiting_review / planning), otherwise insert a fresh one. Matches
-// the Phase 1 planner's ensurePlanRow semantics; the only difference
-// is that we set kind='system' on insert so the discriminator stays
-// honest.
-export async function ensureSystemPlanRow(
+export async function ensureSoftwarePlanRow(
   supabase: ForgeSupabase,
   projectId: string,
   specId: string,
 ): Promise<Plan> {
-  const existing = await loadLatestSystemPlan(supabase, projectId);
+  const existing = await loadLatestSoftwarePlan(supabase, projectId);
   if (
     existing &&
     existing.spec_id === specId &&
@@ -129,29 +127,29 @@ export async function ensureSystemPlanRow(
     .insert({
       project_id: projectId,
       spec_id: specId,
-      kind: 'system',
+      kind: 'software',
       status: 'pending',
     })
     .select('*')
     .single();
   if (error || !data) {
-    throw error ?? new Error('failed to create system plan row');
+    throw error ?? new Error('failed to create software plan row');
   }
   return data as Plan;
 }
 
-export async function markSystemPlanPlanning(
+export async function markSoftwarePlanPlanning(
   supabase: ForgeSupabase,
   planId: string,
 ): Promise<void> {
   await supabase.from('plans').update({ status: 'planning' }).eq('id', planId);
 }
 
-interface PersistSystemPlanArgs {
+interface PersistSoftwarePlanArgs {
   supabase: ForgeSupabase;
   planId: string;
   projectId: string;
-  plan: OrchestrationPlan;
+  plan: SoftwareBuildPlan;
   usage: LLMUsage;
   model: string;
   attempts: number;
@@ -159,15 +157,15 @@ interface PersistSystemPlanArgs {
   source: 'generate' | 'refine';
 }
 
-export async function persistSystemPlanResult(
-  args: PersistSystemPlanArgs,
+export async function persistSoftwarePlanResult(
+  args: PersistSoftwarePlanArgs,
 ): Promise<{ status: 'awaiting_review' }> {
   const { error } = await args.supabase
     .from('plans')
     .update({
       plan: args.plan as unknown as Plan['plan'],
       feedback: (args.feedback ?? null) as unknown as Plan['feedback'],
-      kind: 'system',
+      kind: 'software',
       status: 'awaiting_review',
     })
     .eq('id', args.planId);
@@ -175,21 +173,21 @@ export async function persistSystemPlanResult(
 
   await args.supabase.from('audit_log').insert({
     project_id: args.projectId,
-    action: 'system.plan_generated',
-    actor: 'engine.system.planner',
+    action: 'software.plan_generated',
+    actor: 'engine.software.planner',
     detail: {
       source: args.source,
       attempts: args.attempts,
       model: args.model,
       usage: args.usage,
-      ...summariseOrchestrationPlan(args.plan),
+      ...summariseSoftwareBuildPlan(args.plan),
     },
   });
 
   return { status: 'awaiting_review' };
 }
 
-export async function markSystemPlanFailed(
+export async function markSoftwarePlanFailed(
   supabase: ForgeSupabase,
   planId: string,
   projectId: string,
@@ -198,19 +196,19 @@ export async function markSystemPlanFailed(
   await supabase.from('plans').update({ status: 'failed' }).eq('id', planId);
   await supabase.from('audit_log').insert({
     project_id: projectId,
-    action: 'system.plan_failed',
-    actor: 'engine.system.planner',
+    action: 'software.plan_failed',
+    actor: 'engine.software.planner',
     detail: { message },
   });
 }
 
-export async function approveSystemPlan(
+export async function approveSoftwarePlan(
   supabase: ForgeSupabase,
   planRow: Plan,
-): Promise<OrchestrationPlan> {
-  const parsed = OrchestrationPlanSchema.safeParse(planRow.plan);
+): Promise<SoftwareBuildPlan> {
+  const parsed = SoftwareBuildPlanSchema.safeParse(planRow.plan);
   if (!parsed.success) {
-    throw new Error('stored OrchestrationPlan no longer matches the current schema');
+    throw new Error('stored SoftwareBuildPlan no longer matches the current schema');
   }
   const { error: planErr } = await supabase
     .from('plans')
@@ -218,10 +216,9 @@ export async function approveSystemPlan(
     .eq('id', planRow.id);
   if (planErr) throw planErr;
 
-  // Mirror the Phase 1 approve: bump the project status so the page
-  // header reflects "plan approved". Build / deploy / runtime stay
-  // gated behind kind==='system' in the UI + the planner's defence-in-
-  // depth guards.
+  // Bump the project status so the page header reflects "plan
+  // approved". Generation / sandbox / deploy / runtime stay closed
+  // for kind='software' — both planner loaders 409 anything past this.
   const { error: projErr } = await supabase
     .from('projects')
     .update({ status: 'plan_approved' })
@@ -230,18 +227,18 @@ export async function approveSystemPlan(
 
   await supabase.from('audit_log').insert({
     project_id: planRow.project_id,
-    action: 'system.plan_approved',
+    action: 'software.plan_approved',
     actor: 'user',
     detail: {
       plan_id: planRow.id,
-      ...summariseOrchestrationPlan(parsed.data),
+      ...summariseSoftwareBuildPlan(parsed.data),
     },
   });
 
   return parsed.data;
 }
 
-export function mergeSystemPlanFeedback(
+export function mergeSoftwarePlanFeedback(
   existing: PlanFeedback | null | undefined,
   incoming: PlanFeedback,
 ): PlanFeedback {

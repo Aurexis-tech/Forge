@@ -10,6 +10,16 @@ import {
   SystemExtractionError,
 } from '@/lib/engine/system/extract';
 import { persistSystemExtractionResult } from '@/lib/engine/system/persistence';
+import {
+  extractSoftwareSpec,
+  SoftwareExtractionError,
+} from '@/lib/engine/software/extract';
+import { persistSoftwareExtractionResult } from '@/lib/engine/software/persistence';
+import {
+  extractInfraSpec,
+  InfraExtractionError,
+} from '@/lib/engine/infra/extract';
+import { persistInfraExtractionResult } from '@/lib/engine/infra/persistence';
 import { LLMError } from '@/lib/engine/llm';
 import {
   loadLatestSpec,
@@ -77,8 +87,60 @@ export async function POST(req: Request, { params }: RouteContext) {
   try {
     await markSpecExtracting(supabase, spec.id);
 
-    // Phase 2: branch on the spec's `kind` discriminator. A refine never
-    // re-classifies — the kind is sticky from generate-time.
+    // Phase 2/3/4: branch on the spec's `kind` discriminator. A refine
+    // never re-classifies — the kind is sticky from generate-time.
+    if (spec.kind === 'infrastructure') {
+      const { result, usage, model, attempts } = await extractInfraSpec({
+        governance: { user_id: user.id, project_id: projectId, ref: 'infra.refine' },
+        rawPrompt: spec.raw_prompt,
+        answers: merged.answers,
+        refinements: merged.refinements,
+      });
+      const { status } = await persistInfraExtractionResult({
+        supabase,
+        specId: spec.id,
+        projectId,
+        result,
+        usage,
+        model,
+        attempts,
+        feedback: merged,
+        source: 'refine',
+      });
+      return NextResponse.json({
+        status,
+        kind: 'infrastructure',
+        spec: result.spec,
+        open_questions: result.open_questions,
+      });
+    }
+
+    if (spec.kind === 'software') {
+      const { result, usage, model, attempts } = await extractSoftwareSpec({
+        governance: { user_id: user.id, project_id: projectId, ref: 'software.refine' },
+        rawPrompt: spec.raw_prompt,
+        answers: merged.answers,
+        refinements: merged.refinements,
+      });
+      const { status } = await persistSoftwareExtractionResult({
+        supabase,
+        specId: spec.id,
+        projectId,
+        result,
+        usage,
+        model,
+        attempts,
+        feedback: merged,
+        source: 'refine',
+      });
+      return NextResponse.json({
+        status,
+        kind: 'software',
+        spec: result.spec,
+        open_questions: result.open_questions,
+      });
+    }
+
     if (spec.kind === 'system') {
       const { result, usage, model, attempts } = await extractSystemSpec({
         governance: { user_id: user.id, project_id: projectId, ref: 'system.refine' },
@@ -149,6 +211,8 @@ export async function POST(req: Request, { params }: RouteContext) {
 function describeError(err: unknown): string {
   if (err instanceof SpecExtractionError) return err.message;
   if (err instanceof SystemExtractionError) return err.message;
+  if (err instanceof SoftwareExtractionError) return err.message;
+  if (err instanceof InfraExtractionError) return err.message;
   if (err instanceof LLMError) return `LLM error: ${err.message}`;
   if (err instanceof Error) return err.message;
   return 'unknown spec extraction error';

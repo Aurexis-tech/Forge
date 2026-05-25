@@ -12,10 +12,15 @@ export type Json =
 
 export type ProjectStatus = 'draft' | 'planning' | 'building' | 'ready' | 'failed';
 
-// Phase 2 (Systems) discriminator. Persisted on both `projects` and `specs`
-// rows; tells the engine which Zod schema applies to `specs.structured_spec`.
-// Defaults to 'agent' for every existing row.
-export type ProjectKind = 'agent' | 'system';
+// Project-kind discriminator, persisted on both `projects` and `specs`
+// rows. Tells the engine which Zod schema applies to
+// `specs.structured_spec` and which downstream paths are gated.
+//   - 'agent'          — Phase 1: single-agent AgentSpec, full build pipeline.
+//   - 'system'         — Phase 2: multi-agent SystemSpec, intake + planning.
+//   - 'software'       — Phase 3: SoftwareSpec, intake-only.
+//   - 'infrastructure' — Phase 4: InfraSpec, intake-only (review-only this phase).
+// Defaults to 'agent' for every row that predates Phase 2/3/4.
+export type ProjectKind = 'agent' | 'system' | 'software' | 'infrastructure';
 
 export interface Project {
   id: string;

@@ -36,6 +36,16 @@ import {
   SystemExtractionError,
 } from '@/lib/engine/system/extract';
 import { persistSystemExtractionResult } from '@/lib/engine/system/persistence';
+import {
+  extractSoftwareSpec,
+  SoftwareExtractionError,
+} from '@/lib/engine/software/extract';
+import { persistSoftwareExtractionResult } from '@/lib/engine/software/persistence';
+import {
+  extractInfraSpec,
+  InfraExtractionError,
+} from '@/lib/engine/infra/extract';
+import { persistInfraExtractionResult } from '@/lib/engine/infra/persistence';
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -104,6 +114,12 @@ export async function POST(req: Request, { params }: RouteContext) {
       } else if (spec.kind === 'system') {
         kind = 'system';
         ch.log("kind sticky from prior pass: 'system'");
+      } else if (spec.kind === 'software') {
+        kind = 'software';
+        ch.log("kind sticky from prior pass: 'software'");
+      } else if (spec.kind === 'infrastructure') {
+        kind = 'infrastructure';
+        ch.log("kind sticky from prior pass: 'infrastructure'");
       } else if (spec.kind === 'agent' && spec.structured_spec) {
         kind = 'agent';
         ch.log("kind sticky from prior pass: 'agent'");
@@ -131,8 +147,102 @@ export async function POST(req: Request, { params }: RouteContext) {
       ch.phase('pass1', 'started');
       ch.log(
         'asking the planner-grade model for a draft ' +
-          (kind === 'system' ? 'SystemSpec' : 'AgentSpec'),
+          (kind === 'system'
+            ? 'SystemSpec'
+            : kind === 'software'
+              ? 'SoftwareSpec'
+              : kind === 'infrastructure'
+                ? 'InfraSpec'
+                : 'AgentSpec'),
       );
+
+      if (kind === 'infrastructure') {
+        const { result, usage, model, attempts } = await extractInfraSpec({
+          rawPrompt: spec.raw_prompt,
+          governance: {
+            user_id: user.id,
+            project_id: projectId,
+            ref: 'infra.generate.stream.' + spec.id,
+          },
+        });
+        ch.phase('pass1', 'ok');
+        ch.meta({
+          attempts,
+          model,
+          input_tokens: usage.input_tokens,
+          output_tokens: usage.output_tokens,
+          resources: result.spec.resources.length,
+          topology_edges: result.spec.topology.length,
+          lifecycle: result.spec.lifecycle,
+          open_questions: result.open_questions.length,
+        });
+
+        ch.phase('persist', 'started');
+        const { status } = await persistInfraExtractionResult({
+          supabase,
+          specId: spec.id,
+          projectId,
+          result,
+          usage,
+          model,
+          attempts,
+          feedback: null,
+          source: 'generate',
+          classification,
+        });
+        ch.phase('persist', 'ok');
+        ch.done({
+          status,
+          kind: 'infrastructure',
+          open_questions: result.open_questions,
+        });
+        return;
+      }
+
+      if (kind === 'software') {
+        const { result, usage, model, attempts } = await extractSoftwareSpec({
+          rawPrompt: spec.raw_prompt,
+          governance: {
+            user_id: user.id,
+            project_id: projectId,
+            ref: 'software.generate.stream.' + spec.id,
+          },
+        });
+        ch.phase('pass1', 'ok');
+        ch.meta({
+          attempts,
+          model,
+          input_tokens: usage.input_tokens,
+          output_tokens: usage.output_tokens,
+          pages: result.spec.pages.length,
+          entities: result.spec.entities.length,
+          flows: result.spec.flows.length,
+          requires_auth: result.spec.auth.requires_auth,
+          per_user_isolation: result.spec.auth.per_user_isolation,
+          open_questions: result.open_questions.length,
+        });
+
+        ch.phase('persist', 'started');
+        const { status } = await persistSoftwareExtractionResult({
+          supabase,
+          specId: spec.id,
+          projectId,
+          result,
+          usage,
+          model,
+          attempts,
+          feedback: null,
+          source: 'generate',
+          classification,
+        });
+        ch.phase('persist', 'ok');
+        ch.done({
+          status,
+          kind: 'software',
+          open_questions: result.open_questions,
+        });
+        return;
+      }
 
       if (kind === 'system') {
         const { result, usage, model, attempts } = await extractSystemSpec({
@@ -237,6 +347,8 @@ export async function POST(req: Request, { params }: RouteContext) {
 function describeError(err: unknown): string {
   if (err instanceof SpecExtractionError) return err.message;
   if (err instanceof SystemExtractionError) return err.message;
+  if (err instanceof SoftwareExtractionError) return err.message;
+  if (err instanceof InfraExtractionError) return err.message;
   if (err instanceof LLMError) return 'LLM error: ' + err.message;
   if (err instanceof Error) return err.message;
   return 'unknown spec extraction error';

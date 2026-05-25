@@ -44,15 +44,30 @@ export async function loadProjectWithConfirmedSpec(
       status: 409,
     };
   }
-  // Phase 2 defence-in-depth: the planner only knows how to build a
-  // single AgentSpec. A SystemSpec confirms but stops here — the build
-  // pipeline for systems lands in a later phase. The UI already hides
-  // the Plan/Build/Push/Deploy/Runtime panels for kind='system', so
-  // this is a backstop for direct API callers.
+  // Phase 2/3 defence-in-depth: the planner only knows how to build a
+  // single AgentSpec. SystemSpec (Phase 2) + SoftwareSpec (Phase 3)
+  // confirm but stop here — their build pipelines land in later
+  // phases. The UI already hides the Plan/Build/Push/Deploy/Runtime
+  // panels for non-agent kinds, so these checks are a backstop for
+  // direct API callers.
   if (spec.kind === 'system') {
     return {
       error:
         "this project's spec is a SystemSpec (Phase 2). Systems are review-only in this phase — code generation is not implemented yet.",
+      status: 409,
+    };
+  }
+  if (spec.kind === 'software') {
+    return {
+      error:
+        "this project's spec is a SoftwareSpec (Phase 3). Software is review-only in this phase — code generation is not implemented yet.",
+      status: 409,
+    };
+  }
+  if (spec.kind === 'infrastructure') {
+    return {
+      error:
+        "this project's spec is an InfraSpec (Phase 4). Infrastructure is review-only in this phase — provisioning is not implemented yet.",
       status: 409,
     };
   }

@@ -25,6 +25,16 @@ import {
   SystemExtractionError,
 } from '@/lib/engine/system/extract';
 import { persistSystemExtractionResult } from '@/lib/engine/system/persistence';
+import {
+  extractSoftwareSpec,
+  SoftwareExtractionError,
+} from '@/lib/engine/software/extract';
+import { persistSoftwareExtractionResult } from '@/lib/engine/software/persistence';
+import {
+  extractInfraSpec,
+  InfraExtractionError,
+} from '@/lib/engine/infra/extract';
+import { persistInfraExtractionResult } from '@/lib/engine/infra/persistence';
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -110,13 +120,18 @@ export async function POST(req: Request, { params }: RouteContext) {
     // --- Decide kind ---------------------------------------------------
     // Order: explicit override > existing sticky kind on the spec > LLM
     // classifier. The classifier defaults to 'agent' if its output is
-    // unparseable.
+    // unparseable. With Phase 4 the classifier returns one of
+    // 'agent' | 'system' | 'software' | 'infrastructure'.
     let kind: ClassifiedKind;
     let classification = null as Awaited<ReturnType<typeof classifyIntake>> | null;
     if (overrideKind) {
       kind = overrideKind;
     } else if (spec.kind === 'system') {
       kind = 'system';
+    } else if (spec.kind === 'software') {
+      kind = 'software';
+    } else if (spec.kind === 'infrastructure') {
+      kind = 'infrastructure';
     } else if (spec.kind === 'agent' && spec.structured_spec) {
       // The user has already taken this spec down the agent path at
       // least once (there's a draft on the row). Stay on the agent path
@@ -135,6 +150,78 @@ export async function POST(req: Request, { params }: RouteContext) {
     }
 
     // --- Route to the right extractor ---------------------------------
+    if (kind === 'infrastructure') {
+      const { result, usage, model, attempts } = await extractInfraSpec({
+        rawPrompt: spec.raw_prompt,
+        governance: {
+          user_id: user.id,
+          project_id: projectId,
+          ref: 'infra.generate.' + spec.id,
+        },
+      });
+      const { status } = await persistInfraExtractionResult({
+        supabase,
+        specId: spec.id,
+        projectId,
+        result,
+        usage,
+        model,
+        attempts,
+        feedback: null,
+        source: 'generate',
+        classification,
+      });
+      return NextResponse.json({
+        status,
+        kind: 'infrastructure',
+        spec: result.spec,
+        open_questions: result.open_questions,
+        classification: classification
+          ? {
+              kind: classification.kind,
+              confidence: classification.confidence,
+              why: classification.why,
+            }
+          : null,
+      });
+    }
+
+    if (kind === 'software') {
+      const { result, usage, model, attempts } = await extractSoftwareSpec({
+        rawPrompt: spec.raw_prompt,
+        governance: {
+          user_id: user.id,
+          project_id: projectId,
+          ref: 'software.generate.' + spec.id,
+        },
+      });
+      const { status } = await persistSoftwareExtractionResult({
+        supabase,
+        specId: spec.id,
+        projectId,
+        result,
+        usage,
+        model,
+        attempts,
+        feedback: null,
+        source: 'generate',
+        classification,
+      });
+      return NextResponse.json({
+        status,
+        kind: 'software',
+        spec: result.spec,
+        open_questions: result.open_questions,
+        classification: classification
+          ? {
+              kind: classification.kind,
+              confidence: classification.confidence,
+              why: classification.why,
+            }
+          : null,
+      });
+    }
+
     if (kind === 'system') {
       const { result, usage, model, attempts } = await extractSystemSpec({
         rawPrompt: spec.raw_prompt,
@@ -227,6 +314,8 @@ export async function POST(req: Request, { params }: RouteContext) {
 function describeError(err: unknown): string {
   if (err instanceof SpecExtractionError) return err.message;
   if (err instanceof SystemExtractionError) return err.message;
+  if (err instanceof SoftwareExtractionError) return err.message;
+  if (err instanceof InfraExtractionError) return err.message;
   if (err instanceof LLMError) return 'LLM error: ' + err.message;
   if (err instanceof Error) return err.message;
   return 'unknown spec extraction error';
