@@ -1,11 +1,6 @@
 # Aurexis Forge
 
-<!--
-  CI badge. After pushing the repo, replace OWNER/REPO with your
-  GitHub slug — the badge then auto-reflects the latest run of
-  .github/workflows/ci.yml.
--->
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![CI](https://github.com/AurexisAI/Aurexis-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/AurexisAI/Aurexis-forge/actions/workflows/ci.yml)
 
 Plain-language prompt → deployed AI product.
 
