@@ -48,6 +48,34 @@ export async function loadApprovedPlanForCodegen(
     };
   }
 
+  // Defence in depth — Phase 1 codegen only handles AgentSpecs. Phase
+  // 2 systems route through /api/projects/[id]/system/build/generate,
+  // and Phase 3/4 (software/infrastructure) have no codegen path yet.
+  // Without these guards a system project would fail the AgentSpec
+  // schema check below with a confusing 422; here we surface the right
+  // path and the right reason explicitly.
+  if (spec.kind === 'system') {
+    return {
+      error:
+        "this project's spec is a SystemSpec (Phase 2). Use /api/projects/[id]/system/build/generate for system codegen.",
+      status: 409,
+    };
+  }
+  if (spec.kind === 'software') {
+    return {
+      error:
+        "this project's spec is a SoftwareSpec (Phase 3). Use /api/projects/[id]/software/build/generate for software codegen.",
+      status: 409,
+    };
+  }
+  if (spec.kind === 'infrastructure') {
+    return {
+      error:
+        "this project's spec is an InfraSpec (Phase 4). Use /api/projects/[id]/infra/build/generate for infrastructure IaC codegen.",
+      status: 409,
+    };
+  }
+
   const { data: plans } = await supabase
     .from('plans')
     .select('*')

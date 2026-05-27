@@ -128,16 +128,31 @@ export default async function ProjectsPage() {
                           {new Date(project.created_at).toLocaleString()}
                         </p>
                       </div>
-                      <span
-                        className={
-                          'shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.2em] ' +
-                          (journey.isLive
-                            ? 'border-forge-amber/60 text-forge-amber'
-                            : 'border-white/10 text-forge-dim')
-                        }
-                      >
-                        {journey.isLive ? 'live' : journey.cursor.label}
-                      </span>
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <span
+                          className={
+                            'rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.2em] ' +
+                            (journey.isLive
+                              ? 'border-forge-amber/60 text-forge-amber'
+                              : 'border-white/10 text-forge-dim')
+                          }
+                        >
+                          {journey.isLive ? 'live' : journey.cursor.label}
+                        </span>
+                        {/* Kind badge — surfaced when the project is
+                            anything other than a Phase 1 agent, so
+                            the archive reads at a glance. */}
+                        {project.kind && project.kind !== 'agent' ? (
+                          <span
+                            className={
+                              'rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.25em] ' +
+                              kindBadgeTone(project.kind)
+                            }
+                          >
+                            {project.kind}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                     <JourneyStepper journey={journey} layout="compact" />
                   </div>
@@ -149,4 +164,20 @@ export default async function ProjectsPage() {
       )}
     </section>
   );
+}
+
+// Brand-token-aware tint per project kind. Agents wear no badge
+// (covered by the journey chip); the rest are visually distinct so a
+// long archive of mixed kinds reads at a glance.
+function kindBadgeTone(kind: string): string {
+  switch (kind) {
+    case 'system':
+      return 'border-forge-cyan/40 text-forge-cyan';
+    case 'software':
+      return 'border-emerald-400/40 text-emerald-300';
+    case 'infrastructure':
+      return 'border-rose-400/40 text-rose-300';
+    default:
+      return 'border-white/10 text-forge-dim';
+  }
 }

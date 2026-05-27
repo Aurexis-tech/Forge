@@ -41,6 +41,34 @@ export async function loadGeneratedBuildForTest(
     .limit(1);
   const build = (builds?.[0] as Build | undefined) ?? null;
   if (!build) return { error: 'project has no build', status: 409 };
+  // Defence in depth — Phase 1 sandbox only handles agent builds.
+  // Phase 2 systems route through /api/projects/[id]/system/build/test,
+  // and Phase 3/4 (software/infrastructure) have no sandbox path yet.
+  // Without this guard a system build would attempt the agent smoke
+  // driver and surface a confusing import-failure error instead.
+  if (build.kind === 'system') {
+    return {
+      error:
+        "this is a system build (kind='system'). Use /api/projects/[id]/system/build/test for the system sandbox.",
+      status: 409,
+    };
+  }
+  if (build.kind === 'software') {
+    return {
+      error:
+        "this is a software build (kind='software'). Use /api/projects/[id]/software/build/test for the software sandbox.",
+      status: 409,
+    };
+  }
+  if (build.kind && build.kind !== 'agent') {
+    return {
+      error:
+        "this build has kind='" +
+        build.kind +
+        "' which has no sandbox path in this phase.",
+      status: 409,
+    };
+  }
   if (build.status !== 'generated') {
     return {
       error:

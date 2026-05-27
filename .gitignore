@@ -3,11 +3,21 @@ node_modules
 .pnp
 .pnp.js
 
-# next
+# next — root-anchored so they don't match application directories
+# named build/ (e.g. app/api/projects/[id]/build/, components/build/).
 .next
-out
-build
-dist
+/out
+/build
+/dist
+
+# terraform — defence in depth. The engine NEVER writes state to the
+# repo (it's encrypted in supabase via lib/crypto), but if a local
+# `terraform` ever lands a state file in the tree, never let it
+# accidentally end up in version control.
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
 
 # env
 .env

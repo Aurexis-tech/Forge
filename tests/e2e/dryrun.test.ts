@@ -560,6 +560,7 @@ describe('hermetic end-to-end dry-run', () => {
       env_keys: ['ANTHROPIC_API_KEY', 'RESEND_API_KEY'],
       env_encrypted: null,
       max_run_ms: 60_000,
+      kind: 'agent',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

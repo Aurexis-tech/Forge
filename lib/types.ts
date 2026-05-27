@@ -95,6 +95,37 @@ export type BuildStatus =
   | 'testing'
   | 'tested'
   | 'test_failed'
+  // Phase 3-5a: software DB provisioning lifecycle. Lives between
+  // 'tested' and (the still-locked) 'pushing' for kind='software'.
+  // The agent/system molds do not transit these states.
+  | 'provisioning'
+  | 'provisioned'
+  | 'provision_failed'
+  // Phase 4-4: infra preview lifecycle. Lives between 'generated'
+  // and (the still-locked) provision step for kind='infrastructure'.
+  // 'preview_blocked' = over-budget ceiling verdict; provisioning
+  // stays closed until the cap is raised or the spec trimmed.
+  | 'previewing'
+  | 'previewed'
+  | 'preview_blocked'
+  // Phase 4-5a: real-cloud `terraform plan` lifecycle. The first real
+  // cloud contact. 'planning' = read-only plan in flight; 'plan_confirmed'
+  // = ready-to-apply (apply is P4-5b — still NOT a write to cloud);
+  // 'plan_blocked' = real-plan cost re-check over budget OR destructive
+  // gate refused.
+  | 'planning'
+  | 'plan_confirmed'
+  | 'plan_blocked'
+  // Phase 4-5b: apply lifecycle. 'applying' = `terraform apply` in
+  // flight against real cloud (the ONLY write); 'apply_failed' = apply
+  // errored OR killswitched (partial state captured); 'destroying' =
+  // gated destroy in flight; 'destroyed' = teardown complete.
+  // 'provisioned' (already in the union from P3-5a) is the success
+  // state for infrastructure too.
+  | 'applying'
+  | 'apply_failed'
+  | 'destroying'
+  | 'destroyed'
   | 'pushing'
   | 'pushed'
   | 'push_failed'
@@ -125,6 +156,11 @@ export interface Build {
   logs: Json;
   repo_url: string | null;
   deploy_url: string | null;
+  // Phase 2: discriminator for which codegen path produced this build —
+  // 'agent' (Phase 1 single-file agent project) or 'system' (Phase 2
+  // orchestrator + per-module project). Defaults to 'agent' for every
+  // row created before Phase 2.
+  kind: ProjectKind | string;
   created_at: string;
   updated_at: string;
 }
@@ -141,7 +177,20 @@ export interface BuildFile {
   created_at: string;
 }
 
-export type ConnectionProvider = 'github' | 'vercel' | 'anthropic' | 'e2b';
+export type ConnectionProvider =
+  | 'github'
+  | 'vercel'
+  | 'anthropic'
+  | 'e2b'
+  // Phase 3-5a: the Supabase Management API token, used by the
+  // 'managed' DbProvider to create a fresh Supabase project on the
+  // user's account. Same encryption + storage shape as the other
+  // connection providers (token encrypted at rest via lib/crypto).
+  | 'supabase'
+  // Phase 4-5a: the cloud-provider credential bundle the CloudProvider
+  // seam reads when running a REAL `terraform plan`. Encrypted at
+  // rest like every other connection. NEVER returned in any response.
+  | 'cloud';
 export type ByokProvider = Extract<ConnectionProvider, 'anthropic' | 'e2b'>;
 export type KeySource = 'platform' | 'byok';
 
@@ -155,6 +204,134 @@ export interface Deployment {
   status: string | null;
   env_keys: string[];
   created_at: string;
+}
+
+// Phase 3-5a: the software DB the Forge provisioned (or connected
+// to) for a software build. The service_role_encrypted column holds
+// the only secret — AES-256-GCM ciphertext, decrypted ONLY inside
+// the server when applying the migration or generating a deploy env
+// payload. NEVER returned in any API response.
+export type SoftwareDatabaseProviderKind = 'managed' | 'byo';
+
+export interface SoftwareDatabase {
+  id: string;
+  project_id: string;
+  build_id: string;
+  provider_kind: SoftwareDatabaseProviderKind | string;
+  supabase_url: string;
+  anon_key: string;
+  service_role_encrypted: string;
+  service_role_last4: string;
+  provider_project_ref: string | null;
+  migration_applied: boolean;
+  created_at: string;
+}
+
+// Phase 4-4: a deterministic preview of what an approved infra build
+// would create, plus the cost-ceiling verdict. INERT — no terraform
+// plan, no cloud call, no credentials. The full preview JSON blob
+// lives in the `preview` column; the aggregated cost + ceiling
+// fields are denormalised for fast UI rendering.
+export type InfraCeilingVerdict =
+  | 'within_budget'
+  | 'over_budget'
+  | 'no_budget_set';
+
+export interface InfraPreview {
+  id: string;
+  project_id: string;
+  build_id: string;
+  estimated_usd_per_month: number;
+  estimated_usd_per_hour: number;
+  ceiling_verdict: InfraCeilingVerdict | string;
+  ceiling_period: 'monthly' | 'daily' | string | null;
+  ceiling_limit_usd: number | null;
+  ceiling_projected_usd: number | null;
+  preview: Json;
+  ceiling_message: string;
+  created_at: string;
+}
+
+// Phase 4-5a: the real `terraform plan` diff (read-only). Stored once
+// per gate attempt. NEVER carries raw cloud credentials or secret
+// values — the CloudProvider sanitises the diff at the boundary.
+export interface InfraPlan {
+  id: string;
+  project_id: string;
+  build_id: string;
+  plan_diff: Json;
+  destructive: boolean;
+  create_count: number;
+  change_count: number;
+  destroy_count: number;
+  ceiling_verdict: InfraCeilingVerdict | string;
+  ceiling_period: 'monthly' | 'daily' | string | null;
+  ceiling_limit_usd: number | null;
+  ceiling_projected_usd: number | null;
+  ceiling_message: string;
+  confirmed_by_user_id: string | null;
+  typed_phrase_required: string | null;
+  typed_phrase_verified: boolean;
+  confirmed_at: string | null;
+  // Phase 4-5b: the base64-encoded `terraform plan -out=...` binary
+  // file. Server-only. The apply route reads this and pipes it back
+  // into `terraform apply <file>` so what's applied is EXACTLY what
+  // the user confirmed — no drift between confirm and apply.
+  plan_artifact_b64: string | null;
+  created_at: string;
+}
+
+// Phase 4-6: a single drift-check result. INERT — derived from a
+// read-only `terraform plan` against the IaC + live cloud state.
+// No raw secrets, no terraform stdout in here; the route sanitises
+// before insert.
+export type InfraDriftVerdict = 'in_sync' | 'drifted' | 'failed';
+
+export interface InfraDriftCheck {
+  id: string;
+  project_id: string;
+  build_id: string;
+  apply_id: string;
+  verdict: InfraDriftVerdict | string;
+  create_count: number;
+  change_count: number;
+  destroy_count: number;
+  diff_summary: Json | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+// Phase 4-5b: the apply outcome. ONE row per apply attempt. The
+// encrypted terraform state lives here and NEVER leaves the server.
+export type InfraApplyStatus =
+  | 'applying'
+  | 'succeeded'
+  | 'failed'
+  | 'killswitched'
+  | 'destroying'
+  | 'destroyed';
+
+export interface InfraApply {
+  id: string;
+  project_id: string;
+  build_id: string;
+  plan_id: string;
+  status: InfraApplyStatus | string;
+  killswitched: boolean;
+  partial_state: boolean;
+  resources_added: number;
+  resources_changed: number;
+  resources_destroyed: number;
+  // ENCRYPTED — AES-256-GCM via lib/crypto. NEVER returned in any
+  // response. The sanitiser at the persistence boundary strips this
+  // before any client-bound payload.
+  state_encrypted: string | null;
+  state_present: boolean;
+  outputs_sanitised: Json;
+  billed_usd_per_month: number;
+  error_message: string | null;
+  created_at: string;
+  finished_at: string | null;
 }
 
 export interface Connection {
@@ -189,6 +366,11 @@ export interface AgentRuntime {
   max_run_ms: number;
   env_encrypted: string | null;
   env_keys: string[];
+  // Phase 2: discriminator for which runtime executor handles this row
+  // — 'agent' (Phase 1 single-agent executor) or 'system' (Phase 2
+  // orchestrator executor). Defaults to 'agent' for every row created
+  // before Phase 2.
+  kind: ProjectKind | string;
   created_at: string;
   updated_at: string;
 }
@@ -379,6 +561,51 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Deployment>;
+        Relationships: [];
+      };
+      software_databases: {
+        Row: SoftwareDatabase;
+        Insert: Omit<SoftwareDatabase, 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<SoftwareDatabase>;
+        Relationships: [];
+      };
+      infra_previews: {
+        Row: InfraPreview;
+        Insert: Omit<InfraPreview, 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<InfraPreview>;
+        Relationships: [];
+      };
+      infra_plans: {
+        Row: InfraPlan;
+        Insert: Omit<InfraPlan, 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<InfraPlan>;
+        Relationships: [];
+      };
+      infra_applies: {
+        Row: InfraApply;
+        Insert: Omit<InfraApply, 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<InfraApply>;
+        Relationships: [];
+      };
+      infra_drift_checks: {
+        Row: InfraDriftCheck;
+        Insert: Omit<InfraDriftCheck, 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<InfraDriftCheck>;
         Relationships: [];
       };
       agent_runtimes: {

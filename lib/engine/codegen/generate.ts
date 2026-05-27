@@ -137,7 +137,7 @@ export async function generateCode(args: {
   for (const target of llmTargets) {
     let oneResult;
     try {
-      oneResult = await generateOneFile({
+      oneResult = await generateOneAgentFile({
         spec,
         plan,
         toolInterface: scaffold.toolInterface,
@@ -227,8 +227,18 @@ export async function generateCode(args: {
 }
 
 // --- Per-file generation ----------------------------------------------------
+//
+// `generateOneAgentFile` is the REUSABLE seam the Phase 2 system codegen
+// reaches into. It generates EXACTLY ONE file for a (spec, plan, path)
+// triple, runs the per-file static check (esbuild parse only — never
+// executes), and offers one repair retry when the parse fails. The
+// system generator calls it once per sub-agent module, synthesising a
+// minimal AgentSpec + BuildPlan from each OrchestrationPlan node.
+//
+// Exported for reuse only. Phase 1 callers stay on `generateCode` above;
+// the helper is intentionally unchanged in behaviour.
 
-interface GenerateOneArgs {
+export interface GenerateOneAgentFileArgs {
   spec: AgentSpec;
   plan: BuildPlan;
   toolInterface: string;
@@ -242,7 +252,7 @@ interface GenerateOneArgs {
   governance: GovernanceScope;
 }
 
-interface GenerateOneOutput {
+export interface GenerateOneAgentFileOutput {
   content: string;
   usage: LLMUsage;
   model: string;
@@ -250,9 +260,9 @@ interface GenerateOneOutput {
   staticCheck: StaticCheckResult;
 }
 
-async function generateOneFile(
-  args: GenerateOneArgs,
-): Promise<GenerateOneOutput> {
+export async function generateOneAgentFile(
+  args: GenerateOneAgentFileArgs,
+): Promise<GenerateOneAgentFileOutput> {
   const userMessage = buildCodegenUserMessage({
     spec: args.spec,
     plan: args.plan,

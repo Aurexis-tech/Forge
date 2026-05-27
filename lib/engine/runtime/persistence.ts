@@ -52,6 +52,33 @@ export async function loadRuntimeContext(
   const build = (builds?.[0] as Build | undefined) ?? null;
   if (!build) return { error: 'project has no build', status: 409 };
 
+  // Defence in depth — Phase 1 runtime only handles agent builds.
+  // Phase 2 systems route through /api/projects/[id]/system/runtime/*;
+  // Phase 3 software routes through /api/projects/[id]/software/runtime/*.
+  if (build.kind === 'system') {
+    return {
+      error:
+        "this is a system build (kind='system'). Use /api/projects/[id]/system/runtime/activate for the system runtime.",
+      status: 409,
+    };
+  }
+  if (build.kind === 'software') {
+    return {
+      error:
+        "this is a software build (kind='software'). Use /api/projects/[id]/software/runtime/activate for the software go-live.",
+      status: 409,
+    };
+  }
+  if (build.kind && build.kind !== 'agent') {
+    return {
+      error:
+        "this build has kind='" +
+        build.kind +
+        "' which has no runtime path in this phase.",
+      status: 409,
+    };
+  }
+
   if (
     build.status !== 'pushed' &&
     build.status !== 'running'
@@ -223,9 +250,25 @@ export async function setBuildStatusFromRuntime(
   buildId: string,
   runtimeStatus: 'active' | 'paused' | 'stopped' | 'errored',
 ): Promise<void> {
-  // Build returns to 'pushed' only when the runtime is fully stopped.
-  // Active / paused / errored all still represent a configured runtime.
-  const buildStatus = runtimeStatus === 'stopped' ? 'pushed' : 'running';
+  // Build returns to its pre-runtime resting state only when the
+  // runtime is fully stopped. Active / paused / errored all still
+  // represent a configured runtime → build stays 'running'.
+  //
+  // Pre-runtime resting state depends on build.kind:
+  //   - 'agent'  → 'pushed'   (Phase 1 — repo pushed, awaiting activation)
+  //   - 'system' → 'deployed' (Phase 2 — system already deployed via P2-5a)
+  let buildStatus: 'running' | 'pushed' | 'deployed';
+  if (runtimeStatus !== 'stopped') {
+    buildStatus = 'running';
+  } else {
+    const { data } = await supabase
+      .from('builds')
+      .select('kind')
+      .eq('id', buildId)
+      .single();
+    const kind = (data as { kind?: string } | null)?.kind ?? 'agent';
+    buildStatus = kind === 'system' ? 'deployed' : 'pushed';
+  }
   await supabase
     .from('builds')
     .update({ status: buildStatus })

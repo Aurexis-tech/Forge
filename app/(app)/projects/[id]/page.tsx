@@ -34,6 +34,16 @@ import { SystemReviewPanel } from '@/components/spec/SystemReviewPanel';
 import { ApprovedOrchestrationPanel } from '@/components/system/ApprovedOrchestrationPanel';
 import { GenerateOrchestrationPanel } from '@/components/system/GenerateOrchestrationPanel';
 import { ReviewOrchestrationPanel } from '@/components/system/ReviewOrchestrationPanel';
+import { GenerateSystemBuildPanel } from '@/components/system/GenerateSystemBuildPanel';
+import { SystemBuildView } from '@/components/system/SystemBuildView';
+import { TestSystemBuildPanel } from '@/components/system/TestSystemBuildPanel';
+import { SystemTestView } from '@/components/system/SystemTestView';
+import { SystemGitHubPushPanel } from '@/components/system/SystemGitHubPushPanel';
+import { SystemDeployFlow } from '@/components/system/SystemDeployFlow';
+import { SystemActivateRuntimeFlow } from '@/components/system/SystemActivateRuntimeFlow';
+import { SystemRuntimePanel } from '@/components/system/SystemRuntimePanel';
+import { SystemGraphView } from '@/components/system/SystemGraphView';
+import { aggregateSystemEnvRequired } from '@/lib/engine/system/integrations/persistence';
 import { OrchestrationPlanSchema } from '@/lib/engine/system/planner/schema';
 import { SystemSpecSchema } from '@/lib/engine/system/spec';
 import { SoftwareConfirmedPanel } from '@/components/software/SoftwareConfirmedPanel';
@@ -41,6 +51,25 @@ import { SoftwareReviewPanel } from '@/components/software/SoftwareReviewPanel';
 import { ApprovedSoftwarePlanPanel } from '@/components/software/ApprovedSoftwarePlanPanel';
 import { GenerateSoftwarePlanPanel } from '@/components/software/GenerateSoftwarePlanPanel';
 import { ReviewSoftwarePlanPanel } from '@/components/software/ReviewSoftwarePlanPanel';
+import { GenerateSoftwareBuildPanel } from '@/components/software/GenerateSoftwareBuildPanel';
+import { ProvisionDbFlow } from '@/components/software/ProvisionDbFlow';
+import { ProvisionedDbPanel } from '@/components/software/ProvisionedDbPanel';
+import { SoftwareActivateRuntimeFlow } from '@/components/software/SoftwareActivateRuntimeFlow';
+import { SoftwareAppDashboard } from '@/components/software/SoftwareAppDashboard';
+import { SoftwareBuildView } from '@/components/software/SoftwareBuildView';
+import { SoftwareDeployedPanel } from '@/components/software/SoftwareDeployedPanel';
+import { SoftwareDeployFlow } from '@/components/software/SoftwareDeployFlow';
+import { SoftwareGitHubPushPanel } from '@/components/software/SoftwareGitHubPushPanel';
+import { TestSoftwareBuildPanel } from '@/components/software/TestSoftwareBuildPanel';
+import { SoftwareTestView } from '@/components/software/SoftwareTestView';
+import { loadLatestSoftwareDatabase, sanitizeDbForResponse, type PublicSoftwareDatabase } from '@/lib/engine/software/db/persistence';
+import {
+  assembleSoftwareDashboard,
+  loadSoftwareRuntimeForProject,
+  syncSoftwareRuntimeWithKillSwitch,
+  type SoftwareDashboardPayload,
+} from '@/lib/engine/software/runtime/persistence';
+import { activeKillSwitch } from '@/lib/engine/governance/killswitch';
 import { SoftwareBuildPlanSchema } from '@/lib/engine/software/planner/schema';
 import { SoftwareSpecSchema } from '@/lib/engine/software/spec';
 import { InfraConfirmedPanel } from '@/components/infra/InfraConfirmedPanel';
@@ -48,6 +77,38 @@ import { InfraReviewPanel } from '@/components/infra/InfraReviewPanel';
 import { ApprovedInfraPlanPanel } from '@/components/infra/ApprovedInfraPlanPanel';
 import { GenerateInfraPlanPanel } from '@/components/infra/GenerateInfraPlanPanel';
 import { ReviewInfraPlanPanel } from '@/components/infra/ReviewInfraPlanPanel';
+import { GenerateInfraBuildPanel } from '@/components/infra/GenerateInfraBuildPanel';
+import { InfraBuildView } from '@/components/infra/InfraBuildView';
+import { InfraConfirmPlanFlow } from '@/components/infra/InfraConfirmPlanFlow';
+import { InfraPlanView } from '@/components/infra/InfraPlanView';
+import { InfraPreviewPanel } from '@/components/infra/InfraPreviewPanel';
+import { InfraPreviewView } from '@/components/infra/InfraPreviewView';
+import { RunInfraPlanPanel } from '@/components/infra/RunInfraPlanPanel';
+import {
+  loadLatestInfraPreview,
+  sanitizeInfraPreviewForResponse,
+  type PublicInfraPreview,
+} from '@/lib/engine/infra/preview/persistence';
+import {
+  loadLatestInfraPlanRow,
+  sanitizeInfraPlanForResponse,
+  type PublicInfraPlan,
+} from '@/lib/engine/infra/cloud/persistence';
+import {
+  loadLatestInfraApply,
+  sanitizeInfraApplyForResponse,
+  type PublicInfraApply,
+} from '@/lib/engine/infra/cloud/apply-persistence';
+import { ApplyFailedPanel } from '@/components/infra/ApplyFailedPanel';
+import { ApplyInfraPanel } from '@/components/infra/ApplyInfraPanel';
+import { InfraMonitorDashboard } from '@/components/infra/InfraMonitorDashboard';
+import { InfraProvisionedPanel } from '@/components/infra/InfraProvisionedPanel';
+import {
+  assembleInfraDashboard,
+  loadLatestInfraDriftCheck,
+  type InfraDashboardPayload,
+} from '@/lib/engine/infra/runtime/persistence';
+import { listBudgets } from '@/lib/engine/governance/budgets';
 import { ProvisioningPlanSchema } from '@/lib/engine/infra/planner/schema';
 import { InfraSpecSchema } from '@/lib/engine/infra/spec';
 import { requireProjectOwnership, requireUser } from '@/lib/auth';
@@ -100,6 +161,33 @@ async function loadProject(id: string, userId: string): Promise<{
   latestDeployment: Deployment | null;
   runtime: AgentRuntime | null;
   recentRuns: AgentRun[];
+  // Phase 3-5a: the software DB record + the user's Supabase
+  // Management connection. Both are software-only (no relevance for
+  // agent / system / infrastructure builds). The DB row is sanitised
+  // before reaching the client — the encrypted service-role blob
+  // never leaves the server.
+  softwareDb: PublicSoftwareDatabase | null;
+  supabaseConnection: ConnectionPublic | null;
+  // Phase 3-6: assembled dashboard payload — only populated for
+  // software builds that have reached deployed/running. The shape
+  // intentionally has no service-role-key field.
+  softwareDashboard: SoftwareDashboardPayload | null;
+  // Phase 4-4: the latest preview row for an infrastructure build.
+  // Sanitised before reaching the client; the preview blob carries
+  // no secrets (catalog-derived strings + cost numbers).
+  infraPreview: PublicInfraPreview | null;
+  // Phase 4-5a: the latest real-plan row. Sanitised at the cloud-
+  // provider boundary (no secret-shaped strings); the plan_diff
+  // blob is safe to send to the client.
+  infraPlan: PublicInfraPlan | null;
+  // Phase 4-5b: the latest apply row. The encrypted state is
+  // STRIPPED at the boundary — only state_present (boolean),
+  // sanitised outputs, counts, and the billed cost reach the client.
+  infraApply: PublicInfraApply | null;
+  // Phase 4-6: assembled monitoring dashboard payload — only set
+  // for provisioned infra builds. The encrypted state is
+  // INTENTIONALLY ABSENT from this shape by construction.
+  infraDashboard: InfraDashboardPayload | null;
 } | null> {
   const supabase = getServerSupabase();
   const { data: project, error } = await supabase
@@ -137,6 +225,8 @@ async function loadProject(id: string, userId: string): Promise<{
   let latestDeployment: Deployment | null = null;
   let runtime: AgentRuntime | null = null;
   let recentRuns: AgentRun[] = [];
+  let softwareDb: PublicSoftwareDatabase | null = null;
+  let supabaseConnection: ConnectionPublic | null = null;
 
   if (plan && plan.status === 'approved') {
     const { data: builds } = await supabase
@@ -211,9 +301,16 @@ async function loadProject(id: string, userId: string): Promise<{
         latestDeployment = (deps?.[0] as Deployment | undefined) ?? null;
       }
 
-      // Runtime: always look up when build is pushed/running. Even a
-      // 'stopped' runtime row is useful for showing run history.
-      if (build.status === 'pushed' || build.status === 'running') {
+      // Runtime: always look up when the build is at a status where a
+      // runtime could exist. Phase 1 agents reach 'pushed' before
+      // activation; Phase 2 systems reach 'deployed' before activation;
+      // both flip to 'running' once activated. Even a 'stopped' runtime
+      // row is useful for showing run history.
+      if (
+        build.status === 'pushed' ||
+        build.status === 'deployed' ||
+        build.status === 'running'
+      ) {
         const { data: rt } = await supabase
           .from('agent_runtimes')
           .select('*')
@@ -234,6 +331,229 @@ async function loadProject(id: string, userId: string): Promise<{
     }
   }
 
+  // Phase 3-5a/b (Software) DB + connection state. Load once the
+  // build has reached at least 'tested'; keep it loaded through push
+  // + deploy so the deployed panel can surface the wired env recap.
+  let softwareDashboard: SoftwareDashboardPayload | null = null;
+  let infraPreview: PublicInfraPreview | null = null;
+  let infraPlan: PublicInfraPlan | null = null;
+  let infraApply: PublicInfraApply | null = null;
+  let infraDashboard: InfraDashboardPayload | null = null;
+  if (
+    build &&
+    build.kind === 'software' &&
+    (build.status === 'tested' ||
+      build.status === 'provisioning' ||
+      build.status === 'provisioned' ||
+      build.status === 'provision_failed' ||
+      build.status === 'pushing' ||
+      build.status === 'pushed' ||
+      build.status === 'push_failed' ||
+      build.status === 'deploying' ||
+      build.status === 'deployed' ||
+      build.status === 'deploy_failed' ||
+      build.status === 'running')
+  ) {
+    try {
+      const row = await loadLatestSoftwareDatabase(supabase, build.id);
+      softwareDb = row ? sanitizeDbForResponse(row) : null;
+    } catch {
+      softwareDb = null;
+    }
+    try {
+      supabaseConnection = await loadConnectionPublic(
+        supabase,
+        'supabase',
+        userId,
+      );
+    } catch {
+      supabaseConnection = null;
+    }
+
+    // Phase 3-6: pull the software runtime row, auto-pause it on the
+    // way out if a kill switch is active in the applicable scope, and
+    // assemble the dashboard payload. The runtime row IS the software
+    // "live" marker; the kill switch sync is the gate that takes the
+    // app offline without any background process needing to fire.
+    if (
+      build.status === 'deployed' ||
+      build.status === 'deploy_failed' ||
+      build.status === 'running'
+    ) {
+      let softwareRuntime = await loadSoftwareRuntimeForProject(
+        supabase,
+        build.project_id,
+      );
+      const kill = await activeKillSwitch(
+        { userId, projectId: build.project_id },
+        supabase,
+      );
+      if (softwareRuntime) {
+        softwareRuntime = await syncSoftwareRuntimeWithKillSwitch(
+          supabase,
+          softwareRuntime,
+          { userId, projectId: build.project_id },
+        );
+      }
+      // Reload the latest DB row (with full encrypted blob) for the
+      // dashboard assembly — but DO NOT pass it to the client. The
+      // assembler strips the encrypted + plaintext fields by
+      // constructing only the sanitised dashboard shape.
+      const rawDb = await loadLatestSoftwareDatabase(supabase, build.id);
+      // Re-parse the SoftwareSpec for the dashboard summary.
+      const parsedSpec = spec ? SoftwareSpecSchema.safeParse(spec.structured_spec) : null;
+      if (parsedSpec && parsedSpec.success) {
+        softwareDashboard = assembleSoftwareDashboard({
+          project,
+          build,
+          spec: parsedSpec.data,
+          runtime: softwareRuntime,
+          db: rawDb,
+          deployment: latestDeployment,
+          githubAccountLogin: githubConnection?.account_login ?? null,
+          vercelAccountLogin: vercelConnection?.account_login ?? null,
+          killSwitch: kill
+            ? {
+                active: true,
+                scope: kill.scope as 'global' | 'user' | 'project',
+                reason: kill.reason,
+              }
+            : { active: false, scope: null, reason: null },
+        });
+      }
+      // Expose the software runtime so deriveJourney can read it.
+      // Reuse the existing `runtime` variable — the journey function
+      // reads runtime.kind to dispatch.
+      if (softwareRuntime) runtime = softwareRuntime;
+    }
+  }
+
+  // Phase 4-4 (Infrastructure) preview. Load the latest infra_previews
+  // row whenever an infra build has reached at least 'generated' so
+  // the UI can surface the verdict + cost-breakdown on every page
+  // load. The preview blob is INERT (catalog-derived strings + cost
+  // numbers) — safe to send to the client as-is.
+  if (
+    build &&
+    build.kind === 'infrastructure' &&
+    (build.status === 'generated' ||
+      build.status === 'previewing' ||
+      build.status === 'previewed' ||
+      build.status === 'preview_blocked' ||
+      build.status === 'planning' ||
+      build.status === 'plan_blocked' ||
+      build.status === 'plan_confirmed')
+  ) {
+    try {
+      const row = await loadLatestInfraPreview(supabase, build.id);
+      infraPreview = row ? sanitizeInfraPreviewForResponse(row) : null;
+    } catch {
+      infraPreview = null;
+    }
+  }
+
+  // Phase 4-5a (Infrastructure) real-plan row. Load whenever the
+  // build has reached at least 'previewed' so the UI can render the
+  // live diff + confirm gate on every page load. The plan_diff is
+  // sanitised at the CloudProvider boundary; safe to send as-is.
+  if (
+    build &&
+    build.kind === 'infrastructure' &&
+    (build.status === 'previewed' ||
+      build.status === 'planning' ||
+      build.status === 'plan_blocked' ||
+      build.status === 'plan_confirmed' ||
+      build.status === 'applying' ||
+      build.status === 'provisioned' ||
+      build.status === 'apply_failed' ||
+      build.status === 'destroying' ||
+      build.status === 'destroyed')
+  ) {
+    try {
+      const row = await loadLatestInfraPlanRow(supabase, build.id);
+      infraPlan = row ? sanitizeInfraPlanForResponse(row) : null;
+    } catch {
+      infraPlan = null;
+    }
+  }
+
+  // Phase 4-5b (Infrastructure) apply row. Load whenever the build
+  // has reached at least 'applying' so the UI can render the
+  // provisioned panel (or the apply-failed view) on every page
+  // load. The sanitiser strips the encrypted state from the
+  // client-bound payload; only the state_present boolean travels.
+  if (
+    build &&
+    build.kind === 'infrastructure' &&
+    (build.status === 'applying' ||
+      build.status === 'provisioned' ||
+      build.status === 'apply_failed' ||
+      build.status === 'destroying' ||
+      build.status === 'destroyed')
+  ) {
+    try {
+      const row = await loadLatestInfraApply(supabase, build.id);
+      infraApply = row ? sanitizeInfraApplyForResponse(row) : null;
+    } catch {
+      infraApply = null;
+    }
+  }
+
+  // Phase 4-6 (Infrastructure) MONITOR dashboard. Only assemble for
+  // 'provisioned' (or 'destroying' so the dashboard still renders
+  // while teardown is in flight). The dashboard intentionally has
+  // NO encrypted-state field by construction; the assembler reads
+  // ONLY the sanitised apply row + drift check + ledger spend +
+  // kill-switch snapshot.
+  if (
+    build &&
+    build.kind === 'infrastructure' &&
+    (build.status === 'provisioned' || build.status === 'destroying') &&
+    spec &&
+    plan
+  ) {
+    try {
+      const rawApply = await loadLatestInfraApply(supabase, build.id);
+      const parsedSpec = InfraSpecSchema.safeParse(spec.structured_spec);
+      // Latest drift check + accrued spend + kill switch in parallel.
+      if (rawApply && parsedSpec.success) {
+        const [driftRow, spend, kill, budgets, latestPlan] = await Promise.all([
+          loadLatestInfraDriftCheck(supabase, rawApply.id),
+          getProjectSpend(build.project_id).catch(() => 0),
+          activeKillSwitch(
+            { userId, projectId: build.project_id },
+            supabase,
+          ),
+          listBudgets(userId, supabase).catch(() => []),
+          loadLatestInfraPlanRow(supabase, build.id).catch(() => null),
+        ]);
+        const hardCap = budgets.find((b) => b.hard_cap);
+        infraDashboard = assembleInfraDashboard({
+          project,
+          build,
+          spec: parsedSpec.data,
+          apply: rawApply,
+          drift: driftRow,
+          accruedUsdTotal: spend,
+          ceilingPeriod: hardCap
+            ? (hardCap.period as 'monthly' | 'daily')
+            : null,
+          ceilingLimitUsd: hardCap ? Number(hardCap.limit_usd) : null,
+          killSwitch: kill
+            ? {
+                active: true,
+                scope: kill.scope as 'global' | 'user' | 'project',
+                reason: kill.reason,
+              }
+            : { active: false, scope: null, reason: null },
+          typedPhraseRequired: latestPlan?.typed_phrase_required ?? null,
+        });
+      }
+    } catch {
+      infraDashboard = null;
+    }
+  }
+
   return {
     project,
     spec,
@@ -246,6 +566,13 @@ async function loadProject(id: string, userId: string): Promise<{
     latestDeployment,
     runtime,
     recentRuns,
+    softwareDb,
+    supabaseConnection,
+    softwareDashboard,
+    infraPreview,
+    infraPlan,
+    infraApply,
+    infraDashboard,
   };
 }
 
@@ -273,6 +600,13 @@ export default async function ProjectDetailPage({
     latestDeployment,
     runtime,
     recentRuns,
+    softwareDb,
+    supabaseConnection,
+    softwareDashboard,
+    infraPreview,
+    infraPlan,
+    infraApply,
+    infraDashboard,
   } = data;
   const githubError = searchParams?.github_error ?? null;
   const vercelError = searchParams?.vercel_error ?? null;
@@ -380,7 +714,79 @@ export default async function ProjectDetailPage({
         <BuildArea projectId={project.id} build={build} files={files} />
       ) : null}
 
+      {/* Phase 2 (Systems) codegen area — fires for an approved
+          orchestration plan on a system project. System stops here:
+          sandbox test / deploy / runtime stay closed for kind='system',
+          enforced both by the absence of system-specific routes for
+          those layers AND by the spec.kind==='agent' guards added
+          below. */}
+      {plan?.status === 'approved' && spec?.kind === 'system' ? (
+        <SystemBuildArea
+          projectId={project.id}
+          projectName={project.name}
+          spec={spec}
+          plan={plan}
+          build={build}
+          files={files}
+          sandboxRun={sandboxRun}
+          githubConnection={githubConnection}
+          githubError={githubError}
+          vercelConnection={vercelConnection}
+          vercelError={vercelError}
+          vercelOauthAvailable={vercelOauthAvailable}
+          runtime={runtime}
+          recentRuns={recentRuns}
+          costToDateUsd={costToDateUsd}
+        />
+      ) : null}
+
+      {/* Phase 3 (Software) codegen area — fires for an approved
+          software build plan. Software stops here in this phase: app
+          sandbox test / DB provisioning + deploy / runtime stay
+          closed for kind='software'. The agent + system codegen
+          loaders both 409 a software project as defence in depth. */}
+      {plan?.status === 'approved' && spec?.kind === 'software' ? (
+        <SoftwareBuildArea
+          projectId={project.id}
+          projectName={project.name}
+          spec={spec}
+          build={build}
+          files={files}
+          sandboxRun={sandboxRun}
+          softwareDb={softwareDb}
+          supabaseConnection={supabaseConnection}
+          githubConnection={githubConnection}
+          githubError={githubError}
+          vercelConnection={vercelConnection}
+          vercelError={vercelError}
+          vercelOauthAvailable={vercelOauthAvailable}
+          latestDeployment={latestDeployment}
+          softwareDashboard={softwareDashboard}
+        />
+      ) : null}
+
+      {/* Phase 4 (Infrastructure) IaC codegen area — fires for an
+          approved provisioning plan on an infra project. Infra STOPS
+          here in P4-3: preview, provision/apply, and runtime stay
+          closed for kind='infrastructure'. The agent / system /
+          software codegen loaders all 409 an infra project as
+          defence in depth. */}
+      {plan?.status === 'approved' && spec?.kind === 'infrastructure' ? (
+        <InfraBuildArea
+          projectId={project.id}
+          spec={spec}
+          plan={plan}
+          build={build}
+          files={files}
+          infraPreview={infraPreview}
+          infraPlan={infraPlan}
+          infraApply={infraApply}
+          infraDashboard={infraDashboard}
+        />
+      ) : null}
+
       {build &&
+      spec?.kind === 'agent' &&
       (build.status === 'generated' ||
         build.status === 'testing' ||
         build.status === 'tested' ||
@@ -396,6 +802,7 @@ export default async function ProjectDetailPage({
       ) : null}
 
       {build &&
+      spec?.kind === 'agent' &&
       (build.status === 'tested' ||
         build.status === 'pushing' ||
         build.status === 'pushed' ||
@@ -696,8 +1103,13 @@ function SystemPlanArea({
           />
         );
       }
+      // Render the graph alongside the list — the visual structure
+      // helps reviewers see handoff topology before approval.
       return (
-        <ReviewOrchestrationPanel projectId={projectId} plan={parsed.data} />
+        <>
+          <SystemGraphView plan={parsed.data} />
+          <ReviewOrchestrationPanel projectId={projectId} plan={parsed.data} />
+        </>
       );
     }
 
@@ -712,12 +1124,532 @@ function SystemPlanArea({
           </GlassPanel>
         );
       }
-      return <ApprovedOrchestrationPanel plan={parsed.data} />;
+      return (
+        <>
+          <SystemGraphView plan={parsed.data} />
+          <ApprovedOrchestrationPanel plan={parsed.data} />
+        </>
+      );
     }
 
     default:
       return <GenerateOrchestrationPanel projectId={projectId} />;
   }
+}
+
+// Phase 2 (Systems) codegen + sandbox + deploy area. Mirrors the
+// Phase 1 BuildArea + TestArea + PushArea + DeployArea but stays
+// scoped to kind='system'. Routes to /system/build/{generate,test,
+// push,deploy} and renders the read-only SystemBuildView + SystemTest
+// View. The system pipeline STOPS at 'deployed': runtime activation
+// for kind='system' lands in P2-5b. The agent-side downstream panels
+// are gated on spec.kind === 'agent' so a system build never invites
+// them.
+function SystemBuildArea({
+  projectId,
+  projectName,
+  spec,
+  plan,
+  build,
+  files,
+  sandboxRun,
+  githubConnection,
+  githubError,
+  vercelConnection,
+  vercelError,
+  vercelOauthAvailable,
+  runtime,
+  recentRuns,
+  costToDateUsd,
+}: {
+  projectId: string;
+  projectName: string;
+  spec: Spec;
+  plan: Plan;
+  build: Build | null;
+  files: BuildFile[];
+  sandboxRun: SandboxRun | null;
+  githubConnection: ConnectionPublic | null;
+  githubError: string | null;
+  vercelConnection: ConnectionPublic | null;
+  vercelError: string | null;
+  vercelOauthAvailable: boolean;
+  runtime: AgentRuntime | null;
+  recentRuns: AgentRun[];
+  costToDateUsd: number;
+}) {
+  // Parse the SystemSpec once so the activation flow can pre-fill its
+  // mode default from spec.triggers. Falls back to false when the
+  // schema has drifted; the server gate would refuse activation in
+  // that case anyway.
+  const parsedSysSpec = SystemSpecSchema.safeParse(spec.structured_spec);
+  const hasScheduleTrigger = parsedSysSpec.success
+    ? parsedSysSpec.data.triggers.includes('schedule')
+    : false;
+  // Best-effort node count for the kickoff panel copy. Falls back to 0
+  // if the plan blob has drifted from the schema (the planner gate
+  // would have refused approval, but defensive lookup is cheap).
+  const parsedPlan = OrchestrationPlanSchema.safeParse(plan.plan);
+  const nodeCount = parsedPlan.success ? parsedPlan.data.nodes.length : 0;
+
+  // No build yet, or build belongs to a different plan, or build is
+  // queued/awaiting kick-off → render the generate panel.
+  if (
+    !build ||
+    build.kind !== 'system' ||
+    build.status === 'queued' ||
+    build.status === 'pending'
+  ) {
+    return <GenerateSystemBuildPanel projectId={projectId} nodeCount={nodeCount} />;
+  }
+
+  if (build.status === 'generating') {
+    return (
+      <GlassPanel>
+        <div className="flex items-center gap-3">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+          <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+            forging system code…
+          </p>
+        </div>
+        <p className="mt-3 text-sm text-forge-dim">
+          Materialising the scaffold + deterministic orchestrator, then
+          generating one module per sub-agent. Each file is statically
+          parsed; nothing is executed at this layer.
+        </p>
+      </GlassPanel>
+    );
+  }
+
+  if (build.status === 'failed') {
+    return (
+      <GenerateSystemBuildPanel
+        projectId={projectId}
+        nodeCount={nodeCount}
+        failedMessage="The previous system codegen attempt failed. You can retry."
+      />
+    );
+  }
+
+  // Build is generated or further along. Read static-check logs from
+  // build.logs (codegen leaves them there); read sandbox phases from
+  // sandboxRun.logs (sandbox harness leaves them there).
+  const logs = (build.logs as BuildLogs | null) ?? {};
+  const staticChecks =
+    (logs.static_checks ?? []).map((c) => ({
+      path: c.path,
+      status: (c.status as StaticStatus) ?? 'skipped',
+      error: c.error,
+    })) ?? [];
+  const warnings = logs.warnings ?? [];
+  const failedCount = staticChecks.filter((c) => c.status === 'failed').length;
+
+  const orchestratorPath =
+    files.find((f) => f.path === 'src/orchestrator.ts')?.path ?? null;
+  const entrypointPath = files.find((f) => f.path === 'src/index.ts')?.path ?? null;
+  const moduleCount = files.filter((f) =>
+    f.path.startsWith('src/modules/'),
+  ).length;
+
+  const buildView = (
+    <SystemBuildView
+      files={files}
+      staticChecks={staticChecks}
+      warnings={warnings}
+      failedCount={failedCount}
+      orchestratorPath={orchestratorPath}
+      entrypointPath={entrypointPath}
+      moduleCount={moduleCount}
+      repoUrl={build.repo_url ?? null}
+      deployUrl={build.deploy_url ?? null}
+    />
+  );
+
+  // build.status === 'generated' → ready to sandbox-test, kickoff panel.
+  if (build.status === 'generated') {
+    return (
+      <>
+        {buildView}
+        <TestSystemBuildPanel projectId={projectId} nodeCount={nodeCount} />
+      </>
+    );
+  }
+
+  // build.status === 'testing' → in-flight progress strip.
+  if (build.status === 'testing') {
+    return (
+      <>
+        {buildView}
+        <GlassPanel>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+              system sandbox · running…
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Provisioning a disposable sandbox, installing dependencies,
+            real-compiling the orchestrator + modules, and walking the
+            full execution order with tools in mock mode. The chamber is
+            destroyed when the run ends — refresh in ~1–2 minutes.
+          </p>
+        </GlassPanel>
+      </>
+    );
+  }
+
+  // Past 'testing', render the test view from the sandbox_run row
+  // (status 'tested' / 'test_failed' or any downstream state).
+  const sandboxLogs = readSystemSandboxLogs(sandboxRun);
+  const testView = sandboxRun ? (
+    <SystemTestView
+      passed={
+        build.status === 'tested' ||
+        build.status === 'pushing' ||
+        build.status === 'pushed' ||
+        build.status === 'push_failed' ||
+        build.status === 'deploying' ||
+        build.status === 'deployed' ||
+        build.status === 'deploy_failed'
+      }
+      buildOk={sandboxRun.build_ok ?? null}
+      smokeOk={sandboxRun.smoke_ok ?? null}
+      durationMs={sandboxRun.duration_ms ?? null}
+      provider={sandboxRun.provider ?? 'unknown'}
+      iterations={sandboxRun.iterations ?? 0}
+      phases={sandboxLogs.phases}
+      lines={sandboxLogs.lines}
+      selfHealAttempts={sandboxLogs.selfHealAttempts}
+      error={sandboxRun.error ?? null}
+    />
+  ) : null;
+
+  // build.status === 'test_failed' — render the failed test view +
+  // a retry kickoff. No push gate fires from a failed test.
+  if (build.status === 'test_failed') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        <TestSystemBuildPanel
+          projectId={projectId}
+          nodeCount={nodeCount}
+          isRetry
+          failedMessage="The previous sandbox run failed (self-heal already exhausted, if applicable). You can retry as a fresh run."
+        />
+      </>
+    );
+  }
+
+  // build.status === 'tested' — sandbox passed; render the push gate.
+  // Authorization Gate #1: explicit "create the private repo and push?"
+  if (build.status === 'tested') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        {githubConnection && githubConnection.account_login ? (
+          <SystemGitHubPushPanel
+            projectId={projectId}
+            projectName={projectName}
+            accountLogin={githubConnection.account_login}
+            filesCount={files.length}
+            moduleCount={moduleCount}
+          />
+        ) : (
+          <ConnectGitHubPanel
+            projectId={projectId}
+            errorFlash={
+              githubError ??
+              (githubConnection && !githubConnection.account_login
+                ? 'connection missing account_login; reconnect'
+                : null)
+            }
+          />
+        )}
+      </>
+    );
+  }
+
+  // build.status === 'pushing' → push in flight.
+  if (build.status === 'pushing') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        <GlassPanel>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+              pushing system to github…
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Creating the private repo and committing every file. Refresh in
+            a few seconds.
+          </p>
+        </GlassPanel>
+      </>
+    );
+  }
+
+  // build.status === 'push_failed' → retry the push gate.
+  if (build.status === 'push_failed') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        {githubConnection && githubConnection.account_login ? (
+          <SystemGitHubPushPanel
+            projectId={projectId}
+            projectName={projectName}
+            accountLogin={githubConnection.account_login}
+            filesCount={files.length}
+            moduleCount={moduleCount}
+          />
+        ) : (
+          <ConnectGitHubPanel
+            projectId={projectId}
+            errorFlash={githubError ?? null}
+          />
+        )}
+      </>
+    );
+  }
+
+  // From here on the build is past push: 'pushed' / 'deploying' /
+  // 'deployed' / 'deploy_failed'. Authorization Gate #2 mounts when
+  // pushed; runtime activation for kind='system' is NOT wired in this
+  // phase.
+
+  // Parse the OrchestrationPlan one more time so we can aggregate
+  // env_required for the deploy form. Falls back to an empty list
+  // when the schema has drifted; the deploy route re-derives this
+  // server-side so a UI miss doesn't compromise the secret slots.
+  const envRequired = parsedPlan.success
+    ? aggregateSystemEnvRequired(parsedPlan.data)
+    : [];
+
+  if (build.status === 'deploying') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        <GlassPanel>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+              deploying system to vercel…
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Uploading the orchestrator + modules → building on Vercel → going
+            live. This usually takes 1–3 minutes. Refresh if it stalls.
+          </p>
+        </GlassPanel>
+      </>
+    );
+  }
+
+  // The orchestration graph: shown alongside the deploy / runtime
+  // panels so the reviewer sees the multi-agent shape AT the moment
+  // they're about to activate it. Latest run (if any) is overlaid as
+  // a per-node pass/fail trail.
+  const graphView = parsedPlan.success ? (
+    <SystemGraphView plan={parsedPlan.data} run={recentRuns[0] ?? null} />
+  ) : null;
+
+  // build.status === 'deployed' → show the deploy banner + the
+  // activation gate (when no runtime exists yet). If a runtime exists
+  // and is anything but stopped, the build would normally be 'running',
+  // but we defensively also render the panel here.
+  if (build.status === 'deployed') {
+    const hasActiveRuntime =
+      runtime && runtime.status !== 'stopped' && runtime.kind === 'system';
+    if (hasActiveRuntime && runtime) {
+      return (
+        <>
+          {buildView}
+          {testView}
+          {graphView}
+          <SystemRuntimePanel
+            projectId={projectId}
+            runtime={runtime}
+            runs={recentRuns}
+            nodeCount={moduleCount}
+            costToDateUsd={costToDateUsd}
+          />
+        </>
+      );
+    }
+    return (
+      <>
+        {buildView}
+        {testView}
+        {graphView}
+        <GlassPanel className="border-forge-amber/30 shadow-amber">
+          <div className="flex flex-col gap-3">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+              system · deployed
+            </h2>
+            <p className="text-sm text-forge-dim">
+              {projectName} is deployed at the URL above. Activate the
+              runtime below to run the orchestration on a cron — one tick =
+              one orchestration, governed by the shared cost ceiling.
+            </p>
+          </div>
+        </GlassPanel>
+        <SystemActivateRuntimeFlow
+          projectId={projectId}
+          projectName={projectName}
+          envRequired={envRequired}
+          hasScheduleTrigger={hasScheduleTrigger}
+          nodeCount={moduleCount}
+        />
+      </>
+    );
+  }
+
+  // build.status === 'running' → an active system runtime exists.
+  // Render the SystemRuntimePanel. If the runtime row is somehow
+  // missing or stopped, fall back to the activation flow.
+  if (build.status === 'running') {
+    if (runtime && runtime.kind === 'system' && runtime.status !== 'stopped') {
+      return (
+        <>
+          {buildView}
+          {testView}
+          {graphView}
+          <SystemRuntimePanel
+            projectId={projectId}
+            runtime={runtime}
+            runs={recentRuns}
+            nodeCount={moduleCount}
+            costToDateUsd={costToDateUsd}
+          />
+        </>
+      );
+    }
+    // Defensive — no runtime row but build is 'running'. Show
+    // activation as the recovery path.
+    return (
+      <>
+        {buildView}
+        {testView}
+        {graphView}
+        <SystemActivateRuntimeFlow
+          projectId={projectId}
+          projectName={projectName}
+          envRequired={envRequired}
+          hasScheduleTrigger={false}
+          nodeCount={moduleCount}
+        />
+      </>
+    );
+  }
+
+  // build.status === 'pushed' or 'deploy_failed' → render the deploy
+  // gate (with a flash on the failed branch).
+  const deployFailedFlash =
+    build.status === 'deploy_failed'
+      ? 'The previous deploy failed. You can retry from here.'
+      : null;
+  if (!vercelConnection) {
+    return (
+      <>
+        {buildView}
+        {testView}
+        <ConnectVercelPanel
+          projectId={projectId}
+          oauthAvailable={vercelOauthAvailable}
+          errorFlash={vercelError ?? deployFailedFlash}
+        />
+      </>
+    );
+  }
+  if (!vercelConnection.account_login) {
+    return (
+      <>
+        {buildView}
+        {testView}
+        <ConnectVercelPanel
+          projectId={projectId}
+          oauthAvailable={vercelOauthAvailable}
+          errorFlash="connection missing account_login; reconnect"
+        />
+      </>
+    );
+  }
+  return (
+    <>
+      {buildView}
+      {testView}
+      {deployFailedFlash ? (
+        <GlassPanel className="border-rose-400/30">
+          <p className="text-sm text-rose-200">{deployFailedFlash}</p>
+        </GlassPanel>
+      ) : null}
+      <SystemDeployFlow
+        projectId={projectId}
+        projectName={projectName}
+        accountLogin={vercelConnection.account_login}
+        filesCount={files.length}
+        moduleCount={moduleCount}
+        envRequired={envRequired}
+      />
+    </>
+  );
+}
+
+// Read the system sandbox_run's stored payload. Tolerates rows
+// written before self-heal landed (missing `selfheal_attempts` array).
+function readSystemSandboxLogs(run: SandboxRun | null): {
+  phases: Array<{
+    phase: 'install' | 'build' | 'smoke';
+    status: 'ok' | 'failed' | 'skipped';
+    exit_code: number | null;
+    timed_out: boolean;
+    duration_ms: number;
+    iteration: number;
+  }>;
+  lines: SandboxLogLine[];
+  selfHealAttempts: Array<{
+    node_id: string;
+    module_regen_ok: boolean;
+    smoke_ok_after_retry: boolean;
+  }>;
+} {
+  if (!run) return { phases: [], lines: [], selfHealAttempts: [] };
+  const payload = (run.logs as {
+    phases?: Array<{
+      phase: 'install' | 'build' | 'smoke';
+      status: 'ok' | 'failed' | 'skipped';
+      exit_code: number | null;
+      timed_out: boolean;
+      duration_ms: number;
+      iteration?: number;
+    }>;
+    lines?: SandboxLogLine[];
+    selfheal_attempts?: Array<{
+      node_id: string;
+      module_regen_ok: boolean;
+      smoke_ok_after_retry: boolean;
+    }>;
+  } | null) ?? {};
+  return {
+    phases: (payload.phases ?? []).map((p) => ({
+      phase: p.phase,
+      status: p.status,
+      exit_code: p.exit_code,
+      timed_out: p.timed_out,
+      duration_ms: p.duration_ms,
+      // Older agent-shape rows don't carry iteration; default 0 so the
+      // UI still renders.
+      iteration: typeof p.iteration === 'number' ? p.iteration : 0,
+    })),
+    lines: payload.lines ?? [],
+    selfHealAttempts: payload.selfheal_attempts ?? [],
+  };
 }
 
 // Phase 3: software build-plan area. Mirrors SystemPlanArea — routes
@@ -871,6 +1803,949 @@ function InfraPlanArea({
     default:
       return <GenerateInfraPlanPanel projectId={projectId} />;
   }
+}
+
+// Phase 4 (Infrastructure) IaC codegen area. Mirrors SoftwareBuildArea
+// but stays scoped to kind='infrastructure'. Routes to
+// /infra/build/generate and renders the read-only InfraBuildView.
+// The infra pipeline STOPS here in P4-3: preview, provision/apply,
+// and runtime are NOT wired for kind='infrastructure'. The agent /
+// system / software codegen loaders all 409 an infra project as
+// defence in depth.
+function InfraBuildArea({
+  projectId,
+  spec,
+  plan,
+  build,
+  files,
+  infraPreview,
+  infraPlan,
+  infraApply,
+  infraDashboard,
+}: {
+  projectId: string;
+  spec: Spec;
+  plan: Plan;
+  build: Build | null;
+  files: BuildFile[];
+  infraPreview: PublicInfraPreview | null;
+  infraPlan: PublicInfraPlan | null;
+  infraApply: PublicInfraApply | null;
+  infraDashboard: InfraDashboardPayload | null;
+}) {
+  const parsedPlan = ProvisioningPlanSchema.safeParse(plan.plan);
+  const stepCount = parsedPlan.success ? parsedPlan.data.steps.length : 0;
+  const moduleCount = parsedPlan.success
+    ? new Set(parsedPlan.data.steps.map((s) => s.module)).size
+    : 0;
+
+  // No build yet → render the generate panel.
+  if (
+    !build ||
+    build.kind !== 'infrastructure' ||
+    build.status === 'queued' ||
+    build.status === 'pending'
+  ) {
+    return (
+      <GenerateInfraBuildPanel
+        projectId={projectId}
+        stepCount={stepCount}
+        moduleCount={moduleCount}
+      />
+    );
+  }
+
+  if (build.status === 'generating') {
+    return (
+      <GlassPanel>
+        <div className="flex items-center gap-3">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+          <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+            composing modules…
+          </p>
+        </div>
+        <p className="mt-3 text-sm text-forge-dim">
+          Instantiating vetted catalog modules into Terraform files and
+          running a static parse check. No cloud calls, no terraform plan /
+          apply.
+        </p>
+      </GlassPanel>
+    );
+  }
+
+  if (build.status === 'failed') {
+    return (
+      <GenerateInfraBuildPanel
+        projectId={projectId}
+        stepCount={stepCount}
+        moduleCount={moduleCount}
+        failedMessage="The previous infrastructure codegen attempt failed. You can retry."
+      />
+    );
+  }
+
+  // Build is 'generated'. Read per-file static-check logs + the
+  // aggregated secure-default flags out of build.logs (codegen puts
+  // them there) and render the read-only InfraBuildView.
+  const logs = (build.logs as
+    | (BuildLogs & {
+        infra_secure_defaults?: {
+          private_by_default: boolean;
+          tls: boolean;
+          least_privilege_iam: boolean;
+          kms_encryption: boolean;
+        };
+        infra_public_opt_ins?: string[];
+        infra_module_ids_used?: string[];
+        infra_structural_ok?: boolean;
+      })
+    | null) ?? {};
+  const staticChecks =
+    (logs.static_checks ?? []).map((c) => ({
+      path: c.path,
+      status: (c.status as StaticStatus) ?? 'skipped',
+      error: c.error,
+    })) ?? [];
+  const failedCount = staticChecks.filter((c) => c.status === 'failed').length;
+  const secureDefaults = logs.infra_secure_defaults ?? {
+    private_by_default: true,
+    tls: true,
+    least_privilege_iam: true,
+    kms_encryption: true,
+  };
+  const publicOptIns = logs.infra_public_opt_ins ?? [];
+  const moduleIdsUsed = logs.infra_module_ids_used ?? [];
+
+  const buildView = (
+    <InfraBuildView
+      files={files}
+      staticChecks={staticChecks}
+      failedCount={failedCount}
+      secureDefaults={secureDefaults}
+      publicOptIns={publicOptIns}
+      moduleIdsUsed={moduleIdsUsed}
+    />
+  );
+
+  // build.status === 'generated' → render the preview kick-off panel
+  // beneath the build view. The preview is the next gate.
+  if (build.status === 'generated') {
+    return (
+      <>
+        {buildView}
+        <InfraPreviewPanel projectId={projectId} stepCount={stepCount} />
+      </>
+    );
+  }
+
+  // build.status === 'previewing' → derivation in flight.
+  if (build.status === 'previewing') {
+    return (
+      <>
+        {buildView}
+        <GlassPanel>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+              deriving preview…
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Walking the composed plan + catalog to render the to-be-created
+            resources and the cost estimate. No cloud calls.
+          </p>
+        </GlassPanel>
+      </>
+    );
+  }
+
+  // build.status === 'previewed' → preview rendered + within budget;
+  // mount the real-plan kick-off (or the plan view + confirm gate
+  // if a plan row already exists). The P4-5a gate fires from here.
+  if (build.status === 'previewed' && infraPreview) {
+    return (
+      <>
+        {buildView}
+        <InfraPreviewView preview={infraPreview} />
+        {infraPlan ? (
+          <>
+            <InfraPlanView plan={infraPlan} />
+            <InfraConfirmPlanFlow projectId={projectId} plan={infraPlan} />
+          </>
+        ) : (
+          <RunInfraPlanPanel projectId={projectId} stepCount={stepCount} />
+        )}
+      </>
+    );
+  }
+
+  // build.status === 'planning' → real plan in flight.
+  if (build.status === 'planning') {
+    return (
+      <>
+        {buildView}
+        {infraPreview ? <InfraPreviewView preview={infraPreview} /> : null}
+        <GlassPanel>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+              terraform plan · running…
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Running a real <code className="text-forge-text">terraform plan</code>{' '}
+            against your cloud state (read-only). The diff + cost re-check land
+            in ~30–90s.
+          </p>
+        </GlassPanel>
+      </>
+    );
+  }
+
+  // build.status === 'plan_blocked' → real-plan cost re-check over
+  // budget. Surface the plan view (with the OVER_BUDGET banner) plus
+  // a retry panel for after the user raises their cap.
+  if (build.status === 'plan_blocked') {
+    return (
+      <>
+        {buildView}
+        {infraPreview ? <InfraPreviewView preview={infraPreview} /> : null}
+        {infraPlan ? <InfraPlanView plan={infraPlan} /> : null}
+        <RunInfraPlanPanel
+          projectId={projectId}
+          stepCount={stepCount}
+          failedMessage="The real terraform plan came in over budget. Raise the ceiling or trim the spec, then re-run the plan."
+        />
+      </>
+    );
+  }
+
+  // build.status === 'plan_confirmed' → the user passed the P4-5a
+  // gate; mount the P4-5b apply kick-off panel.
+  if (build.status === 'plan_confirmed' && infraPlan) {
+    return (
+      <>
+        {buildView}
+        {infraPreview ? <InfraPreviewView preview={infraPreview} /> : null}
+        <InfraPlanView plan={infraPlan} />
+        <ApplyInfraPanel projectId={projectId} plan={infraPlan} />
+      </>
+    );
+  }
+
+  // build.status === 'applying' → terraform apply in flight (the
+  // single write to real cloud). The mid-flight kill-switch watcher
+  // is polling on the server.
+  if (build.status === 'applying') {
+    return (
+      <>
+        {buildView}
+        {infraPreview ? <InfraPreviewView preview={infraPreview} /> : null}
+        {infraPlan ? <InfraPlanView plan={infraPlan} /> : null}
+        <GlassPanel className="border-forge-amber/40 shadow-amber">
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+              terraform apply · running (the single write to real cloud)
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Applying the confirmed plan. The kill switch can interrupt this
+            mid-flight (terraform receives SIGINT and finishes the in-flight
+            resource cleanly before stopping). Refresh in ~1–10 minutes.
+          </p>
+        </GlassPanel>
+      </>
+    );
+  }
+
+  // build.status === 'provisioned' → apply succeeded; live cloud
+  // exists; state encrypted at rest; ledger billed. The MONITOR
+  // DASHBOARD (P4-6) is the primary surface; it shows resources +
+  // masked outputs + accruing cost vs cap + drift + freeze + gated
+  // teardown. Falls back to the older provisioned panel if the
+  // dashboard couldn't be assembled (e.g. spec drift).
+  if (build.status === 'provisioned' && infraApply && infraPlan) {
+    return (
+      <>
+        {buildView}
+        {infraPreview ? <InfraPreviewView preview={infraPreview} /> : null}
+        <InfraPlanView plan={infraPlan} />
+        {infraDashboard ? (
+          <InfraMonitorDashboard payload={infraDashboard} />
+        ) : (
+          <InfraProvisionedPanel
+            projectId={projectId}
+            apply={infraApply}
+            plan={infraPlan}
+          />
+        )}
+      </>
+    );
+  }
+
+  // build.status === 'apply_failed' → apply errored or was
+  // killswitched; partial state captured; rollback gate.
+  if (build.status === 'apply_failed' && infraApply && infraPlan) {
+    return (
+      <>
+        {buildView}
+        {infraPreview ? <InfraPreviewView preview={infraPreview} /> : null}
+        <InfraPlanView plan={infraPlan} />
+        <ApplyFailedPanel
+          projectId={projectId}
+          apply={infraApply}
+          plan={infraPlan}
+        />
+      </>
+    );
+  }
+
+  // build.status === 'destroying' → destroy in flight.
+  if (build.status === 'destroying') {
+    return (
+      <>
+        {buildView}
+        {infraPreview ? <InfraPreviewView preview={infraPreview} /> : null}
+        {infraPlan ? <InfraPlanView plan={infraPlan} /> : null}
+        <GlassPanel className="border-rose-400/40 shadow-amber">
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-rose-400 shadow-amber" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-rose-300">
+              terraform destroy · running
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Tearing down every resource the apply created. Refresh in ~1–10
+            minutes.
+          </p>
+        </GlassPanel>
+      </>
+    );
+  }
+
+  // build.status === 'destroyed' → teardown complete.
+  if (build.status === 'destroyed') {
+    return (
+      <>
+        {buildView}
+        {infraPreview ? <InfraPreviewView preview={infraPreview} /> : null}
+        {infraPlan ? <InfraPlanView plan={infraPlan} /> : null}
+        <GlassPanel className="border-rose-400/30">
+          <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-rose-300">
+            infrastructure · destroyed
+          </h2>
+          <p className="mt-2 text-sm text-forge-dim">
+            The teardown completed. The audit record is retained; this build
+            is now read-only.
+          </p>
+        </GlassPanel>
+      </>
+    );
+  }
+
+  // build.status === 'preview_blocked' → preview rendered + OVER
+  // BUDGET; provisioning stays locked. Surface the verdict AND a
+  // retry panel for after the user raises the ceiling.
+  if (build.status === 'preview_blocked') {
+    return (
+      <>
+        {buildView}
+        {infraPreview ? <InfraPreviewView preview={infraPreview} /> : null}
+        <InfraPreviewPanel
+          projectId={projectId}
+          stepCount={stepCount}
+          isRetry
+        />
+      </>
+    );
+  }
+
+  // Defensive fallback — just the build view.
+  return buildView;
+}
+
+// Phase 3 (Software) codegen area. Mirrors SystemBuildArea but stays
+// scoped to kind='software'. Routes to /software/build/generate and
+// renders the read-only SoftwareBuildView. The software pipeline
+// STOPS here in this phase: app sandbox test / DB provisioning +
+// deploy / runtime are NOT wired for kind='software'. The agent +
+// system codegen loaders both 409 a software project as defence in
+// depth.
+function SoftwareBuildArea({
+  projectId,
+  projectName,
+  spec,
+  build,
+  files,
+  sandboxRun,
+  softwareDb,
+  supabaseConnection,
+  githubConnection,
+  githubError,
+  vercelConnection,
+  vercelError,
+  vercelOauthAvailable,
+  latestDeployment,
+  softwareDashboard,
+}: {
+  projectId: string;
+  projectName: string;
+  spec: Spec;
+  build: Build | null;
+  files: BuildFile[];
+  sandboxRun: SandboxRun | null;
+  softwareDb: PublicSoftwareDatabase | null;
+  supabaseConnection: ConnectionPublic | null;
+  githubConnection: ConnectionPublic | null;
+  githubError: string | null;
+  vercelConnection: ConnectionPublic | null;
+  vercelError: string | null;
+  vercelOauthAvailable: boolean;
+  latestDeployment: Deployment | null;
+  softwareDashboard: SoftwareDashboardPayload | null;
+}) {
+  // Parse the software spec for slot-count framing in the kickoff
+  // panel. Falls back to zeros if the schema has drifted (the
+  // planner's loader would have refused; defensive parse).
+  const parsedSpec = SoftwareSpecSchema.safeParse(spec.structured_spec);
+  const pageCount = parsedSpec.success ? parsedSpec.data.pages.length : 0;
+  const entityCount = parsedSpec.success ? parsedSpec.data.entities.length : 0;
+  const requiresAuth = parsedSpec.success ? parsedSpec.data.auth.requires_auth : true;
+
+  // No build yet, or build belongs to a different plan, or build is
+  // queued/awaiting kick-off → render the generate panel.
+  if (
+    !build ||
+    build.kind !== 'software' ||
+    build.status === 'queued' ||
+    build.status === 'pending'
+  ) {
+    return (
+      <GenerateSoftwareBuildPanel
+        projectId={projectId}
+        pageCount={pageCount}
+        entityCount={entityCount}
+      />
+    );
+  }
+
+  if (build.status === 'generating') {
+    return (
+      <GlassPanel>
+        <div className="flex items-center gap-3">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+          <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+            filling software slots…
+          </p>
+        </div>
+        <p className="mt-3 text-sm text-forge-dim">
+          Materialising the Next.js + Supabase scaffold, emitting the RLS
+          migration, and filling each LLM slot (API handlers + page
+          components). Each file is statically parsed; nothing is executed
+          at this layer.
+        </p>
+      </GlassPanel>
+    );
+  }
+
+  if (build.status === 'failed') {
+    return (
+      <GenerateSoftwareBuildPanel
+        projectId={projectId}
+        pageCount={pageCount}
+        entityCount={entityCount}
+        failedMessage="The previous software codegen attempt failed. You can retry."
+      />
+    );
+  }
+
+  // Build is generated or further along. Read static-check logs
+  // from build.logs (codegen leaves them there); read sandbox
+  // phases from sandboxRun.logs (sandbox harness leaves them there).
+  const logs = (build.logs as BuildLogs | null) ?? {};
+  const staticChecks =
+    (logs.static_checks ?? []).map((c) => ({
+      path: c.path,
+      status: (c.status as StaticStatus) ?? 'skipped',
+      error: c.error,
+    })) ?? [];
+  const warnings = logs.warnings ?? [];
+  const failedCount = staticChecks.filter((c) => c.status === 'failed').length;
+
+  const buildView = (
+    <SoftwareBuildView
+      files={files}
+      staticChecks={staticChecks}
+      warnings={warnings}
+      failedCount={failedCount}
+      repoUrl={build.repo_url ?? null}
+      deployUrl={build.deploy_url ?? null}
+    />
+  );
+
+  // build.status === 'generated' → ready to sandbox-test.
+  if (build.status === 'generated') {
+    return (
+      <>
+        {buildView}
+        <TestSoftwareBuildPanel
+          projectId={projectId}
+          entityCount={entityCount}
+          requiresAuth={requiresAuth}
+        />
+      </>
+    );
+  }
+
+  // build.status === 'testing' → in-flight progress strip.
+  if (build.status === 'testing') {
+    return (
+      <>
+        {buildView}
+        <GlassPanel>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+              software sandbox · running…
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Provisioning a disposable sandbox, installing deps, building the
+            app with <code className="text-forge-text">next build</code>, then
+            standing up an ephemeral Postgres and running the cross-user
+            isolation test. Refresh in ~2–4 minutes.
+          </p>
+        </GlassPanel>
+      </>
+    );
+  }
+
+  // Past testing — render the test view from the sandbox_run row.
+  const sandboxLogs = readSoftwareSandboxLogs(sandboxRun);
+  const testView = sandboxRun ? (
+    <SoftwareTestView
+      passed={build.status === 'tested'}
+      buildOk={sandboxRun.build_ok ?? null}
+      // The software sandbox repurposes smoke_ok for the ISOLATION
+      // outcome — see software/sandbox/persistence.ts.
+      isolationOk={sandboxRun.smoke_ok ?? null}
+      isolation={sandboxLogs.isolation}
+      durationMs={sandboxRun.duration_ms ?? null}
+      provider={sandboxRun.provider ?? 'unknown'}
+      iterations={sandboxRun.iterations ?? 0}
+      phases={sandboxLogs.phases}
+      lines={sandboxLogs.lines}
+      selfHealAttempts={sandboxLogs.selfHealAttempts}
+      error={sandboxRun.error ?? null}
+    />
+  ) : null;
+
+  if (build.status === 'test_failed') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        <TestSoftwareBuildPanel
+          projectId={projectId}
+          entityCount={entityCount}
+          requiresAuth={requiresAuth}
+          isRetry
+          failedMessage={
+            sandboxRun?.smoke_ok === false
+              ? 'Cross-user isolation FAILED — review the migration / spec and re-test. Isolation leaks are not self-healed.'
+              : 'The previous sandbox run failed. You can retry.'
+          }
+        />
+      </>
+    );
+  }
+
+  // build.status === 'tested' → P3-5a DB provisioning gate.
+  // build.status === 'provision_failed' → retry the gate with a flash.
+  if (build.status === 'tested' || build.status === 'provision_failed') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        <ProvisionDbFlow
+          projectId={projectId}
+          projectName={projectName}
+          hasSupabaseConnection={Boolean(
+            supabaseConnection && supabaseConnection.account_login,
+          )}
+          entityCount={entityCount}
+          failedMessage={
+            build.status === 'provision_failed'
+              ? 'The previous provisioning attempt failed. You can retry from here.'
+              : null
+          }
+        />
+      </>
+    );
+  }
+
+  // build.status === 'provisioning' — DB call in flight.
+  if (build.status === 'provisioning') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        <GlassPanel>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+              provisioning database…
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Creating the Supabase project (or validating your connection) and
+            applying the RLS migration the sandbox already proved isolates
+            users cross-account. Refresh in ~30s.
+          </p>
+        </GlassPanel>
+      </>
+    );
+  }
+
+  // build.status === 'provisioned' — show the DB recap, then mount
+  // the push gate (or the connect-github prompt). Software runtime
+  // stays closed until P3-6.
+  if (build.status === 'provisioned') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        {softwareDb ? <ProvisionedDbPanel db={softwareDb} /> : null}
+        {githubConnection && githubConnection.account_login ? (
+          <SoftwareGitHubPushPanel
+            projectId={projectId}
+            projectName={projectName}
+            accountLogin={githubConnection.account_login}
+            filesCount={files.length}
+            entityCount={entityCount}
+          />
+        ) : (
+          <ConnectGitHubPanel
+            projectId={projectId}
+            errorFlash={
+              githubError ??
+              (githubConnection && !githubConnection.account_login
+                ? 'connection missing account_login; reconnect'
+                : null)
+            }
+          />
+        )}
+      </>
+    );
+  }
+
+  // build.status === 'pushing' — push in flight.
+  if (build.status === 'pushing') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        {softwareDb ? <ProvisionedDbPanel db={softwareDb} /> : null}
+        <GlassPanel>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+              pushing app to github…
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Creating the private repo and committing every file. Refresh in a
+            few seconds.
+          </p>
+        </GlassPanel>
+      </>
+    );
+  }
+
+  // build.status === 'push_failed' — retry the push gate.
+  if (build.status === 'push_failed') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        {softwareDb ? <ProvisionedDbPanel db={softwareDb} /> : null}
+        {githubConnection && githubConnection.account_login ? (
+          <SoftwareGitHubPushPanel
+            projectId={projectId}
+            projectName={projectName}
+            accountLogin={githubConnection.account_login}
+            filesCount={files.length}
+            entityCount={entityCount}
+            isRetry
+          />
+        ) : (
+          <ConnectGitHubPanel
+            projectId={projectId}
+            errorFlash={githubError ?? null}
+          />
+        )}
+      </>
+    );
+  }
+
+  // From here on the build is past push: 'pushed' / 'deploying' /
+  // 'deployed' / 'deploy_failed'. The deploy gate mounts when pushed;
+  // runtime activation for kind='software' is NOT wired in this phase.
+
+  if (build.status === 'deploying') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        {softwareDb ? <ProvisionedDbPanel db={softwareDb} /> : null}
+        <GlassPanel>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+              deploying app to vercel…
+            </p>
+          </div>
+          <p className="mt-3 text-sm text-forge-dim">
+            Uploading the Next.js bundle → setting the wired DB env (anon
+            public, service-role server-only · encrypted) → building on Vercel
+            → going live. This usually takes 1–3 minutes.
+          </p>
+        </GlassPanel>
+      </>
+    );
+  }
+
+  // build.status === 'deployed' — Phase 3-6 go-live gate or, if the
+  // runtime row already exists in non-stopped state, the app
+  // dashboard. The runtime row's existence is the ground truth for
+  // "user has authorised live"; a deployed build with no runtime row
+  // means "deployed but not yet marked live".
+  if (build.status === 'deployed') {
+    const liveDashboard = softwareDashboard;
+    const hasActiveRuntime =
+      liveDashboard?.runtime && liveDashboard.runtime.status !== 'stopped';
+    return (
+      <>
+        {buildView}
+        {testView}
+        {softwareDb ? <ProvisionedDbPanel db={softwareDb} /> : null}
+        {build.deploy_url ? (
+          <SoftwareDeployedPanel
+            deployUrl={build.deploy_url}
+            repoUrl={build.repo_url ?? null}
+            accountLogin={vercelConnection?.account_login ?? 'unknown'}
+            publicEnvKeys={
+              (latestDeployment?.env_keys ?? []).filter((k) =>
+                k.startsWith('NEXT_PUBLIC_'),
+              )
+            }
+            serverOnlyEnvKeys={
+              (latestDeployment?.env_keys ?? []).filter(
+                (k) => !k.startsWith('NEXT_PUBLIC_'),
+              )
+            }
+          />
+        ) : null}
+        {liveDashboard && hasActiveRuntime ? (
+          <SoftwareAppDashboard payload={liveDashboard} />
+        ) : build.deploy_url ? (
+          <SoftwareActivateRuntimeFlow
+            projectId={projectId}
+            projectName={projectName}
+            deployUrl={build.deploy_url}
+            entityCount={entityCount}
+          />
+        ) : null}
+      </>
+    );
+  }
+
+  // build.status === 'running' — software is live. Render the
+  // dashboard. If the dashboard payload is missing (edge case after a
+  // schema drift), fall back to the deployed panel.
+  if (build.status === 'running') {
+    return (
+      <>
+        {buildView}
+        {testView}
+        {softwareDb ? <ProvisionedDbPanel db={softwareDb} /> : null}
+        {softwareDashboard ? (
+          <SoftwareAppDashboard payload={softwareDashboard} />
+        ) : build.deploy_url ? (
+          <SoftwareDeployedPanel
+            deployUrl={build.deploy_url}
+            repoUrl={build.repo_url ?? null}
+            accountLogin={vercelConnection?.account_login ?? 'unknown'}
+            publicEnvKeys={
+              (latestDeployment?.env_keys ?? []).filter((k) =>
+                k.startsWith('NEXT_PUBLIC_'),
+              )
+            }
+            serverOnlyEnvKeys={
+              (latestDeployment?.env_keys ?? []).filter(
+                (k) => !k.startsWith('NEXT_PUBLIC_'),
+              )
+            }
+          />
+        ) : null}
+      </>
+    );
+  }
+
+  // build.status === 'pushed' or 'deploy_failed' — render the deploy
+  // gate (with a flash on the failed branch). Connect Vercel first if
+  // needed.
+  const deployFailedFlash =
+    build.status === 'deploy_failed'
+      ? 'The previous deploy failed. You can retry from here.'
+      : null;
+  if (build.status === 'pushed' || build.status === 'deploy_failed') {
+    if (!vercelConnection) {
+      return (
+        <>
+          {buildView}
+          {testView}
+          {softwareDb ? <ProvisionedDbPanel db={softwareDb} /> : null}
+          <ConnectVercelPanel
+            projectId={projectId}
+            oauthAvailable={vercelOauthAvailable}
+            errorFlash={vercelError ?? deployFailedFlash}
+          />
+        </>
+      );
+    }
+    if (!vercelConnection.account_login) {
+      return (
+        <>
+          {buildView}
+          {testView}
+          {softwareDb ? <ProvisionedDbPanel db={softwareDb} /> : null}
+          <ConnectVercelPanel
+            projectId={projectId}
+            oauthAvailable={vercelOauthAvailable}
+            errorFlash="connection missing account_login; reconnect"
+          />
+        </>
+      );
+    }
+    if (!softwareDb) {
+      // Defensive — a software build at 'pushed' should always have a
+      // provisioned-db row. If somehow missing, surface that loudly.
+      return (
+        <>
+          {buildView}
+          {testView}
+          <GlassPanel className="border-rose-400/30">
+            <p className="text-sm text-rose-200">
+              Provisioned database record missing — re-run provisioning before
+              deploying.
+            </p>
+          </GlassPanel>
+        </>
+      );
+    }
+    return (
+      <>
+        {buildView}
+        {testView}
+        <ProvisionedDbPanel db={softwareDb} />
+        {deployFailedFlash ? (
+          <GlassPanel className="border-rose-400/30">
+            <p className="text-sm text-rose-200">{deployFailedFlash}</p>
+          </GlassPanel>
+        ) : null}
+        <SoftwareDeployFlow
+          projectId={projectId}
+          projectName={projectName}
+          accountLogin={vercelConnection.account_login}
+          filesCount={files.length}
+          supabaseUrl={softwareDb.supabase_url}
+          anonKey={softwareDb.anon_key}
+          serviceRoleLast4={softwareDb.service_role_last4}
+        />
+      </>
+    );
+  }
+
+  // Defensive fallback.
+  return (
+    <>
+      {buildView}
+      {testView}
+    </>
+  );
+}
+
+// Read the software sandbox_run's stored payload. Tolerates older
+// rows that pre-date the isolation result + self-heal-attempts
+// shape — defaults to null / empty array so the UI still renders.
+function readSoftwareSandboxLogs(run: SandboxRun | null): {
+  phases: Array<{
+    phase: 'install' | 'build' | 'smoke' | 'isolation';
+    status: 'ok' | 'failed' | 'skipped';
+    exit_code: number | null;
+    timed_out: boolean;
+    duration_ms: number;
+    iteration: number;
+  }>;
+  lines: SandboxLogLine[];
+  isolation: {
+    outcome: 'passed' | 'failed' | 'errored';
+    perEntity: Record<string, { aWrote: number; bSawA: number }>;
+    leakTable: string | null;
+    leakCount: number;
+    errorMessage: string | null;
+    vacuous: boolean;
+  } | null;
+  selfHealAttempts: Array<{
+    file_path: string;
+    slot_regen_ok: boolean;
+    build_ok_after_retry: boolean;
+    isolation_ok_after_retry: boolean;
+  }>;
+} {
+  if (!run) {
+    return { phases: [], lines: [], isolation: null, selfHealAttempts: [] };
+  }
+  const payload = (run.logs as {
+    phases?: Array<{
+      phase: 'install' | 'build' | 'smoke' | 'isolation';
+      status: 'ok' | 'failed' | 'skipped';
+      exit_code: number | null;
+      timed_out: boolean;
+      duration_ms: number;
+      iteration?: number;
+    }>;
+    lines?: SandboxLogLine[];
+    isolation?: {
+      outcome: 'passed' | 'failed' | 'errored';
+      perEntity: Record<string, { aWrote: number; bSawA: number }>;
+      leakTable: string | null;
+      leakCount: number;
+      errorMessage: string | null;
+      vacuous: boolean;
+    } | null;
+    selfheal_attempts?: Array<{
+      file_path: string;
+      slot_regen_ok: boolean;
+      build_ok_after_retry: boolean;
+      isolation_ok_after_retry: boolean;
+    }>;
+  } | null) ?? {};
+  return {
+    phases: (payload.phases ?? []).map((p) => ({
+      phase: p.phase,
+      status: p.status,
+      exit_code: p.exit_code,
+      timed_out: p.timed_out,
+      duration_ms: p.duration_ms,
+      iteration: typeof p.iteration === 'number' ? p.iteration : 0,
+    })),
+    lines: payload.lines ?? [],
+    isolation: payload.isolation ?? null,
+    selfHealAttempts: payload.selfheal_attempts ?? [],
+  };
 }
 
 function PlanArea({

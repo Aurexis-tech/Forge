@@ -120,12 +120,27 @@ export async function tickRuntimes(): Promise<TickSummary> {
 }
 
 // Run a single execution and persist everything. Reusable by both the
-// scheduler tick and the manual run-now route.
+// scheduler tick and the manual run-now route. Dispatches by
+// runtime.kind: 'agent' (Phase 1) stays inline below; 'system'
+// (Phase 2) routes to lib/engine/system/runtime/scheduler.ts. The
+// shared bits (governance gate, runs-row lifecycle, ledger, audit,
+// auto-pause threshold) are the same on both branches.
 export async function runOnce(
   supabase: ForgeSupabase,
   runtime: AgentRuntime,
   trigger: AgentRunTrigger,
 ): Promise<void> {
+  // Phase 2 dispatch — system runtimes have their own executor + run
+  // context loader (parses SystemSpec + OrchestrationPlan).
+  // Dynamic import keeps the agent path's import graph identical and
+  // avoids a circular dependency.
+  if (runtime.kind === 'system') {
+    const { runSystemOnce } = await import(
+      '@/lib/engine/system/runtime/scheduler'
+    );
+    return runSystemOnce(supabase, runtime, trigger);
+  }
+
   // Re-validate: a runtime that was activated weeks ago may now reference
   // a stale spec/plan/build. Defensive reload.
   const ctx = await loadRunContext(supabase, runtime);
