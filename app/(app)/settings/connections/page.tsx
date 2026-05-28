@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { CloudConnectionPanel } from '@/components/connections/CloudConnectionPanel';
 import { ConnectionsForm } from '@/components/connections/ConnectionsForm';
 import { SupabaseConnectionPanel } from '@/components/connections/SupabaseConnectionPanel';
+import { ToolProviderKeysSection } from '@/components/connections/ToolProviderKeysSection';
 import { requireUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -55,6 +56,12 @@ export default async function ConnectionsSettingsPage() {
           on the page — render LAST so it's the user's parting
           impression before they paste real cloud keys. */}
       <CloudConnectionPanel />
+
+      {/* Agent tool keys — keys the user's DEPLOYED AGENTS use (e.g.
+          Brave Search for web_search). Registry-driven + visually
+          distinct from the platform connections above. Renders nothing
+          when no provider-backed tool is registered. */}
+      <ToolProviderKeysSection />
     </section>
   );
 }

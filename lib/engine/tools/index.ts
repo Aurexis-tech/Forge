@@ -101,8 +101,14 @@ export {
   NeedsConnectionError,
   requiredProviderConnections,
   buildProviderConnectionEnv,
+  listToolProviderConnections,
   type ProviderKeyLookup,
 } from './provider-connections';
+export {
+  verifyProviderKey,
+  type VerifyFetch,
+  type VerifyResult,
+} from './verify-provider-key';
 export type {
   ToolDefinition,
   ToolContext,

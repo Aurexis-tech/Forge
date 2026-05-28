@@ -18,7 +18,7 @@
 // NEXT_PUBLIC_ (asserted here AND at registration via the contract).
 
 import type { ToolProviderConnection } from './contract';
-import { getToolByName } from './registry';
+import { getToolByName, listTools } from './registry';
 // Type-only import — keeps this module out of the vercel.ts runtime
 // import graph (avoids a cycle through retry/errors).
 import type { VercelEnvVar } from '../integrations/vercel';
@@ -65,6 +65,27 @@ export function requiredProviderConnections(
     out.push(pc);
   }
   return out;
+}
+
+/**
+ * The UNIQUE set of provider connections across ALL registered tools,
+ * de-duplicated by `provider` (multiple tools may share one) and
+ * ordered by provider id for stable rendering. Registry-derived: a
+ * new provider-backed tool appears here automatically, so the
+ * settings UI gets a panel with no per-tool work.
+ *
+ * Today this is just brave_search (from web_search). An internal-only
+ * registry yields [].
+ */
+export function listToolProviderConnections(): ToolProviderConnection[] {
+  const byProvider = new Map<string, ToolProviderConnection>();
+  for (const tool of listTools()) {
+    const pc = tool.provider_connection;
+    if (pc && !byProvider.has(pc.provider)) byProvider.set(pc.provider, pc);
+  }
+  return Array.from(byProvider.values()).sort((a, b) =>
+    a.provider.localeCompare(b.provider),
+  );
 }
 
 /** A key-lookup seam: provider id → decrypted key (or null if not connected). */
