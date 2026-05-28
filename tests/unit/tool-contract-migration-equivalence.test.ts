@@ -62,17 +62,29 @@ const LEGACY_TOOL_NAMES = [
   'email_send',
 ];
 
+// web_search was DELIBERATELY upgraded to a provider-backed (Brave)
+// tool in the provider-tool prompt. Its scaffoldSource + interface line
+// change on purpose; the OTHER 7 legacy tools stay byte-identical to
+// the frozen pre-migration baseline.
+const PROVIDER_UPGRADED = 'web_search';
+const OTHER_LEGACY = LEGACY_TOOL_NAMES.filter((n) => n !== PROVIDER_UPGRADED);
+
 // ===========================================================================
-// 1 + 2 — SCAFFOLD FILES BYTE-IDENTICAL
+// 1 + 2 — SCAFFOLD FILES BYTE-IDENTICAL (the 7 unchanged tools)
 // ===========================================================================
 describe('equivalence — shipped scaffold files', () => {
-  it('the full SCAFFOLD_FILES set is byte-identical to the pre-migration baseline', () => {
-    const post = SCAFFOLD_FILES.map((f) => ({ path: f.path, content: f.content }));
-    expect(post).toEqual(baseline.scaffoldFiles);
+  it('every scaffold file EXCEPT web_search.ts is byte-identical to the baseline', () => {
+    const webSearchPath = 'src/lib/tools/web_search.ts';
+    for (const pre of baseline.scaffoldFiles) {
+      if (pre.path === webSearchPath) continue;
+      const post = SCAFFOLD_FILES.find((f) => f.path === pre.path);
+      expect(post, 'derived has ' + pre.path).toBeDefined();
+      expect(post!.content, pre.path + ' byte-identical').toBe(pre.content);
+    }
   });
 
-  it('each legacy tool source file ships byte-identical', () => {
-    for (const name of LEGACY_TOOL_NAMES) {
+  it('each of the 7 unchanged legacy tool source files ships byte-identical', () => {
+    for (const name of OTHER_LEGACY) {
       const filePath = 'src/lib/tools/' + name + '.ts';
       const pre = baseline.scaffoldFiles.find((f) => f.path === filePath);
       const post = SCAFFOLD_FILES.find((f) => f.path === filePath);
@@ -80,6 +92,22 @@ describe('equivalence — shipped scaffold files', () => {
       expect(post, 'derived has ' + filePath).toBeDefined();
       expect(post!.content).toBe(pre!.content);
     }
+  });
+
+  it('web_search.ts was DELIBERATELY upgraded to the Brave provider-backed source', () => {
+    // This is the one legacy baseline we update on purpose. The new
+    // source uses the Brave endpoint + the X-Subscription-Token header,
+    // self-mocks on FORGE_MOCK_TOOLS=1, and no longer reads the old
+    // WEB_SEARCH_URL env var.
+    const path = 'src/lib/tools/web_search.ts';
+    const pre = baseline.scaffoldFiles.find((f) => f.path === path)!;
+    const post = SCAFFOLD_FILES.find((f) => f.path === path)!;
+    expect(post.content).not.toBe(pre.content); // changed on purpose
+    expect(post.content).toContain('api.search.brave.com/res/v1/web/search');
+    expect(post.content).toContain('X-Subscription-Token');
+    expect(post.content).toContain('BRAVE_SEARCH_API_KEY');
+    expect(post.content).toContain('isMockMode'); // still self-mocks
+    expect(post.content).not.toContain('WEB_SEARCH_URL'); // old stub gone
   });
 
   it('the boilerplate files (package.json, tsconfig, README, types, index, runtime) are byte-identical', () => {
@@ -105,11 +133,31 @@ describe('equivalence — shipped scaffold files', () => {
 });
 
 // ===========================================================================
-// 3 — SCAFFOLD_TOOL_INTERFACE BYTE-IDENTICAL
+// 3 — SCAFFOLD_TOOL_INTERFACE — 7 lines unchanged, web_search line updated
 // ===========================================================================
+function interfaceLine(blob: string, name: string): string {
+  return (
+    blob.split('\n').find((l) => l.startsWith('export const ' + name + ':')) ?? ''
+  );
+}
+
 describe('equivalence — SCAFFOLD_TOOL_INTERFACE', () => {
-  it('the derived interface blob is byte-identical to the baseline', () => {
-    expect(SCAFFOLD_TOOL_INTERFACE).toBe(baseline.scaffoldToolInterface);
+  it("the 7 unchanged tools' interface signature lines are byte-identical", () => {
+    for (const name of OTHER_LEGACY) {
+      const pre = interfaceLine(baseline.scaffoldToolInterface, name);
+      expect(pre.length, name + ' has a baseline line').toBeGreaterThan(0);
+      expect(SCAFFOLD_TOOL_INTERFACE).toContain(pre);
+    }
+  });
+
+  it("web_search's interface line was DELIBERATELY updated (limit? → count?)", () => {
+    const preLine = interfaceLine(baseline.scaffoldToolInterface, 'web_search');
+    expect(preLine).toContain('limit?: number'); // old shape
+    // The old line is gone; the new line carries count? + the provider note.
+    expect(SCAFFOLD_TOOL_INTERFACE).not.toContain(preLine);
+    const newLine = interfaceLine(SCAFFOLD_TOOL_INTERFACE, 'web_search');
+    expect(newLine).toContain('count?: number');
+    expect(newLine).toContain('brave_search');
   });
 });
 

@@ -130,6 +130,34 @@ export function classifyError(err: unknown): EngineError {
     });
   }
 
+  // NeedsConnectionError (provider-backed tool, e.g. web_search →
+  // Brave). Duck-typed on `name` to avoid an import cycle with the
+  // tools layer (which imports this module's badInputError).
+  if (
+    err &&
+    typeof err === 'object' &&
+    (err as { name?: unknown }).name === 'NeedsConnectionError'
+  ) {
+    const e = err as {
+      provider?: string;
+      env_key?: string;
+      message?: string;
+    };
+    return new EngineError({
+      category: 'auth',
+      code: 'needs_connection_' + (e.provider ?? 'unknown'),
+      message: e.message ?? 'needs_connection',
+      userMessage:
+        'Connect your ' +
+        (e.provider ?? 'provider') +
+        ' key (sets ' +
+        (e.env_key ?? 'the provider env var') +
+        ') before deploying.',
+      cause: err,
+      retriable: false,
+    });
+  }
+
   // Zod errors — schema validation failures.
   if (isZodError(err)) {
     const issues = (err as { issues: ReadonlyArray<{ path: ReadonlyArray<unknown>; message: string }> })

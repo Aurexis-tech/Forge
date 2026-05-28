@@ -94,18 +94,26 @@ describe('capability sweep — runtime + scaffoldSource match declared capabilit
     expect(t.capabilities.writes_external).toBe(true);
   });
 
-  // Defence-in-depth: the three seed tools all declare every
-  // capability false — and their scaffoldSource genuinely contains
-  // no network/write tells.
-  it('the three seed tools declare every capability false AND their scaffoldSource has no network/write tells', () => {
-    const seeds = ['compute.math', 'parse.json', 'compute.text_transform'];
+  // Defence-in-depth: every seed tool (batch 1 + batch 2) declares
+  // every capability false — and their scaffoldSource genuinely
+  // contains no network/write tells.
+  it('all six seed tools declare every capability false AND their scaffoldSource has no network/write tells', () => {
+    const seeds = [
+      'compute_math',
+      'parse_json',
+      'compute_text_transform',
+      'compute_regex_extract',
+      'parse_url',
+      'parse_csv',
+    ];
     for (const name of seeds) {
       const t = listTools().find((x) => x.name === name)!;
+      expect(t, name + ' registered').toBeDefined();
       expect(t.capabilities.reads_network).toBe(false);
       expect(t.capabilities.writes_external).toBe(false);
       expect(t.capabilities.destructive).toBe(false);
-      expect(hasAny(t.scaffoldSource, NETWORK_INDICATORS)).toBe(false);
-      expect(hasAny(t.scaffoldSource, WRITE_INDICATORS)).toBe(false);
+      expect(hasAny(t.scaffoldSource, NETWORK_INDICATORS), name + ' scaffold network').toBe(false);
+      expect(hasAny(t.scaffoldSource, WRITE_INDICATORS), name + ' scaffold write').toBe(false);
     }
   });
 });

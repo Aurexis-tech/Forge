@@ -1,4 +1,4 @@
-// SEED TOOL — `compute.math`.
+// SEED TOOL — `compute_math`.
 //
 // Safe expression evaluator backed by mathjs. Pure / local — no
 // network, no fs, no destructive side-effects. Mock + runtime
@@ -37,11 +37,11 @@ export interface ComputeMathOutput {
 }
 
 export const compute_math: Tool<ComputeMathInput, ComputeMathOutput> = {
-  id: 'compute.math',
+  id: 'compute_math',
   description: 'Evaluate a mathematical expression. Returns value or error.',
   async call({ expression }, ctx) {
     if (isMockMode(ctx)) {
-      ctx.log('compute.math.mock', { expression });
+      ctx.log('compute_math.mock', { expression });
     }
     try {
       const raw = evaluate(expression);
@@ -113,7 +113,7 @@ function normaliseResult(raw: unknown): Output {
 }
 
 export const COMPUTE_MATH: ToolDefinition<Input, Output> = {
-  name: 'compute.math',
+  name: 'compute_math',
   description:
     'Evaluate a mathematical expression (arithmetic, common functions, constants). ' +
     'Use when an agent needs to compute a numeric value from a formula. Returns the ' +

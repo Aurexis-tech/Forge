@@ -5,7 +5,7 @@
 //     offer them),
 //   - they render in the codegen TOOLS section (codegen describes them),
 //   - they carry shippable scaffoldSource + correct scaffoldDependencies
-//     (generated agents can run them — mathjs for compute.math).
+//     (generated agents can run them — mathjs for compute_math).
 
 import { describe, expect, it } from 'vitest';
 import { TOOL_REGISTRY, findRegistryTool } from '@/lib/engine/planner/registry';
@@ -14,7 +14,16 @@ import {
   toolsSectionForPrompt,
 } from '@/lib/engine/tools';
 
-const SEED_NAMES = ['compute.math', 'parse.json', 'compute.text_transform'];
+const SEED_NAMES = [
+  // batch 1
+  'compute_math',
+  'parse_json',
+  'compute_text_transform',
+  // batch 2
+  'compute_regex_extract',
+  'parse_url',
+  'parse_csv',
+];
 
 // ===========================================================================
 // PLANNER REGISTRY
@@ -46,9 +55,7 @@ describe('reachability — seed tools in the derived planner registry', () => {
 describe('reachability — seed tools in the codegen TOOLS section', () => {
   it('toolsSectionForPrompt renders each seed tool with name + category', () => {
     const section = toolsSectionForPrompt(SEED_NAMES);
-    expect(section).toContain('compute.math');
-    expect(section).toContain('parse.json');
-    expect(section).toContain('compute.text_transform');
+    for (const name of SEED_NAMES) expect(section).toContain(name);
     expect(section).toContain('[compute]');
     expect(section).toContain('[parse]');
   });
@@ -72,16 +79,26 @@ describe('reachability — seed tools ship runnable scaffold source', () => {
     }
   });
 
-  it('compute.math declares mathjs as a scaffold dependency', () => {
-    const t = getToolByName('compute.math');
+  it('compute_math declares mathjs as a scaffold dependency', () => {
+    const t = getToolByName('compute_math');
     expect(t!.scaffoldDependencies).toBeDefined();
     expect(t!.scaffoldDependencies!.mathjs).toMatch(/^\^?\d+\./);
   });
 
-  it('parse.json + compute.text_transform are dependency-free', () => {
-    for (const name of ['parse.json', 'compute.text_transform']) {
+  it('parse_csv declares papaparse as a scaffold dependency', () => {
+    const t = getToolByName('parse_csv');
+    expect(t!.scaffoldDependencies).toBeDefined();
+    expect(t!.scaffoldDependencies!.papaparse).toMatch(/^\^?\d+\./);
+  });
+
+  it('the dependency-free tools declare no external deps', () => {
+    for (const name of [
+      'parse_json',
+      'compute_text_transform',
+      'compute_regex_extract',
+      'parse_url',
+    ]) {
       const t = getToolByName(name);
-      // Either undefined or an empty object — no external deps.
       const deps = t!.scaffoldDependencies ?? {};
       expect(Object.keys(deps)).toHaveLength(0);
     }

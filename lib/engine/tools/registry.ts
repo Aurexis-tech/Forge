@@ -222,6 +222,51 @@ function validateDefinition(def: ToolDefinition<unknown, unknown>): void {
     );
   }
 
+  // --- provider_connection (provider-backed tools) ---
+  if (def.provider_connection !== undefined) {
+    const pc = def.provider_connection;
+    if (typeof pc !== 'object' || pc === null) {
+      throw new ToolRegistrationError(
+        def.name,
+        'provider_connection must be an object',
+      );
+    }
+    for (const field of ['provider', 'label', 'env_key'] as const) {
+      if (typeof pc[field] !== 'string' || pc[field].trim().length === 0) {
+        throw new ToolRegistrationError(
+          def.name,
+          'provider_connection.' + field + ' must be a non-empty string',
+        );
+      }
+    }
+    if (pc.env_key.startsWith('NEXT_PUBLIC_')) {
+      throw new ToolRegistrationError(
+        def.name,
+        'provider_connection.env_key must be SERVER-ONLY (never NEXT_PUBLIC_)',
+      );
+    }
+    if (pc.setup_url !== undefined && typeof pc.setup_url !== 'string') {
+      throw new ToolRegistrationError(def.name, 'provider_connection.setup_url must be a string');
+    }
+    if (pc.verify !== undefined) {
+      for (const field of ['url', 'method', 'header'] as const) {
+        if (typeof pc.verify[field] !== 'string' || pc.verify[field].length === 0) {
+          throw new ToolRegistrationError(
+            def.name,
+            'provider_connection.verify.' + field + ' must be a non-empty string',
+          );
+        }
+      }
+    }
+    // CAPABILITY HONESTY: a provider-backed tool reaches the network.
+    if (def.capabilities.reads_network !== true) {
+      throw new ToolRegistrationError(
+        def.name,
+        'a tool with provider_connection MUST declare capabilities.reads_network:true',
+      );
+    }
+  }
+
   // --- examples ---
   if (!Array.isArray(def.examples) || def.examples.length < 2) {
     throw new ToolRegistrationError(

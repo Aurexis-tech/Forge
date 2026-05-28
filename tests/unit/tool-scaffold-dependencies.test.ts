@@ -44,10 +44,10 @@ afterEach(() => {
 // ===========================================================================
 // COMPUTE.MATH SHIPS MATHJS
 // ===========================================================================
-describe('mergePackageJsonDependencies — compute.math ships mathjs', () => {
-  it('a build selecting compute.math gets mathjs in package.json at the declared version', () => {
+describe('mergePackageJsonDependencies — compute_math ships mathjs', () => {
+  it('a build selecting compute_math gets mathjs in package.json at the declared version', () => {
     const merged = mergePackageJsonDependencies(BASE_PACKAGE_JSON, [
-      'compute.math',
+      'compute_math',
     ]);
     const pkg = JSON.parse(merged) as { dependencies: Record<string, string> };
     expect(pkg.dependencies.mathjs).toBe('^15.2.0');
@@ -55,7 +55,7 @@ describe('mergePackageJsonDependencies — compute.math ships mathjs', () => {
 
   it('the base @anthropic-ai/sdk dependency is still present alongside mathjs', () => {
     const merged = mergePackageJsonDependencies(BASE_PACKAGE_JSON, [
-      'compute.math',
+      'compute_math',
     ]);
     const pkg = JSON.parse(merged) as { dependencies: Record<string, string> };
     expect(pkg.dependencies['@anthropic-ai/sdk']).toBe('^0.40.0');
@@ -64,10 +64,45 @@ describe('mergePackageJsonDependencies — compute.math ships mathjs', () => {
 });
 
 // ===========================================================================
+// TWO REAL DEPS — the union scenario (mathjs + papaparse)
+// ===========================================================================
+describe('mergePackageJsonDependencies — union of two real deps', () => {
+  it('a build selecting BOTH compute_math AND parse_csv merges mathjs + papaparse', () => {
+    const merged = mergePackageJsonDependencies(BASE_PACKAGE_JSON, [
+      'compute_math',
+      'parse_csv',
+    ]);
+    const pkg = JSON.parse(merged) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies.mathjs).toBe('^15.2.0');
+    expect(pkg.dependencies.papaparse).toBe('^5.5.3');
+    // Base dep still present.
+    expect(pkg.dependencies['@anthropic-ai/sdk']).toBe('^0.40.0');
+    // Sorted: @anthropic-ai/sdk, mathjs, papaparse.
+    expect(merged.indexOf('@anthropic-ai/sdk')).toBeLessThan(merged.indexOf('mathjs'));
+    expect(merged.indexOf('mathjs')).toBeLessThan(merged.indexOf('papaparse'));
+  });
+
+  it('a build with NEITHER has neither mathjs nor papaparse', () => {
+    const merged = mergePackageJsonDependencies(BASE_PACKAGE_JSON, [
+      'parse_url',
+      'compute_regex_extract',
+    ]);
+    expect(merged).not.toContain('mathjs');
+    expect(merged).not.toContain('papaparse');
+  });
+
+  it('a build selecting only parse_csv ships papaparse but NOT mathjs', () => {
+    const merged = mergePackageJsonDependencies(BASE_PACKAGE_JSON, ['parse_csv']);
+    expect(merged).toContain('papaparse');
+    expect(merged).not.toContain('mathjs');
+  });
+});
+
+// ===========================================================================
 // EXCLUDING COMPUTE.MATH → NO MATHJS
 // ===========================================================================
 describe('mergePackageJsonDependencies — no math, no mathjs', () => {
-  it('a build that excludes compute.math has NO mathjs', () => {
+  it('a build that excludes compute_math has NO mathjs', () => {
     const merged = mergePackageJsonDependencies(BASE_PACKAGE_JSON, [
       'http_request',
       'llm_completion',
@@ -75,10 +110,10 @@ describe('mergePackageJsonDependencies — no math, no mathjs', () => {
     expect(merged).not.toContain('mathjs');
   });
 
-  it('dependency-free tools (parse.json, text_transform) add nothing', () => {
+  it('dependency-free tools (parse_json, text_transform) add nothing', () => {
     const merged = mergePackageJsonDependencies(BASE_PACKAGE_JSON, [
-      'parse.json',
-      'compute.text_transform',
+      'parse_json',
+      'compute_text_transform',
     ]);
     // Identical to a build with no tool deps at all.
     expect(merged).toBe(mergePackageJsonDependencies(BASE_PACKAGE_JSON, []));
@@ -93,10 +128,10 @@ describe('mergePackageJsonDependencies — base deps always present', () => {
   it('@anthropic-ai/sdk + devDeps survive every tool selection', () => {
     for (const sel of [
       [] as string[],
-      ['compute.math'],
-      ['parse.json', 'compute.text_transform'],
+      ['compute_math'],
+      ['parse_json', 'compute_text_transform'],
       LEGACY_TOOL_NAMES,
-      [...LEGACY_TOOL_NAMES, 'compute.math'],
+      [...LEGACY_TOOL_NAMES, 'compute_math'],
     ]) {
       const merged = mergePackageJsonDependencies(BASE_PACKAGE_JSON, sel);
       const pkg = JSON.parse(merged) as {
@@ -135,26 +170,26 @@ describe('mergePackageJsonDependencies — legacy byte-identity', () => {
 // ===========================================================================
 describe('mergePackageJsonDependencies — stable ordering', () => {
   it('the same selected-tool set yields byte-identical output across calls', () => {
-    const a = mergePackageJsonDependencies(BASE_PACKAGE_JSON, ['compute.math']);
-    const b = mergePackageJsonDependencies(BASE_PACKAGE_JSON, ['compute.math']);
+    const a = mergePackageJsonDependencies(BASE_PACKAGE_JSON, ['compute_math']);
+    const b = mergePackageJsonDependencies(BASE_PACKAGE_JSON, ['compute_math']);
     expect(a).toBe(b);
   });
 
   it('selection ORDER does not change the output (deps sorted)', () => {
     const a = mergePackageJsonDependencies(BASE_PACKAGE_JSON, [
-      'compute.math',
-      'parse.json',
+      'compute_math',
+      'parse_json',
     ]);
     const b = mergePackageJsonDependencies(BASE_PACKAGE_JSON, [
-      'parse.json',
-      'compute.math',
+      'parse_json',
+      'compute_math',
     ]);
     expect(a).toBe(b);
   });
 
   it('dependencies are sorted alphabetically (@anthropic-ai/sdk before mathjs)', () => {
     const merged = mergePackageJsonDependencies(BASE_PACKAGE_JSON, [
-      'compute.math',
+      'compute_math',
     ]);
     expect(merged.indexOf('@anthropic-ai/sdk')).toBeLessThan(
       merged.indexOf('mathjs'),
@@ -163,7 +198,7 @@ describe('mergePackageJsonDependencies — stable ordering', () => {
 
   it('the output is valid JSON ending with a single trailing newline', () => {
     const merged = mergePackageJsonDependencies(BASE_PACKAGE_JSON, [
-      'compute.math',
+      'compute_math',
     ]);
     expect(() => JSON.parse(merged)).not.toThrow();
     expect(merged.endsWith('}\n')).toBe(true);
@@ -204,10 +239,10 @@ describe('collectToolDependencies — version conflict fails loudly', () => {
   });
 
   it('two tools declaring the same package at DIFFERENT versions throws bad_input/tool_dependency_conflict', () => {
-    registerTool(depTool('conflict.a', { leftpad: '^1.0.0' }));
-    registerTool(depTool('conflict.b', { leftpad: '^2.0.0' }));
+    registerTool(depTool('conflict_a', { leftpad: '^1.0.0' }));
+    registerTool(depTool('conflict_b', { leftpad: '^2.0.0' }));
     try {
-      collectToolDependencies(['conflict.a', 'conflict.b']);
+      collectToolDependencies(['conflict_a', 'conflict_b']);
       expect.fail('expected a conflict error');
     } catch (err) {
       expect(err).toBeInstanceOf(EngineError);
@@ -217,17 +252,17 @@ describe('collectToolDependencies — version conflict fails loudly', () => {
   });
 
   it('two tools declaring the same package at the SAME version dedupe cleanly', () => {
-    registerTool(depTool('same.a', { leftpad: '^1.0.0' }));
-    registerTool(depTool('same.b', { leftpad: '^1.0.0' }));
-    const deps = collectToolDependencies(['same.a', 'same.b']);
+    registerTool(depTool('same_a', { leftpad: '^1.0.0' }));
+    registerTool(depTool('same_b', { leftpad: '^1.0.0' }));
+    const deps = collectToolDependencies(['same_a', 'same_b']);
     expect(deps).toEqual({ leftpad: '^1.0.0' });
   });
 
   it('the conflict surfaces through mergePackageJsonDependencies too', () => {
-    registerTool(depTool('m.a', { leftpad: '^1.0.0' }));
-    registerTool(depTool('m.b', { leftpad: '^2.0.0' }));
+    registerTool(depTool('m_a', { leftpad: '^1.0.0' }));
+    registerTool(depTool('m_b', { leftpad: '^2.0.0' }));
     try {
-      mergePackageJsonDependencies(BASE_PACKAGE_JSON, ['m.a', 'm.b']);
+      mergePackageJsonDependencies(BASE_PACKAGE_JSON, ['m_a', 'm_b']);
       expect.fail('expected a conflict error');
     } catch (err) {
       expect(err).toBeInstanceOf(EngineError);

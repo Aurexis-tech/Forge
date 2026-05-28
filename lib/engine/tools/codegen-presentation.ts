@@ -21,7 +21,7 @@
 //     concrete instance the LLM can pattern-match against.
 //
 // USAGE
-//   const section = toolsSectionForPrompt(['compute.math', 'parse.json']);
+//   const section = toolsSectionForPrompt(['compute_math', 'parse_json']);
 
 import type { ToolDefinition } from './contract';
 import { getToolByName } from './registry';

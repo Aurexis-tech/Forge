@@ -17,6 +17,7 @@ import {
   NeedsKeyError,
   peekKeySource,
 } from '@/lib/engine/keys';
+import { NeedsConnectionError } from '@/lib/engine/tools';
 import type { ByokProvider } from '@/lib/types';
 
 interface NeedsKeyBody {
@@ -61,4 +62,31 @@ export function needsKeyResponse(err: unknown): NextResponse | null {
     buildBody(err.provider, err.require_byok),
     { status: 412 },
   );
+}
+
+interface NeedsConnectionBody {
+  error: string;
+  reason: 'needs_connection';
+  provider: string;
+  env_key: string;
+  setup_url: string | null;
+}
+
+/**
+ * Map a thrown NeedsConnectionError (a provider-backed tool whose key
+ * isn't connected) to a 412 — the connection-flavoured analogue of
+ * needsKeyResponse. Returns null for any other error type. The body
+ * names the provider + env_key + setup_url so the UI can render a
+ * "connect your <provider> key" gate.
+ */
+export function needsConnectionResponse(err: unknown): NextResponse | null {
+  if (!(err instanceof NeedsConnectionError)) return null;
+  const body: NeedsConnectionBody = {
+    error: 'connect your ' + err.provider + ' key to deploy this agent',
+    reason: 'needs_connection',
+    provider: err.provider,
+    env_key: err.env_key,
+    setup_url: err.setup_url,
+  };
+  return NextResponse.json(body, { status: 412 });
 }

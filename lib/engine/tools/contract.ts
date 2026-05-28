@@ -89,6 +89,40 @@ export interface ToolContext {
   readonly log: (message: string, meta?: Record<string, unknown>) => void;
 }
 
+/**
+ * PROVIDER CONNECTION — declared by a provider-backed tool (one that
+ * calls an external API on the user's account). It tells the Forge:
+ *   - which connection the user must bring (`provider` + `label`),
+ *   - which env var the DEPLOYED AGENT reads at runtime (`env_key`),
+ *   - where the user gets a key (`setup_url`),
+ *   - an optional reachability shape for a connect-time verify probe.
+ *
+ * The key is resolved from the encrypted connection store and wired
+ * into the deployed agent's env as a SERVER-ONLY var at deploy time
+ * (see lib/engine/tools/provider-connections.ts). The ENGINE never
+ * calls the provider API — the deployed agent does, on the user's
+ * own account + quota.
+ *
+ * A tool that declares `provider_connection` MUST declare
+ * `capabilities.reads_network: true` (enforced at registration).
+ */
+export interface ToolProviderConnection {
+  /** Stable connection id, e.g. 'brave_search'. Stored as the `connections.provider` value. */
+  readonly provider: string;
+  /** Human label, e.g. 'Brave Search'. */
+  readonly label: string;
+  /** Env var the DEPLOYED AGENT reads, e.g. 'BRAVE_SEARCH_API_KEY'. Never NEXT_PUBLIC. */
+  readonly env_key: string;
+  /** Where the user obtains a key. */
+  readonly setup_url?: string;
+  /** Optional reachability shape for a connect-time verify probe. */
+  readonly verify?: {
+    readonly url: string;
+    readonly method: string;
+    readonly header: string;
+  };
+}
+
 /** A single worked example surfaced in codegen prompts + tests. */
 export interface ToolExample<I, O> {
   /** Short label (e.g. "simple sum", "kebab case"). */
@@ -169,7 +203,26 @@ export interface ToolDefinition<I = unknown, O = unknown> {
   readonly envKeys: readonly string[];
   /** Planner availability status. */
   readonly status: ToolPlannerStatus;
+
+  /**
+   * Present for PROVIDER-BACKED tools (web_search, future fetch/
+   * communicate tools). Declares the connection the user must bring +
+   * the env var wired into the deployed agent. A tool with this set
+   * MUST declare capabilities.reads_network:true (enforced at
+   * registration). Internal tools leave it undefined.
+   */
+  readonly provider_connection?: ToolProviderConnection;
 }
 
-/** The snake_case name grammar — exposed so tests can re-use it. */
-export const TOOL_NAME_PATTERN = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/;
+/**
+ * The tool `name` grammar: STRICT snake_case — lowercase, digits,
+ * underscores; must start with a letter; NO dots, NO uppercase.
+ *
+ * This is enforced at registration (registry.ts). Cross-layer
+ * consistency: a tool name doubles as the generated agent's export
+ * stem (src/lib/tools/<name>.ts) AND must be valid as a spec
+ * capability id (which is lower_snake_case, no dots) — so the
+ * single snake_case grammar closes the prior namespace split where
+ * dotted seed names (compute.math) couldn't be used as capabilities.
+ */
+export const TOOL_NAME_PATTERN = /^[a-z][a-z0-9_]*$/;

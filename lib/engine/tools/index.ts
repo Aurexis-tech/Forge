@@ -3,7 +3,8 @@
 // Importing this module registers ALL engine tools into the
 // in-process registry as a side effect:
 //   - the 8 builtin planner tools (web_search … email_send)
-//   - the 3 seed tools (compute.math, parse.json, compute.text_transform)
+//   - the seed tools (compute_math, parse_json, compute_text_transform,
+//     compute_regex_extract, parse_url, parse_csv)
 // then re-exports the public API:
 //
 //   - registerTool, getToolByName, listTools (registry)
@@ -20,19 +21,29 @@
 // can be imported multiple times without duplicate-name errors.
 
 import { registerTool, getToolByName } from './registry';
-import { COMPUTE_MATH, PARSE_JSON, COMPUTE_TEXT_TRANSFORM } from './seed';
+import {
+  COMPUTE_MATH,
+  PARSE_JSON,
+  COMPUTE_TEXT_TRANSFORM,
+  COMPUTE_REGEX_EXTRACT,
+  PARSE_URL,
+  PARSE_CSV,
+} from './seed';
 import { PLANNER_TOOLS } from './builtin';
 import type { ToolDefinition } from './contract';
 
 let toolsRegistered = false;
 
 // Canonical registration order: the 8 builtin planner tools first
-// (in their legacy order), then the 3 seed tools.
+// (in their legacy order), then the seed tools (batch 1 + batch 2).
 const ALL_TOOLS: ReadonlyArray<ToolDefinition> = [
   ...PLANNER_TOOLS,
   COMPUTE_MATH as unknown as ToolDefinition,
   PARSE_JSON as unknown as ToolDefinition,
   COMPUTE_TEXT_TRANSFORM as unknown as ToolDefinition,
+  COMPUTE_REGEX_EXTRACT as unknown as ToolDefinition,
+  PARSE_URL as unknown as ToolDefinition,
+  PARSE_CSV as unknown as ToolDefinition,
 ];
 
 /**
@@ -86,6 +97,12 @@ export {
   mergePackageJsonDependencies,
   dedupeSelectedToolNames,
 } from './scaffold-dependencies';
+export {
+  NeedsConnectionError,
+  requiredProviderConnections,
+  buildProviderConnectionEnv,
+  type ProviderKeyLookup,
+} from './provider-connections';
 export type {
   ToolDefinition,
   ToolContext,
@@ -93,9 +110,17 @@ export type {
   ToolCapabilities,
   ToolExample,
   ToolPlannerStatus,
+  ToolProviderConnection,
 } from './contract';
 export { TOOL_CATEGORIES, TOOL_NAME_PATTERN, TOOL_PLANNER_STATUSES } from './contract';
-export { COMPUTE_MATH, PARSE_JSON, COMPUTE_TEXT_TRANSFORM } from './seed';
+export {
+  COMPUTE_MATH,
+  PARSE_JSON,
+  COMPUTE_TEXT_TRANSFORM,
+  COMPUTE_REGEX_EXTRACT,
+  PARSE_URL,
+  PARSE_CSV,
+} from './seed';
 export {
   PLANNER_TOOLS,
   PLANNER_TOOL_NAMES,

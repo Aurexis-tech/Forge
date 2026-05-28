@@ -65,7 +65,7 @@ describe('toolsSectionForPrompt — empty + unknown', () => {
 // ===========================================================================
 describe('toolsSectionForPrompt — determinism', () => {
   it('produces byte-identical output across 10 successive calls', () => {
-    const names = ['compute.math', 'parse.json', 'compute.text_transform'];
+    const names = ['compute_math', 'parse_json', 'compute_text_transform'];
     const first = toolsSectionForPrompt(names);
     for (let i = 0; i < 9; i++) {
       expect(toolsSectionForPrompt(names)).toBe(first);
@@ -77,15 +77,15 @@ describe('toolsSectionForPrompt — determinism', () => {
     // name list MUST produce the same section.
     _resetRegistryForTests();
     _resetSeedFlagForTests();
-    registerTool(trivialTool('aa.x'));
-    registerTool(trivialTool('bb.x'));
-    const a = toolsSectionForPrompt(['aa.x', 'bb.x']);
+    registerTool(trivialTool('aa_x'));
+    registerTool(trivialTool('bb_x'));
+    const a = toolsSectionForPrompt(['aa_x', 'bb_x']);
 
     _resetRegistryForTests();
     _resetSeedFlagForTests();
-    registerTool(trivialTool('bb.x'));
-    registerTool(trivialTool('aa.x'));
-    const b = toolsSectionForPrompt(['aa.x', 'bb.x']);
+    registerTool(trivialTool('bb_x'));
+    registerTool(trivialTool('aa_x'));
+    const b = toolsSectionForPrompt(['aa_x', 'bb_x']);
 
     expect(a).toBe(b);
   });
@@ -93,11 +93,11 @@ describe('toolsSectionForPrompt — determinism', () => {
   it('preserves the INPUT name order in the rendered section', () => {
     _resetRegistryForTests();
     _resetSeedFlagForTests();
-    registerTool(trivialTool('zzz.late'));
-    registerTool(trivialTool('aaa.early'));
-    const section = toolsSectionForPrompt(['zzz.late', 'aaa.early']);
-    const zIdx = section.indexOf('zzz.late');
-    const aIdx = section.indexOf('aaa.early');
+    registerTool(trivialTool('zzz_late'));
+    registerTool(trivialTool('aaa_early'));
+    const section = toolsSectionForPrompt(['zzz_late', 'aaa_early']);
+    const zIdx = section.indexOf('zzz_late');
+    const aIdx = section.indexOf('aaa_early');
     expect(zIdx).toBeGreaterThan(-1);
     expect(aIdx).toBeGreaterThan(-1);
     expect(zIdx).toBeLessThan(aIdx);
@@ -107,7 +107,7 @@ describe('toolsSectionForPrompt — determinism', () => {
     _resetRegistryForTests();
     _resetSeedFlagForTests();
     const t: ToolDefinition = {
-      name: 'order.test',
+      name: 'order_test',
       description: 'd',
       category: 'compute',
       capabilities: { reads_network: false, writes_external: false, destructive: false },
@@ -126,7 +126,7 @@ describe('toolsSectionForPrompt — determinism', () => {
       status: 'available',
     };
     registerTool(t);
-    const section = toolsSectionForPrompt(['order.test']);
+    const section = toolsSectionForPrompt(['order_test']);
     // Keys MUST appear alphabetically (apple before zebra; bravo before delta).
     expect(section.indexOf('apple')).toBeLessThan(section.indexOf('zebra'));
     expect(section.indexOf('bravo')).toBeLessThan(section.indexOf('delta'));
@@ -138,11 +138,11 @@ describe('toolsSectionForPrompt — determinism', () => {
 // ===========================================================================
 describe('renderToolBlock — shape', () => {
   it('contains name, category, description, capabilities, input + output example', () => {
-    const lines = renderToolBlock(trivialTool('shape.x'));
+    const lines = renderToolBlock(trivialTool('shape_x'));
     const joined = lines.join('\n');
-    expect(joined).toContain('shape.x');
+    expect(joined).toContain('shape_x');
     expect(joined).toContain('[compute]');
-    expect(joined).toContain('description for shape.x');
+    expect(joined).toContain('description for shape_x');
     expect(joined).toContain('capabilities:');
     expect(joined).toContain('local'); // reads_network:false → "local"
     expect(joined).toContain('input  :');
@@ -151,7 +151,7 @@ describe('renderToolBlock — shape', () => {
 
   it("a network-reading tool's capabilities line says 'network'", () => {
     const t: ToolDefinition = {
-      ...trivialTool('net.x'),
+      ...trivialTool('net_x'),
       capabilities: { reads_network: true, writes_external: false, destructive: false },
     };
     const joined = renderToolBlock(t).join('\n');
@@ -161,7 +161,7 @@ describe('renderToolBlock — shape', () => {
 
   it('a destructive + writes_external tool surfaces both flags', () => {
     const t: ToolDefinition = {
-      ...trivialTool('danger.x'),
+      ...trivialTool('danger_x'),
       capabilities: { reads_network: false, writes_external: true, destructive: true },
     };
     const joined = renderToolBlock(t).join('\n');
@@ -176,13 +176,13 @@ describe('renderToolBlock — shape', () => {
 describe('toolsSectionForPrompt — seed tools end-to-end', () => {
   it('the section for all three seed tools contains each name + category', () => {
     const section = toolsSectionForPrompt([
-      'compute.math',
-      'parse.json',
-      'compute.text_transform',
+      'compute_math',
+      'parse_json',
+      'compute_text_transform',
     ]);
-    expect(section).toContain('compute.math');
-    expect(section).toContain('parse.json');
-    expect(section).toContain('compute.text_transform');
+    expect(section).toContain('compute_math');
+    expect(section).toContain('parse_json');
+    expect(section).toContain('compute_text_transform');
     expect(section).toContain('[compute]');
     expect(section).toContain('[parse]');
     // All three are local-only, so the section should not surface 'network'.

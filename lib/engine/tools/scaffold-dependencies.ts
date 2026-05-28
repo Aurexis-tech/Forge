@@ -3,7 +3,7 @@
 // project's package.json.
 //
 // WHY
-//   A build that selects `compute.math` ships source that
+//   A build that selects `compute_math` ships source that
 //   `import { evaluate } from 'mathjs'`. If mathjs isn't in the
 //   generated package.json, the deployed agent crashes at runtime.
 //   This module closes the gap: the deps of the tools a build

@@ -3,7 +3,7 @@
 //
 // Proves the per-build package.json dependency merge actually fires
 // in the real codegen pipeline (not just the pure helper):
-//   - a build whose plan selects compute.math → package.json file
+//   - a build whose plan selects compute_math → package.json file
 //     in the build output contains mathjs.
 //   - a build with only the legacy tools → package.json byte-identical
 //     to the scaffold base (no tool deps).
@@ -97,16 +97,16 @@ function primeMocks() {
 }
 
 describe('dependency-merge wiring — generateCode', () => {
-  it('a build selecting compute.math ships mathjs in the package.json file', async () => {
+  it('a build selecting compute_math ships mathjs in the package.json file', async () => {
     primeMocks();
     // Spec capabilities are lower_snake_case only; the dotted
-    // compute.math registry_id rides on the PLAN's tools (which is
+    // compute_math registry_id rides on the PLAN's tools (which is
     // what the merge reads).
     const summary = await generateCode({
       spec: makeSpec([{ tool: 'http_request', why: 'fetch' }]),
       plan: makePlan([
         { registry_id: 'http_request' },
-        { registry_id: 'compute.math' },
+        { registry_id: 'compute_math' },
       ]),
       governance,
     });

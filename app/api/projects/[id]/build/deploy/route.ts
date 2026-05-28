@@ -21,6 +21,11 @@ import { requireProjectOwnership, requireUser, UnauthorizedError } from '@/lib/a
 import { assertAllowed, GovernanceError, governanceBlockResponse } from '@/lib/engine/governance/guard';
 import { loadConnectionWithToken } from '@/lib/engine/integrations/connections';
 import {
+  buildProviderConnectionEnv,
+  dedupeSelectedToolNames,
+} from '@/lib/engine/tools';
+import { needsConnectionResponse } from '@/lib/route-needs-key';
+import {
   VercelDeployError,
   deployBuildToVercel,
   type VercelEnvVar,
@@ -243,6 +248,35 @@ export async function POST(req: Request, { params }: RouteContext) {
 
   // --- Merge env: plan-declared + incoming secrets ------------------------
   const envForVercel = mergeEnv(buildPlan.env_required, incomingSecrets);
+
+  // --- Provider-backed tool connections (e.g. web_search → Brave) ---------
+  // For every selected tool that declares a provider_connection, resolve
+  // the key from the encrypted connection store and wire it SERVER-ONLY.
+  // Missing key → 412 NeedsConnection (the agent is NOT deployed
+  // half-wired). The ENGINE never calls the provider; the deployed agent
+  // does, on the user's account.
+  const selectedToolNames = dedupeSelectedToolNames(
+    buildPlan.tools.map((t) => t.registry_id),
+  );
+  try {
+    const providerEnv = await buildProviderConnectionEnv({
+      toolNames: selectedToolNames,
+      lookupKey: async (provider) => {
+        const c = await loadConnectionWithToken(
+          supabase,
+          provider as Parameters<typeof loadConnectionWithToken>[1],
+          user.id,
+        );
+        return c?.token ?? null;
+      },
+    });
+    for (const e of providerEnv) envForVercel.push(e);
+  } catch (err) {
+    const needs = needsConnectionResponse(err);
+    if (needs) return needs;
+    throw err;
+  }
+
   const envKeysSet = envForVercel.map((e) => e.key);
 
   // --- Audit BEFORE acting (so consent is recorded even on a crash) ------

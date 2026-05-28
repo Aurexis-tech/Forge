@@ -1,14 +1,14 @@
-// Per-tool test — compute.math seed tool.
+// Per-tool test — compute_math seed tool.
 
 import { describe, expect, it } from 'vitest';
 import { callTool, COMPUTE_MATH } from '@/lib/engine/tools';
 
 const MODE = 'mock' as const;
 
-describe('compute.math — happy path', () => {
+describe('compute_math — happy path', () => {
   it('evaluates simple arithmetic', async () => {
     const out = (await callTool({
-      name: 'compute.math',
+      name: 'compute_math',
       input: { expression: '2 + 3' },
       mode: MODE,
     })) as { value: number };
@@ -17,7 +17,7 @@ describe('compute.math — happy path', () => {
 
   it('evaluates a function + constant expression', async () => {
     const out = (await callTool({
-      name: 'compute.math',
+      name: 'compute_math',
       input: { expression: 'sqrt(16) + 1' },
       mode: MODE,
     })) as { value: number };
@@ -26,7 +26,7 @@ describe('compute.math — happy path', () => {
 
   it('handles pi correctly', async () => {
     const out = (await callTool({
-      name: 'compute.math',
+      name: 'compute_math',
       input: { expression: 'pi' },
       mode: MODE,
     })) as { value: number };
@@ -34,10 +34,10 @@ describe('compute.math — happy path', () => {
   });
 });
 
-describe('compute.math — edge cases', () => {
+describe('compute_math — edge cases', () => {
   it('returns an error message for malformed input rather than throwing', async () => {
     const out = (await callTool({
-      name: 'compute.math',
+      name: 'compute_math',
       input: { expression: '2 +' },
       mode: MODE,
     })) as { value: number | string; error?: string };
@@ -48,7 +48,7 @@ describe('compute.math — edge cases', () => {
 
   it('coerces non-finite results to a string + sets error', async () => {
     const out = (await callTool({
-      name: 'compute.math',
+      name: 'compute_math',
       input: { expression: '1 / 0' },
       mode: MODE,
     })) as { value: number | string; error?: string };
@@ -64,17 +64,17 @@ describe('compute.math — edge cases', () => {
 
   it('rejects empty expression at the schema boundary', async () => {
     await expect(
-      callTool({ name: 'compute.math', input: { expression: '' }, mode: MODE }),
+      callTool({ name: 'compute_math', input: { expression: '' }, mode: MODE }),
     ).rejects.toThrow(/input/);
   });
 });
 
-describe('compute.math — determinism', () => {
+describe('compute_math — determinism', () => {
   it('mock returns the same output for the same input across 50 calls', async () => {
     const outputs = await Promise.all(
       Array.from({ length: 50 }, () =>
         callTool({
-          name: 'compute.math',
+          name: 'compute_math',
           input: { expression: 'sin(pi/2) + cos(0)' },
           mode: MODE,
         }),
@@ -87,7 +87,7 @@ describe('compute.math — determinism', () => {
   });
 });
 
-describe('compute.math — examples parse against schemas', () => {
+describe('compute_math — examples parse against schemas', () => {
   it('every example input parses against input_schema', () => {
     for (const ex of COMPUTE_MATH.examples) {
       expect(COMPUTE_MATH.input_schema.safeParse(ex.input).success).toBe(true);

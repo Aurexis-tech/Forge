@@ -8,3 +8,6 @@
 export { COMPUTE_MATH } from './compute-math';
 export { PARSE_JSON } from './parse-json';
 export { COMPUTE_TEXT_TRANSFORM } from './text-transform';
+export { COMPUTE_REGEX_EXTRACT } from './regex-extract';
+export { PARSE_URL } from './parse-url';
+export { PARSE_CSV } from './parse-csv';

@@ -48,7 +48,7 @@ function tracingTool(opts: { runtimeMustNotFire?: boolean } = {}): {
 } {
   const trace: Trace = { runtimeCalls: 0, mockCalls: 0 };
   const def: ToolDefinition<{ x: number }, { y: number }> = {
-    name: 'test.tracer',
+    name: 'test_tracer',
     description: 'tracer',
     category: 'compute',
     capabilities: { reads_network: false, writes_external: false, destructive: false },
@@ -87,7 +87,7 @@ describe('sandbox bridge — mock-vs-runtime dispatch', () => {
     const { trace, def } = tracingTool({ runtimeMustNotFire: true });
     registerTool(def);
     const out = (await callTool({
-      name: 'test.tracer',
+      name: 'test_tracer',
       input: { x: 7 },
       mode: 'mock',
     })) as { y: number };
@@ -100,7 +100,7 @@ describe('sandbox bridge — mock-vs-runtime dispatch', () => {
     const { trace, def } = tracingTool();
     registerTool(def);
     const out = (await callTool({
-      name: 'test.tracer',
+      name: 'test_tracer',
       input: { x: 7 },
       mode: 'runtime',
     })) as { y: number };
@@ -114,7 +114,7 @@ describe('sandbox bridge — mock-vs-runtime dispatch', () => {
     registerTool(def);
     // No mode flag — bridge MUST default to 'mock' so a forgetful
     // caller cannot accidentally fire real I/O.
-    const out = (await callTool({ name: 'test.tracer', input: { x: 3 } })) as {
+    const out = (await callTool({ name: 'test_tracer', input: { x: 3 } })) as {
       y: number;
     };
     expect(out.y).toBe(3); // mock path
@@ -126,7 +126,7 @@ describe('sandbox bridge — mock-vs-runtime dispatch', () => {
     const { trace, def } = tracingTool({ runtimeMustNotFire: true });
     registerTool(def);
     for (let i = 0; i < 25; i++) {
-      await callTool({ name: 'test.tracer', input: { x: i }, mode: 'mock' });
+      await callTool({ name: 'test_tracer', input: { x: i }, mode: 'mock' });
     }
     expect(trace.mockCalls).toBe(25);
     expect(trace.runtimeCalls).toBe(0);
@@ -149,7 +149,7 @@ describe('sandbox bridge — error surfaces', () => {
     registerTool(def);
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await callTool({ name: 'test.tracer', input: { x: 'not a number' as any }, mode: 'mock' });
+      await callTool({ name: 'test_tracer', input: { x: 'not a number' as any }, mode: 'mock' });
       expect.fail('expected ToolSchemaError');
     } catch (err) {
       expect(err).toBeInstanceOf(ToolSchemaError);
@@ -159,7 +159,7 @@ describe('sandbox bridge — error surfaces', () => {
 
   it('output that fails output_schema throws ToolSchemaError(direction="output")', async () => {
     const broken: ToolDefinition<{ x: number }, { y: number }> = {
-      name: 'test.broken',
+      name: 'test_broken',
       description: 'returns a bad shape',
       category: 'compute',
       capabilities: { reads_network: false, writes_external: false, destructive: false },
@@ -182,7 +182,7 @@ describe('sandbox bridge — error surfaces', () => {
     };
     registerTool(broken);
     try {
-      await callTool({ name: 'test.broken', input: { x: 1 }, mode: 'mock' });
+      await callTool({ name: 'test_broken', input: { x: 1 }, mode: 'mock' });
       expect.fail('expected ToolSchemaError');
     } catch (err) {
       expect(err).toBeInstanceOf(ToolSchemaError);
@@ -201,10 +201,10 @@ describe('sandbox bridge — hermeticity for seed tools', () => {
     // If any of these accidentally falls through to a runtime that
     // calls fetch, the global setup.ts blocker throws
     // "real fetch() blocked" and the test fails.
-    await callTool({ name: 'compute.math', input: { expression: '1+1' }, mode: 'mock' });
-    await callTool({ name: 'parse.json', input: { text: '{"a":1}' }, mode: 'mock' });
+    await callTool({ name: 'compute_math', input: { expression: '1+1' }, mode: 'mock' });
+    await callTool({ name: 'parse_json', input: { text: '{"a":1}' }, mode: 'mock' });
     await callTool({
-      name: 'compute.text_transform',
+      name: 'compute_text_transform',
       input: { text: 'hello world', op: 'slug' },
       mode: 'mock',
     });

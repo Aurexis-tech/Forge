@@ -32,7 +32,7 @@ afterEach(() => {
 // mutate single fields to trigger specific failure modes.
 function baseDef(over: Partial<ToolDefinition> = {}): ToolDefinition {
   return {
-    name: 'test.tool',
+    name: 'test_tool',
     description: 'a test tool',
     category: 'compute',
     capabilities: { reads_network: false, writes_external: false, destructive: false },
@@ -64,31 +64,31 @@ describe('registerTool — happy path', () => {
   it('a fully-formed definition registers cleanly and is retrievable by name', () => {
     const def = baseDef();
     expect(() => registerTool(def)).not.toThrow();
-    expect(getToolByName('test.tool')).toBe(def);
+    expect(getToolByName('test_tool')).toBe(def);
   });
 
   it('listTools returns the registered tool sorted by name', () => {
-    registerTool(baseDef({ name: 'b.tool' }));
-    registerTool(baseDef({ name: 'a.tool' }));
+    registerTool(baseDef({ name: 'b_tool' }));
+    registerTool(baseDef({ name: 'a_tool' }));
     const names = listTools().map((t) => t.name);
-    expect(names).toEqual(['a.tool', 'b.tool']);
+    expect(names).toEqual(['a_tool', 'b_tool']);
   });
 
   it('listTools filters by category', () => {
-    registerTool(baseDef({ name: 'comp.x', category: 'compute' }));
-    registerTool(baseDef({ name: 'parse.x', category: 'parse' }));
-    expect(listTools({ category: 'parse' }).map((t) => t.name)).toEqual(['parse.x']);
+    registerTool(baseDef({ name: 'comp_x', category: 'compute' }));
+    registerTool(baseDef({ name: 'parse_x', category: 'parse' }));
+    expect(listTools({ category: 'parse' }).map((t) => t.name)).toEqual(['parse_x']);
   });
 
   it('listTools local_only excludes network tools', () => {
-    registerTool(baseDef({ name: 'local.x' }));
+    registerTool(baseDef({ name: 'local_x' }));
     registerTool(
       baseDef({
-        name: 'net.x',
+        name: 'net_x',
         capabilities: { reads_network: true, writes_external: false, destructive: false },
       }),
     );
-    expect(listTools({ local_only: true }).map((t) => t.name)).toEqual(['local.x']);
+    expect(listTools({ local_only: true }).map((t) => t.name)).toEqual(['local_x']);
   });
 });
 
@@ -106,19 +106,28 @@ describe('registerTool — name validation', () => {
 
   it('rejects non-snake_case name (CamelCase)', () => {
     expect(() => registerTool(baseDef({ name: 'BadName' }))).toThrow(/must match/);
+    expect(() => registerTool(baseDef({ name: 'ComputeFoo' }))).toThrow(/must match/);
   });
 
   it('rejects name starting with a digit', () => {
     expect(() => registerTool(baseDef({ name: '1tool' }))).toThrow(/must match/);
   });
 
-  it('rejects duplicate name', () => {
-    registerTool(baseDef({ name: 'dup.tool' }));
-    expect(() => registerTool(baseDef({ name: 'dup.tool' }))).toThrow(/already registered/);
+  it('rejects DOTTED names (snake_case convention enforced — no namespaces)', () => {
+    // The naming decision: cross-layer consistency requires strict
+    // snake_case so a tool name is valid as a generated-project export
+    // stem AND as a spec capability id. Dots are out.
+    expect(() => registerTool(baseDef({ name: 'compute.foo' }))).toThrow(/must match/);
+    expect(() => registerTool(baseDef({ name: 'a.b.c' }))).toThrow(/must match/);
   });
 
-  it('allows dot-separated namespaces', () => {
-    expect(() => registerTool(baseDef({ name: 'a.b.c' }))).not.toThrow();
+  it('accepts a valid snake_case name with digits + underscores', () => {
+    expect(() => registerTool(baseDef({ name: 'parse_csv_v2' }))).not.toThrow();
+  });
+
+  it('rejects duplicate name', () => {
+    registerTool(baseDef({ name: 'dup_tool' }));
+    expect(() => registerTool(baseDef({ name: 'dup_tool' }))).toThrow(/already registered/);
   });
 });
 
@@ -267,13 +276,13 @@ describe('registerTool — examples validation', () => {
 describe('seed tools — register cleanly via public barrel', () => {
   it('the registry contains exactly the three seed tools after a fresh import', () => {
     const names = listTools().map((t) => t.name);
-    expect(names).toContain('compute.math');
-    expect(names).toContain('parse.json');
-    expect(names).toContain('compute.text_transform');
+    expect(names).toContain('compute_math');
+    expect(names).toContain('parse_json');
+    expect(names).toContain('compute_text_transform');
   });
 
   it('every seed tool is local-only (capabilities: reads_network=false, writes_external=false, destructive=false)', () => {
-    for (const name of ['compute.math', 'parse.json', 'compute.text_transform']) {
+    for (const name of ['compute_math', 'parse_json', 'compute_text_transform']) {
       const t = getToolByName(name);
       expect(t).not.toBeNull();
       expect(t!.capabilities.reads_network).toBe(false);

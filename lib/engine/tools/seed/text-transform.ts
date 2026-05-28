@@ -1,4 +1,4 @@
-// SEED TOOL — `compute.text_transform`.
+// SEED TOOL — `compute_text_transform`.
 //
 // Deterministic text operations: slug, kebab-case, snake-case,
 // title-case, truncate, normalize-whitespace. Pure / local — no
@@ -47,11 +47,11 @@ function toSlug(s: string): string {
 }
 
 export const compute_text_transform: Tool<TextTransformInput, TextTransformOutput> = {
-  id: 'compute.text_transform',
+  id: 'compute_text_transform',
   description: 'Apply a deterministic text transformation.',
   async call({ text, op, params }, ctx) {
     if (isMockMode(ctx)) {
-      ctx.log('compute.text_transform.mock', { op });
+      ctx.log('compute_text_transform.mock', { op });
     }
     switch (op) {
       case 'slug':
@@ -191,7 +191,7 @@ function splitWords(s: string): string[] {
 }
 
 export const COMPUTE_TEXT_TRANSFORM: ToolDefinition<Input, Output> = {
-  name: 'compute.text_transform',
+  name: 'compute_text_transform',
   description:
     'Apply a deterministic text transformation: slug, kebab, snake, title, truncate, ' +
     'normalize_whitespace. Use for ID generation, slug creation, normalising user input, ' +

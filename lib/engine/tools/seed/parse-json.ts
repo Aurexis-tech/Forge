@@ -1,4 +1,4 @@
-// SEED TOOL — `parse.json`.
+// SEED TOOL — `parse_json`.
 //
 // Robust JSON extraction from arbitrary text. Mirrors the
 // critique-gate's extractor pattern: handle fenced blocks, partial
@@ -85,11 +85,11 @@ function firstBalancedJsonSubstring(text: string): string | null {
 }
 
 export const parse_json: Tool<ParseJsonInput, ParseJsonOutput> = {
-  id: 'parse.json',
+  id: 'parse_json',
   description: 'Extract structured JSON from arbitrary text.',
   async call({ text }, ctx) {
     if (isMockMode(ctx)) {
-      ctx.log('parse.json.mock', { chars: text.length });
+      ctx.log('parse_json.mock', { chars: text.length });
     }
     const direct = tryParse(text);
     if (direct.ok) return { parsed: direct.value, recovered: false };
@@ -217,7 +217,7 @@ function findFirstOpen(text: string): number {
 }
 
 export const PARSE_JSON: ToolDefinition<Input, Output> = {
-  name: 'parse.json',
+  name: 'parse_json',
   description:
     'Extract structured JSON from arbitrary text. Handles raw JSON, ```json``` fenced blocks, ' +
     'and partial LLM responses with leading or trailing prose. Use when an agent receives a ' +

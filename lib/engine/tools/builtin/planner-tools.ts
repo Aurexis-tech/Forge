@@ -29,12 +29,17 @@ import type { ToolDefinition } from '../contract';
 // these ship byte-for-byte unchanged.
 // ===========================================================================
 
+// PROVIDER-BACKED web_search — runs in the DEPLOYED AGENT against the
+// Brave Search API, on the user's own Brave account + quota. The
+// BRAVE_SEARCH_API_KEY is wired into the agent's env (SERVER-ONLY) at
+// deploy time from the encrypted connection store. Self-mocks on
+// FORGE_MOCK_TOOLS=1 (sandbox smoke) — NEVER fetches in mock mode.
 const WEB_SEARCH_SOURCE = `import type { Tool } from './types.js';
 import { isMockMode } from './types.js';
 
 export interface WebSearchInput {
   query: string;
-  limit?: number;
+  count?: number;
 }
 export interface WebSearchResult {
   title: string;
@@ -45,41 +50,62 @@ export interface WebSearchOutput {
   results: WebSearchResult[];
 }
 
-// Lightweight HTTP-based web search. Configure WEB_SEARCH_URL to point at a
-// JSON-returning search endpoint that accepts a \`q\` query parameter and
-// returns { results: WebSearchResult[] }. With no endpoint configured the
-// tool resolves to an empty result list rather than failing — generated
-// agents should handle that case.
+interface BraveWebResult {
+  title?: string;
+  url?: string;
+  description?: string;
+}
+interface BraveResponse {
+  web?: { results?: BraveWebResult[] };
+}
+
+// Deterministic fixture returned in mock mode — keeps sandbox smoke
+// tests hermetic (no real Brave call, no key needed).
+const MOCK_OUTPUT: WebSearchOutput = {
+  results: [
+    {
+      title: 'Example Domain',
+      url: 'https://example.com',
+      snippet: 'Illustrative result — sandbox mock, no real search performed.',
+    },
+  ],
+};
+
 export const web_search: Tool<WebSearchInput, WebSearchOutput> = {
   id: 'web_search',
-  description: 'Search the public web. Configure WEB_SEARCH_URL.',
-  async call({ query, limit }, ctx) {
+  description: 'Search the web via Brave Search. Reads BRAVE_SEARCH_API_KEY.',
+  async call({ query, count }, ctx) {
     if (isMockMode(ctx)) {
-      ctx.log('web_search.mock', { query, limit });
-      return {
-        results: [
-          {
-            title: 'Mock result for: ' + query,
-            url: 'https://example.com/mock',
-            snippet: 'Mocked snippet — no real network call was made.',
-          },
-        ],
-      };
+      ctx.log('web_search.mock', { query, count });
+      return MOCK_OUTPUT;
     }
-    const endpoint = ctx.env.WEB_SEARCH_URL;
-    ctx.log('web_search', { query, limit });
-    if (!endpoint) {
-      return { results: [] };
+    const key = ctx.env.BRAVE_SEARCH_API_KEY;
+    if (!key) {
+      throw new Error(
+        '[forge-agent] web_search requires BRAVE_SEARCH_API_KEY in the environment.',
+      );
     }
-    const url = new URL(endpoint);
+    const url = new URL('https://api.search.brave.com/res/v1/web/search');
     url.searchParams.set('q', query);
-    if (limit != null) url.searchParams.set('limit', String(limit));
-    const res = await fetch(url, { headers: { accept: 'application/json' } });
+    if (count != null) url.searchParams.set('count', String(count));
+    ctx.log('web_search', { query, count });
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Subscription-Token': key,
+        Accept: 'application/json',
+      },
+    });
     if (!res.ok) {
-      throw new Error('web_search HTTP ' + res.status);
+      throw new Error('web_search Brave HTTP ' + res.status);
     }
-    const data = (await res.json()) as WebSearchOutput;
-    return data;
+    const data = (await res.json()) as BraveResponse;
+    const results = (data.web?.results ?? []).map((r) => ({
+      title: r.title ?? '',
+      url: r.url ?? '',
+      snippet: r.description ?? '',
+    }));
+    return { results };
   },
 };
 `;
@@ -390,7 +416,7 @@ export const email_send: Tool<EmailSendInput, EmailSendOutput> = {
 // ===========================================================================
 
 const WEB_SEARCH_SIG =
-  'export const web_search:     Tool<{ query: string; limit?: number }, { results: { title: string; url: string; snippet: string }[] }>;';
+  'export const web_search:     Tool<{ query: string; count?: number }, { results: { title: string; url: string; snippet: string }[] }>;  // provider: brave_search (BRAVE_SEARCH_API_KEY)';
 const HTTP_REQUEST_SIG =
   "export const http_request:   Tool<{ url: string; method?: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE'; headers?: Record<string,string>; body?: string|Record<string, unknown> }, { status: number; ok: boolean; headers: Record<string,string>; body: string }>;";
 const LLM_COMPLETION_SIG =
@@ -412,7 +438,7 @@ const EMAIL_SEND_SIG =
 
 const webSearchInput = z.object({
   query: z.string(),
-  limit: z.number().optional(),
+  count: z.number().optional(),
 });
 const webSearchOutput = z.object({
   results: z.array(
@@ -430,11 +456,13 @@ export const WEB_SEARCH_TOOL: ToolDefinition<WebSearchIn, WebSearchOut> = {
   capabilities: { reads_network: true, writes_external: false, destructive: false },
   input_schema: webSearchInput,
   output_schema: webSearchOutput,
+  // Engine-side runtime/mock are deterministic + do NO network — the
+  // real Brave call happens only in the DEPLOYED AGENT (scaffoldSource).
   runtime: async (input) => representativeWebSearch(input),
   mock: async (input) => representativeWebSearch(input),
   examples: [
     {
-      label: 'basic query',
+      label: 'basic query (mock-shaped)',
       input: { query: 'arxiv computer vision' },
       output: {
         results: [
@@ -443,13 +471,26 @@ export const WEB_SEARCH_TOOL: ToolDefinition<WebSearchIn, WebSearchOut> = {
       },
     },
     {
-      label: 'with limit',
-      input: { query: 'weather', limit: 3 },
+      label: 'with count',
+      input: { query: 'weather', count: 3 },
       output: { results: [] },
     },
   ],
   scaffoldSource: WEB_SEARCH_SOURCE,
   scaffoldInterfaceSignature: WEB_SEARCH_SIG,
+  // PROVIDER-BACKED: the deployed agent calls Brave Search on the
+  // user's account. The key is wired SERVER-ONLY at deploy time.
+  provider_connection: {
+    provider: 'brave_search',
+    label: 'Brave Search',
+    env_key: 'BRAVE_SEARCH_API_KEY',
+    setup_url: 'https://api-dashboard.search.brave.com/',
+    verify: {
+      url: 'https://api.search.brave.com/res/v1/web/search?q=test',
+      method: 'GET',
+      header: 'X-Subscription-Token',
+    },
+  },
   plannerLabel: 'Web search',
   envKeys: [],
   status: 'available',
