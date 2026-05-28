@@ -32,7 +32,11 @@ import {
   mergePackageJsonDependencies,
 } from '@/lib/engine/tools';
 import { TOOL_REGISTRY } from '@/lib/engine/planner/registry';
-import { isControllerRole, isJudgeRole } from '../coordination/roles';
+import {
+  isControllerRole,
+  isJudgeRole,
+  isRouterRole,
+} from '../coordination/roles';
 import {
   AgentSpecSchema,
   type AgentSpec,
@@ -226,7 +230,7 @@ export async function generateSystemCode(args: {
     },
     ...plan.nodes.map((n) => ({
       path: moduleFilePath(n.id),
-      purpose: moduleFilePurpose(n),
+      purpose: moduleFilePurpose(n, plan),
       source: 'generated' as const,
     })),
   ];
@@ -334,7 +338,7 @@ export async function generateOneSystemNodeModule(
 
   const adapted = adaptNodeForAgentGenerator(args.node, args.spec);
   const targetPath = moduleFilePath(args.node.id);
-  const purpose = moduleFilePurpose(args.node);
+  const purpose = moduleFilePurpose(args.node, args.plan);
   // Build the explicit handoff contract from the plan so the per-file
   // prompt carries the neighbour info as a first-class section, not
   // buried in the synthesised AgentSpec's constraints.
@@ -408,7 +412,7 @@ function defaultAllFilesForPrompt(
     },
     ...plan.nodes.map((n) => ({
       path: moduleFilePath(n.id),
-      purpose: moduleFilePurpose(n),
+      purpose: moduleFilePurpose(n, plan),
       source: 'generated' as const,
     })),
   ];
@@ -693,7 +697,7 @@ function moduleFilePath(nodeId: string): string {
   return 'src/modules/' + nodeId + '/index.ts';
 }
 
-function moduleFilePurpose(node: OrchestrationNode): string {
+function moduleFilePurpose(node: OrchestrationNode, plan?: OrchestrationPlan): string {
   const outputs =
     node.outputs.length === 0
       ? '(no outputs)'
@@ -722,9 +726,25 @@ function moduleFilePurpose(node: OrchestrationNode): string {
       'string } ALONGSIDE your declared outputs (the runtime reads ' +
       '`decision` to bound the loop). Do not re-do the body work. '
     : '';
+  // ROUTER node-role (router / selection): the router reads the input and
+  // emits a structured decision selecting EXACTLY ONE downstream branch to
+  // run. List the valid branch keys (from the plan's branch metadata) so
+  // the generator emits a decision over a CLOSED set, not a free choice.
+  // Additive: only the router node sees this.
+  const routerPrefix =
+    isRouterRole(node.role) && plan?.branch && plan.branch.routerId === node.id
+      ? 'ROUTER node: read the input and DECIDE which single branch should ' +
+        'run. Return a structured control signal { branch: <key>, reason?: ' +
+        'string } ALONGSIDE your declared outputs — the orchestrator runs ONLY ' +
+        'the selected branch and SKIPS the rest. `branch` MUST be exactly one ' +
+        'of the valid keys: ' +
+        plan.branch.branches.map((b) => "'" + b.key + "'").join(', ') +
+        '. Do not run the branch work yourself. '
+      : '';
   return (
     judgePrefix +
     controllerPrefix +
+    routerPrefix +
     "Module for node '" +
     node.id +
     "' (role: " +

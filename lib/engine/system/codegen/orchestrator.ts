@@ -117,6 +117,23 @@ export function generateOrchestratorSource(
   );
   lines.push('');
 
+  // ROUTER (selection): when the plan carries branch metadata, inline it so
+  // the walker can run EXACTLY ONE branch — the subgraph keyed by the
+  // router's decision — and SKIP the rest. Absent for every other pattern
+  // (the walk below is then byte-identical to the pre-router orchestrator).
+  if (plan.branch) {
+    lines.push('// Branch metadata (router). After the router node runs, the walker');
+    lines.push('// reads its `branch` decision and skips every non-selected branch.');
+    lines.push('interface BranchDef { key: string; nodeIds: string[]; }');
+    lines.push('interface BranchMeta { routerId: string; branches: BranchDef[]; }');
+    lines.push(
+      'const BRANCH_META: BranchMeta = ' +
+        JSON.stringify(plan.branch, null, 2) +
+        ';',
+    );
+    lines.push('');
+  }
+
   // Dispatch map: node id → module's run function. Built from the
   // imports above. Typed to `unknown` for both directions so the
   // orchestrator stays honest about not knowing each module's shape
@@ -159,8 +176,19 @@ export function generateOrchestratorSource(
   lines.push('  const outputsByNode: Record<string, Record<string, unknown>> = {};');
   lines.push('  let steps = 0;');
   lines.push('  let finalNode = "";');
+  if (plan.branch) {
+    lines.push('  // Nodes whose branch was NOT selected by the router; skipped below.');
+    lines.push('  const skip = new Set<string>();');
+  }
   lines.push('');
   lines.push('  for (const nodeId of EXECUTION_ORDER) {');
+  if (plan.branch) {
+    lines.push('    // ROUTER conditional skip: a non-selected branch node does not');
+    lines.push('    // execute, is not validated, and does not count toward steps.');
+    lines.push('    if (skip.has(nodeId)) {');
+    lines.push('      continue;');
+    lines.push('    }');
+  }
   lines.push('    if (steps >= MAX_STEPS) {');
   lines.push('      throw new OrchestratorError(');
   lines.push("        'max-steps ceiling of ' + String(MAX_STEPS) + ' exceeded — orchestrator aborted',");
@@ -230,6 +258,30 @@ export function generateOrchestratorSource(
   lines.push('    outputsByNode[nodeId] = out;');
   lines.push('    finalNode = nodeId;');
   lines.push('    steps++;');
+  if (plan.branch) {
+    lines.push('');
+    lines.push('    // ROUTER decision: after the router runs, read its `branch` signal');
+    lines.push('    // and mark every non-selected branch node for skipping. A decision');
+    lines.push('    // matching no branch key fails closed (router_no_branch_match) — never');
+    lines.push('    // a silent fall-through.');
+    lines.push('    if (nodeId === BRANCH_META.routerId) {');
+    lines.push('      const decision = out.branch;');
+    lines.push('      const selected = BRANCH_META.branches.find((b) => b.key === decision);');
+    lines.push('      if (!selected) {');
+    lines.push('        throw new OrchestratorError(');
+    lines.push("          'router_no_branch_match: router decision ' + JSON.stringify(decision) + ' matched no branch key',");
+    lines.push('          nodeId,');
+    lines.push('        );');
+    lines.push('      }');
+    lines.push('      const keep = new Set(selected.nodeIds);');
+    lines.push('      for (const b of BRANCH_META.branches) {');
+    lines.push('        if (b.key === selected.key) continue;');
+    lines.push('        for (const id of b.nodeIds) {');
+    lines.push('          if (!keep.has(id)) skip.add(id);');
+    lines.push('        }');
+    lines.push('      }');
+    lines.push('    }');
+  }
   lines.push('  }');
   lines.push('');
   lines.push('  return { outputs: outputsByNode, steps, final_node: finalNode };');

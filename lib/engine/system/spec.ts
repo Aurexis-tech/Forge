@@ -32,6 +32,7 @@ export const PATTERN_IDS = [
   'standard',
   'competing_experts',
   'loop_with_break',
+  'router',
 ] as const;
 export type PatternId = (typeof PATTERN_IDS)[number];
 export const DEFAULT_PATTERN_ID: PatternId = 'standard';
@@ -112,6 +113,27 @@ const LoopSchema = z.object({
   break_condition: z.string().trim().min(1).max(800),
 });
 
+// router parameters. PRESENT only for coordination_pattern 'router';
+// absent for every other pattern. The router node (role 'router') reads
+// the input and emits a structured { branch: <key> } decision; the
+// orchestrator runs EXACTLY ONE branch — the subgraph keyed by that
+// decision — and skips the rest. Each branch maps a decision key to the
+// ordered list of sub_agent ids that form its subgraph. The cross-
+// referential checks (keys distinct, node_ids real + disjoint + covering
+// every non-router node) live in the pattern's expand() as typed
+// bad_input, mirroring competing_experts / loop_with_break.
+const RouterBranchSchema = z.object({
+  // The decision value the router emits to select this branch. A short,
+  // stable token (the router's purpose lists the valid keys).
+  key: z.string().trim().min(1).max(60),
+  // The sub_agent ids forming this branch, in execution order. Chained
+  // as a pipeline at expand; the first consumes the router's output.
+  node_ids: z.array(SubAgentIdSchema).min(1).max(12),
+});
+const RouterSchema = z.object({
+  branches: z.array(RouterBranchSchema).min(1).max(12),
+});
+
 export const SystemSpecSchema = z
   .object({
     goal: z.string().trim().min(1).max(800),
@@ -125,6 +147,9 @@ export const SystemSpecSchema = z
     // OPTIONAL loop parameters — meaningful only when coordination_pattern
     // is 'loop_with_break'. Absent for every other pattern.
     loop: LoopSchema.optional(),
+    // OPTIONAL router parameters — meaningful only when coordination_pattern
+    // is 'router'. Absent for every other pattern.
+    router: RouterSchema.optional(),
     // Reuse the Phase 1 trigger vocabulary so the planner / scheduler can
     // route a system the same way it routes a single agent later.
     triggers: z.array(z.enum(TRIGGERS)).min(1).max(4),

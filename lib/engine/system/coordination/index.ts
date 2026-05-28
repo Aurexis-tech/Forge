@@ -15,6 +15,7 @@ import type { CoordinationPatternDef } from './types';
 import { STANDARD } from './standard';
 import { COMPETING_EXPERTS } from './competing-experts';
 import { LOOP_WITH_BREAK } from './loop-with-break';
+import { ROUTER } from './router';
 
 export class PatternRegistrationError extends Error {
   constructor(
@@ -83,6 +84,7 @@ export function ensurePatternsRegistered(): void {
   if (!REGISTRY.has(STANDARD.id)) registerPattern(STANDARD);
   if (!REGISTRY.has(COMPETING_EXPERTS.id)) registerPattern(COMPETING_EXPERTS);
   if (!REGISTRY.has(LOOP_WITH_BREAK.id)) registerPattern(LOOP_WITH_BREAK);
+  if (!REGISTRY.has(ROUTER.id)) registerPattern(ROUTER);
   registered = true;
 }
 
@@ -116,7 +118,10 @@ export {
   isJudgeRole,
   CONTROLLER_ROLE,
   isControllerRole,
+  ROUTER_ROLE,
+  isRouterRole,
 } from './roles';
 export { STANDARD } from './standard';
 export { COMPETING_EXPERTS } from './competing-experts';
 export { LOOP_WITH_BREAK } from './loop-with-break';
+export { ROUTER } from './router';

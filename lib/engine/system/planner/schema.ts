@@ -91,6 +91,26 @@ const LoopMetaSchema = z.object({
   backEdge: z.object({ from: NodeIdSchema, to: NodeIdSchema }),
 });
 
+// OPTIONAL selection metadata — present ONLY for the router pattern.
+// Mirrors DerivedGraph.BranchMetadata. The plan's nodes/edges/
+// execution_order describe the ACYCLIC router+branches DAG; this carries
+// which node is the router + which node ids belong to each decision key,
+// so the generated orchestrator can run exactly one branch. Additive +
+// backward-compatible. Structural checks (router/branch ids reference real
+// nodes) run in superRefine below.
+const BranchMetaSchema = z.object({
+  routerId: NodeIdSchema,
+  branches: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1).max(60),
+        nodeIds: z.array(NodeIdSchema).min(1).max(12),
+      }),
+    )
+    .min(2)
+    .max(12),
+});
+
 export const OrchestrationPlanSchema = z
   .object({
     goal: z.string().trim().min(1).max(800),
@@ -109,6 +129,8 @@ export const OrchestrationPlanSchema = z
     // OPTIONAL loop metadata (loop_with_break only). Additive +
     // backward-compatible — omitted for standard + competing_experts.
     loop: LoopMetaSchema.optional(),
+    // OPTIONAL branch metadata (router only). Additive + backward-compatible.
+    branch: BranchMetaSchema.optional(),
   })
   .superRefine((data, ctx) => {
     const nodeIds = new Set<string>();
@@ -270,6 +292,48 @@ export const OrchestrationPlanSchema = z
           message: 'controllerId must not also be a body node',
         });
       }
+    }
+
+    // Branch metadata (router) — router + every branch node must be a real
+    // node, the router must NOT be a branch node, and keys must be
+    // distinct. Keeps the orchestrator's conditional skip honest about
+    // which nodes belong to which branch.
+    if (data.branch) {
+      const b = data.branch;
+      if (!nodeIds.has(b.routerId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['branch', 'routerId'],
+          message: "branch.routerId '" + b.routerId + "' does not match any node id",
+        });
+      }
+      const seenKeys = new Set<string>();
+      b.branches.forEach((br, bi) => {
+        if (seenKeys.has(br.key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['branch', 'branches', bi, 'key'],
+            message: "duplicate branch key '" + br.key + "'",
+          });
+        }
+        seenKeys.add(br.key);
+        br.nodeIds.forEach((id, ni) => {
+          if (!nodeIds.has(id)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['branch', 'branches', bi, 'nodeIds', ni],
+              message: "branch node '" + id + "' does not match any node id",
+            });
+          }
+          if (id === b.routerId) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['branch', 'branches', bi, 'nodeIds', ni],
+              message: 'a branch node must not be the router',
+            });
+          }
+        });
+      });
     }
   });
 

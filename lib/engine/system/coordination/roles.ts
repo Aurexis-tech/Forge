@@ -22,3 +22,15 @@ export const CONTROLLER_ROLE = 'controller';
 export function isControllerRole(role: string): boolean {
   return role.trim().toLowerCase() === CONTROLLER_ROLE;
 }
+
+/** The role string that marks a node as the router in router (selection). */
+export const ROUTER_ROLE = 'router';
+
+/**
+ * True when a node's role identifies it as the router (case-insensitive).
+ * The router is the single node that reads the input and emits a structured
+ * decision selecting EXACTLY ONE downstream branch to execute.
+ */
+export function isRouterRole(role: string): boolean {
+  return role.trim().toLowerCase() === ROUTER_ROLE;
+}

@@ -53,6 +53,21 @@ export interface LoopMetadata {
   backEdge: { from: string; to: string };
 }
 
+// OPTIONAL selection metadata, attached ONLY by the router pattern's
+// expand(). The graph stays ACYCLIC (router -> all branches) — the
+// CONDITIONAL SKIP lives in the generated orchestrator, which reads this
+// metadata: after the router runs, exactly ONE branch (the subgraph keyed
+// by the router's decision) executes; the rest are skipped. There is no
+// runtime-model change — it is still ONE governed run; skipped nodes just
+// don't execute. Patterns without branch metadata are unaffected.
+export interface BranchMetadata {
+  // The single node (role 'router') whose decision selects a branch.
+  routerId: string;
+  // Each branch: the decision key + the node ids (in execution order)
+  // that run when that key is selected.
+  branches: Array<{ key: string; nodeIds: string[] }>;
+}
+
 export interface DerivedGraph {
   nodeIds: string[];
   edges: DerivedEdge[];
@@ -64,6 +79,8 @@ export interface DerivedGraph {
   // Present ONLY for loop_with_break. Optional + additive — standard +
   // competing_experts never set it.
   loop?: LoopMetadata;
+  // Present ONLY for router. Optional + additive.
+  branch?: BranchMetadata;
 }
 
 export class SystemGraphError extends Error {

@@ -297,6 +297,9 @@ function stitchAndValidate(
     // plan so the runtime can drive the bounded loop. Undefined for every
     // other pattern — the schema field is optional, so this is additive.
     ...(graph.loop ? { loop: graph.loop } : {}),
+    // Thread the branch metadata (router) onto the plan so the generated
+    // orchestrator can run exactly the selected branch. Additive.
+    ...(graph.branch ? { branch: graph.branch } : {}),
   };
 
   const final = OrchestrationPlanSchema.safeParse(planCandidate);
