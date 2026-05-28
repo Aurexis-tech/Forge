@@ -28,9 +28,21 @@ export type CoordinationPattern = (typeof COORDINATION_PATTERNS)[number];
 // The id list is defined HERE (a leaf module) so SystemSpecSchema can
 // validate the field without importing the catalog (which imports this
 // module's SystemSpec type — keeping the dependency one-directional).
-export const PATTERN_IDS = ['standard', 'competing_experts'] as const;
+export const PATTERN_IDS = [
+  'standard',
+  'competing_experts',
+  'loop_with_break',
+] as const;
 export type PatternId = (typeof PATTERN_IDS)[number];
 export const DEFAULT_PATTERN_ID: PatternId = 'standard';
+
+// HARD CEILING on a loop_with_break system's iteration count. The
+// `loop.max_iterations` a spec requests is clamped/rejected against this
+// at expand time (typed bad_input) AND re-clamped in the runtime helper —
+// a bounded loop can NEVER run away regardless of spec or controller.
+// Mirrors HARD_CAP_MAX_STEPS: the safety bound is engine-owned, not
+// user-tunable past the ceiling.
+export const ENGINE_LOOP_CEILING = 10;
 
 // Bound the runtime cost surface. max_steps is the maximum number of
 // LLM turns the system can take across all sub-agents in a single
@@ -82,15 +94,37 @@ const CoordinationSchema = z.object({
   edges: z.array(EdgeSchema).max(60).optional(),
 });
 
+// loop_with_break parameters. PRESENT only for coordination_pattern
+// 'loop_with_break'; absent for every other pattern (the field is
+// optional + backward-compatible). max_iterations is kept lenient HERE
+// (any positive-or-not int) so the canonical bound check + typed
+// bad_input lives in the pattern's expand() — exactly like
+// competing_experts validates its expert/judge counts at expand rather
+// than in the spec schema. The runtime ALSO re-clamps to
+// ENGINE_LOOP_CEILING, so a bad value can never produce a runaway loop.
+const LoopSchema = z.object({
+  // The requested hard cap on iterations. Bounded to
+  // [1, ENGINE_LOOP_CEILING] at expand time (bad_input on violation).
+  max_iterations: z.number().int(),
+  // Natural-language break condition — drives the controller's generated
+  // decision logic. The runtime never interprets this; the controller
+  // module does.
+  break_condition: z.string().trim().min(1).max(800),
+});
+
 export const SystemSpecSchema = z
   .object({
     goal: z.string().trim().min(1).max(800),
     sub_agents: z.array(SubAgentSchema).min(2).max(12),
     coordination: CoordinationSchema,
     // OPTIONAL topology pattern. Absent → 'standard' (today's behaviour,
-    // byte-identical). 'competing_experts' fans the experts out to a judge.
+    // byte-identical). 'competing_experts' fans the experts out to a judge;
+    // 'loop_with_break' re-invokes a body subgraph under a controller.
     // Backward-compatible: existing specs omit it and resolve to standard.
     coordination_pattern: z.enum(PATTERN_IDS).optional(),
+    // OPTIONAL loop parameters — meaningful only when coordination_pattern
+    // is 'loop_with_break'. Absent for every other pattern.
+    loop: LoopSchema.optional(),
     // Reuse the Phase 1 trigger vocabulary so the planner / scheduler can
     // route a system the same way it routes a single agent later.
     triggers: z.array(z.enum(TRIGGERS)).min(1).max(4),

@@ -293,6 +293,10 @@ function stitchAndValidate(
     edges: graph.edges,
     execution_order: graph.executionOrder,
     warnings: detail.data.warnings,
+    // Thread the deterministic loop metadata (loop_with_break) onto the
+    // plan so the runtime can drive the bounded loop. Undefined for every
+    // other pattern — the schema field is optional, so this is additive.
+    ...(graph.loop ? { loop: graph.loop } : {}),
   };
 
   const final = OrchestrationPlanSchema.safeParse(planCandidate);

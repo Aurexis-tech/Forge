@@ -27,6 +27,7 @@ import type {
 import { assertAllowed, GovernanceError } from '@/lib/engine/governance/guard';
 import { recordCost } from '@/lib/engine/governance/ledger';
 import { projectedComputeCostUsd } from '@/lib/engine/governance/pricing';
+import { activeKillSwitch } from '@/lib/engine/governance/killswitch';
 import { peekKeySource, NeedsKeyError } from '@/lib/engine/keys';
 import {
   audit,
@@ -43,6 +44,8 @@ import {
   executeSystemRun,
   type SystemExecutorResult,
 } from './executor';
+import { buildLiveExternalInput } from './driver';
+import { runBoundedLoop } from './bounded-loop';
 
 // One end-to-end system orchestration. Called by Phase 1's `runOnce`
 // when runtime.kind === 'system'. Returns void; all outcomes are
@@ -81,6 +84,20 @@ export async function runSystemOnce(
 
   const peek = await peekKeySource(userId, 'e2b', supabase);
   const guardKeySource = peek.source === 'byok' ? 'byok' : 'platform';
+
+  // --- loop_with_break branch -----------------------------------------
+  // A bounded loop is NOT one governed unit — it is N governed units
+  // (one per iteration). The per-iteration assertAllowed + recordCost
+  // live INSIDE the loop, so we branch here BEFORE the single pre-run
+  // gate the flat-DAG path uses. Every other pattern falls through to
+  // the unchanged single-run flow below.
+  if (ctx.plan.loop) {
+    await runBoundedSystemLoop(supabase, runtime, trigger, ctx, {
+      userId,
+      guardKeySource,
+    });
+    return;
+  }
 
   try {
     await assertAllowed(
@@ -267,6 +284,280 @@ export async function runSystemOnce(
       },
     });
   }
+}
+
+// --- loop_with_break runtime ----------------------------------------------
+//
+// A loop_with_break run executes the SAME acyclic body+controller plan
+// ONCE PER ITERATION via executeSystemRun, bounded by `runBoundedLoop`.
+// Each iteration is its own governed unit: assertAllowed + a kill-switch
+// check BEFORE it runs, recordCost('…iteration.N') AFTER. The hard
+// `max_iterations` cap (re-clamped to ENGINE_LOOP_CEILING inside the
+// helper) means the loop can never run away; an early break (or a
+// mid-loop budget/kill block) bills only the iterations that ran.
+//
+// The run lifecycle is still ONE runs-row + ONE run_started/_succeeded
+// audit pair — only the GOVERNANCE + LEDGER granularity is per-iteration.
+
+async function runBoundedSystemLoop(
+  supabase: ForgeSupabase,
+  runtime: AgentRuntime,
+  trigger: AgentRunTrigger,
+  ctx: SystemRunContext,
+  governance: { userId: string | null; guardKeySource: 'byok' | 'platform' },
+): Promise<void> {
+  const loop = ctx.plan.loop;
+  if (!loop) return; // defensive — caller guarantees presence
+  const { userId, guardKeySource } = governance;
+
+  // One runs-row for the whole loop run.
+  const runRow = await insertRunningRunRow(supabase, runtime.id, trigger);
+  await audit(supabase, {
+    projectId: runtime.project_id,
+    action: 'system.run_started',
+    actor: 'engine.system.runtime',
+    detail: {
+      runtime_id: runtime.id,
+      run_id: runRow.id,
+      trigger,
+      nodes: ctx.plan.nodes.length,
+      loop: true,
+      max_iterations: loop.maxIterations,
+    },
+  });
+
+  // Decrypt env once for the whole loop (dropped after the loop).
+  let env: Record<string, string> = {};
+  try {
+    env = decryptRuntimeEnv(runtime);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'decrypt_failed';
+    await finishRunRow(supabase, {
+      runtime,
+      runId: runRow.id,
+      result: {
+        success: false,
+        output: null,
+        logs: [],
+        error: 'env decrypt failed: ' + msg,
+        duration_ms: 0,
+        provider: 'unknown',
+        key_source: 'platform',
+      },
+      scheduleNextTick: trigger === 'tick',
+    });
+    await audit(supabase, {
+      projectId: runtime.project_id,
+      action: 'system.run_failed',
+      actor: 'engine.system.runtime',
+      detail: { runtime_id: runtime.id, run_id: runRow.id, error: msg },
+    });
+    return;
+  }
+
+  // Synthetic base input — the body entry's external-trigger keys. Every
+  // iteration's input is the threaded body output merged OVER this base,
+  // so the orchestrator's required external keys are always present.
+  const baseInput = buildLiveExternalInput(ctx.plan);
+
+  // Loop bookkeeping, captured by the hooks. lastRun is BOXED: a bare
+  // `let` mutated only inside the hook closures gets narrowed back to its
+  // `null` initializer at the read sites after the loop, so we hold it in
+  // an object whose property keeps the full union type.
+  const lastRun: { value: SystemExecutorResult | null } = { value: null };
+  let totalDurationMs = 0;
+  let aggregateError: string | null = null;
+  let provider = 'unknown';
+  let keySource: SystemExecutorResult['key_source'] = 'platform';
+  let needsKeyError: NeedsKeyError | null = null;
+
+  interface LoopState {
+    external: Record<string, unknown>;
+  }
+
+  const loopResult = await runBoundedLoop<LoopState>({
+    maxIterations: loop.maxIterations,
+    initialState: { external: { ...baseInput } },
+    killSwitchActive: async () => {
+      const k = await activeKillSwitch(
+        { userId, projectId: runtime.project_id },
+        supabase,
+      );
+      return Boolean(k);
+    },
+    assertAllowed: async () => {
+      await assertAllowed(
+        {
+          user_id: userId,
+          project_id: runtime.project_id,
+          projectedCostUsd: projectedComputeCostUsd('runtime', runtime.max_run_ms),
+          keySource: guardKeySource,
+        },
+        supabase,
+      );
+    },
+    runIteration: async (_i, state) => {
+      let res: SystemExecutorResult;
+      try {
+        res = await executeSystemRun({
+          spec: ctx.spec,
+          plan: ctx.plan,
+          files: ctx.files,
+          env,
+          maxRunMs: runtime.max_run_ms,
+          user_id: userId,
+          project_id: runtime.project_id,
+          supabase,
+          externalInput: state.external,
+          loop: { controllerId: loop.controllerId, backEdgeFrom: loop.backEdge.from },
+        });
+      } catch (err) {
+        if (err instanceof NeedsKeyError) {
+          needsKeyError = err;
+          return {
+            state,
+            decision: 'break',
+            reason: 'needs ' + err.provider + ' key',
+          };
+        }
+        throw err;
+      }
+      lastRun.value = res;
+      totalDurationMs += res.duration_ms;
+      provider = res.provider;
+      keySource = res.key_source;
+      if (!res.success && !aggregateError) aggregateError = res.error;
+
+      // Thread the body terminal output into the next iteration, merged
+      // over the synthetic base so required external keys stay present.
+      const threaded = res.output?.final_output ?? null;
+      const nextExternal = threaded
+        ? { ...baseInput, ...threaded }
+        : { ...baseInput };
+
+      // A FAILED iteration breaks the loop — don't keep re-running a
+      // broken body. Otherwise honour the controller's decision; a
+      // missing/garbled decision defaults to 'continue' (the cap still
+      // bounds the loop).
+      const decision: 'continue' | 'break' = !res.success
+        ? 'break'
+        : res.output?.decision === 'break'
+          ? 'break'
+          : 'continue';
+      return {
+        state: { external: nextExternal },
+        decision,
+        reason: res.output?.decision_reason ?? undefined,
+      };
+    },
+    recordIterationCost: async (i) => {
+      // ONE ledger event per ACTUALLY-EXECUTED iteration. The '.iteration.N'
+      // ref mirrors withRetry's '.retry.N' so the ledger reads cleanly.
+      void recordCost(
+        {
+          user_id: userId,
+          project_id: runtime.project_id,
+          kind: 'runtime',
+          compute_ms: lastRun.value?.duration_ms ?? 0,
+          key_source: lastRun.value?.key_source ?? 'platform',
+          ref:
+            'system.runtime.' + trigger + '.' + runRow.id + '.iteration.' + i,
+        },
+        supabase,
+      );
+    },
+  });
+
+  // Drop the decrypted env from memory ASAP.
+  env = {};
+
+  // If governance blocked the VERY FIRST iteration (nothing ran), mirror
+  // the flat-DAG pre-run block: auto-pause the runtime + finish the empty
+  // runs-row so it never dangles as 'running'.
+  if (loopResult.iterationsRun === 0 && loopResult.governanceError) {
+    await handleSystemBudgetBlock(supabase, runtime, loopResult.governanceError);
+    await finishRunRow(supabase, {
+      runtime,
+      runId: runRow.id,
+      result: {
+        success: false,
+        output: null,
+        logs: [],
+        error:
+          'governance blocked before any iteration: ' +
+          (loopResult.reason ?? loopResult.haltedBy),
+        duration_ms: 0,
+        provider: 'unknown',
+        key_source: 'platform',
+      },
+      scheduleNextTick: false,
+    });
+    return;
+  }
+
+  // Success = the last iteration succeeded AND we stopped for a benign
+  // reason (controller break or the cap). A kill/budget halt or a failed
+  // body iteration is a failed run.
+  const success =
+    (lastRun.value?.success ?? false) &&
+    (loopResult.haltedBy === 'break' || loopResult.haltedBy === 'max_iterations');
+
+  const { autoPaused } = await finishRunRow(supabase, {
+    runtime,
+    runId: runRow.id,
+    result: {
+      success,
+      output: (lastRun.value?.output ?? null) as unknown,
+      logs: lastRun.value?.logs ?? [],
+      error: success
+        ? null
+        : aggregateError ?? loopResult.reason ?? 'loop halted: ' + loopResult.haltedBy,
+      duration_ms: totalDurationMs,
+      provider,
+      key_source: keySource,
+    },
+    scheduleNextTick: trigger === 'tick',
+  });
+
+  await audit(supabase, {
+    projectId: runtime.project_id,
+    action: success ? 'system.run_succeeded' : 'system.run_failed',
+    actor: 'engine.system.runtime',
+    detail: {
+      runtime_id: runtime.id,
+      run_id: runRow.id,
+      duration_ms: totalDurationMs,
+      provider,
+      iterations_run: loopResult.iterationsRun,
+      halted_by: loopResult.haltedBy,
+      max_iterations: loop.maxIterations,
+      steps_completed: lastRun.value?.steps_completed ?? 0,
+      ...(success
+        ? {
+            final_node: lastRun.value?.output?.final_node ?? null,
+            output_keys: lastRun.value?.output?.output_keys ?? [],
+          }
+        : {
+            error: aggregateError ?? loopResult.reason ?? null,
+            killed_by_kill_switch: loopResult.haltedBy === 'kill_switch',
+          }),
+    },
+  });
+
+  if (autoPaused) {
+    await audit(supabase, {
+      projectId: runtime.project_id,
+      action: 'system.runtime_auto_paused',
+      actor: 'engine.system.runtime',
+      detail: {
+        runtime_id: runtime.id,
+        consecutive_fails: runtime.consecutive_fails + 1,
+      },
+    });
+  }
+
+  // Surface a missing key to run-now (412 gate) AFTER persisting the run.
+  if (needsKeyError) throw needsKeyError;
 }
 
 // --- Budget block handler --------------------------------------------------

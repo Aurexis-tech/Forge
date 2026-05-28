@@ -66,6 +66,13 @@ export interface SystemExecutorInput {
   // Optional injected supabase client for the kill-switch watcher. The
   // tests stub this so the watcher polls the in-memory db.
   supabase?: ForgeSupabase;
+  // loop_with_break only — the bounded-loop runtime calls executeSystemRun
+  // once per iteration. `externalInput` threads the previous iteration's
+  // body output into this iteration's body entry; `loop` tells the driver
+  // which node carries the control signal + which carries the body output.
+  // Both omitted for every other pattern (today's behaviour, unchanged).
+  externalInput?: Record<string, unknown>;
+  loop?: { controllerId: string; backEdgeFrom: string };
 }
 
 export interface SystemExecutorResult {
@@ -74,6 +81,12 @@ export interface SystemExecutorResult {
     steps: number;
     final_node: string;
     output_keys: string[];
+    // loop_with_break only — the controller's control signal + the body
+    // terminal output to thread into the next iteration. Absent/null for
+    // every other pattern.
+    decision?: 'continue' | 'break' | null;
+    decision_reason?: string | null;
+    final_output?: Record<string, unknown> | null;
   } | null;
   // Per-handoff trail captured from the driver. Empty array on a
   // clean pass — populated with one entry per failed handoff.
@@ -205,6 +218,8 @@ export async function executeSystemRun(
     const driver = planSystemLiveRun({
       plan: input.plan,
       maxRunMs: input.maxRunMs,
+      externalInput: input.externalInput,
+      loop: input.loop,
     });
     await provider.writeFiles([
       { path: 'forge_system_live.mjs', content: driver.driverContent },
@@ -246,7 +261,14 @@ export async function executeSystemRun(
       const passed = parseLiveRunResult(runRes.stdout + '\n' + runRes.stderr);
       if (passed) {
         success = true;
-        output = passed;
+        output = {
+          steps: passed.steps,
+          final_node: passed.final_node,
+          output_keys: passed.output_keys,
+          decision: passed.decision,
+          decision_reason: passed.decision_reason,
+          final_output: passed.final_output,
+        };
         stepsCompleted = passed.steps;
       } else {
         error =

@@ -32,7 +32,7 @@ import {
   mergePackageJsonDependencies,
 } from '@/lib/engine/tools';
 import { TOOL_REGISTRY } from '@/lib/engine/planner/registry';
-import { isJudgeRole } from '../coordination/roles';
+import { isControllerRole, isJudgeRole } from '../coordination/roles';
 import {
   AgentSpecSchema,
   type AgentSpec,
@@ -573,7 +573,12 @@ function adaptNodeForAgentGenerator(
     files: [
       {
         path: modulePath,
-        purpose: moduleFilePurpose(node),
+        // The full role-aware framing (judge / controller prefixes +
+        // task) goes to the prompt via `filePurpose`, which is uncapped.
+        // The BuildPlan's per-file purpose is capped at 400 chars, so keep
+        // it concise — otherwise a long task or control-signal framing
+        // clips and fails Phase 1 schema validation.
+        purpose: "Module for node '" + node.id + "' (role: " + node.role + ').',
       },
     ],
     env_required: envRequired,
@@ -639,22 +644,42 @@ function deriveHandoffContract(
   // The plan-level edges[] carry payload labels, which are richer
   // than the raw output names — surface them when we have them.
   const inboundEdges = plan.edges.filter((e) => e.to === node.id);
-  const upstream: HandoffContract['upstream'] = node.inputs.map((h) => {
-    if (h.from === null) {
-      return { fromNodeId: null, payload: h.output };
-    }
-    const edge = inboundEdges.find((e) => e.from === h.from);
-    return {
-      fromNodeId: h.from,
-      payload: edge ? edge.payload : h.output,
-    };
-  });
+  // Mutable so the loop_with_break back edge can be appended below; the
+  // readonly HandoffContract['upstream'] field accepts it on return.
+  const upstream: Array<{ fromNodeId: string | null; payload: string }> =
+    node.inputs.map((h) => {
+      if (h.from === null) {
+        return { fromNodeId: null, payload: h.output };
+      }
+      const edge = inboundEdges.find((e) => e.from === h.from);
+      return {
+        fromNodeId: h.from,
+        payload: edge ? edge.payload : h.output,
+      };
+    });
 
   const outboundEdges = plan.edges.filter((e) => e.from === node.id);
   const downstream: HandoffContract['downstream'] = outboundEdges.map((e) => ({
     toNodeId: e.to,
     payload: e.payload,
   }));
+
+  // loop_with_break back edge — surface it to the BODY ENTRY node so its
+  // module knows that, on iterations after the first, its input is the
+  // PREVIOUS iteration's body output (not just the external trigger). This
+  // is prompt-context only: the back edge is loop METADATA, never a real
+  // graph edge (a real one would make the DAG cyclic). The orchestrator
+  // still runs ONE acyclic pass per iteration; the runtime re-invokes it.
+  if (plan.loop && node.id === plan.loop.backEdge.to) {
+    upstream.push({
+      fromNodeId: plan.loop.backEdge.from,
+      payload:
+        '(loop back-edge) on iterations after the first, the previous ' +
+        "iteration's output from node '" +
+        plan.loop.backEdge.from +
+        "' is fed back in as your input",
+    });
+  }
 
   return {
     selfNodeId: node.id,
@@ -684,8 +709,22 @@ function moduleFilePurpose(node: OrchestrationNode): string {
       'by the upstream expert nodes and select OR synthesise the single best ' +
       'result. Do not re-do the experts’ work. '
     : '';
+  // CONTROLLER node-role (loop_with_break): the controller runs AFTER the
+  // body subgraph each iteration. It reads the body output / accumulated
+  // state and emits a structured control signal so the runtime knows
+  // whether to run another iteration. Prepend controller-specific framing
+  // so the generator produces decision logic, not more body work.
+  // Additive: only controller-role nodes see this.
+  const controllerPrefix = isControllerRole(node.role)
+    ? 'CONTROLLER node: read the body output / accumulated state from this ' +
+      'iteration and DECIDE whether to continue looping or stop. Return a ' +
+      "structured control signal { decision: 'continue' | 'break', reason?: " +
+      'string } ALONGSIDE your declared outputs (the runtime reads ' +
+      '`decision` to bound the loop). Do not re-do the body work. '
+    : '';
   return (
     judgePrefix +
+    controllerPrefix +
     "Module for node '" +
     node.id +
     "' (role: " +

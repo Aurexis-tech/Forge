@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { TOOL_REGISTRY } from '@/lib/engine/planner/registry';
 import {
   COORDINATION_PATTERNS,
+  ENGINE_LOOP_CEILING,
   HARD_CAP_MAX_STEPS,
 } from '../spec';
 
@@ -73,6 +74,23 @@ const EdgeSchema = z.object({
   payload: z.string().trim().min(1).max(200),
 });
 
+// OPTIONAL bounded-loop metadata — present ONLY for the loop_with_break
+// pattern. Mirrors DerivedGraph.LoopMetadata. The plan's nodes/edges/
+// execution_order still describe the ACYCLIC body+controller subgraph;
+// this carries the runtime-only loop bounds + back edge. Additive +
+// backward-compatible: every other pattern omits it. Structural checks
+// (controllerId / bodyNodeIds / backEdge reference real nodes) run in
+// superRefine below.
+const LoopMetaSchema = z.object({
+  controllerId: NodeIdSchema,
+  bodyNodeIds: z.array(NodeIdSchema).min(1).max(12),
+  // Bounded to the same hard ceiling the spec + runtime enforce, so a
+  // hand-crafted plan can't smuggle a runaway cap past validation.
+  maxIterations: z.number().int().min(1).max(ENGINE_LOOP_CEILING),
+  breakCondition: z.string().trim().min(1).max(800),
+  backEdge: z.object({ from: NodeIdSchema, to: NodeIdSchema }),
+});
+
 export const OrchestrationPlanSchema = z
   .object({
     goal: z.string().trim().min(1).max(800),
@@ -88,6 +106,9 @@ export const OrchestrationPlanSchema = z
     // 1-1. Cycle detection happens in graph.ts before this is built.
     execution_order: z.array(NodeIdSchema).min(2).max(12),
     warnings: z.array(z.string().trim().min(1).max(400)).max(20).default([]),
+    // OPTIONAL loop metadata (loop_with_break only). Additive +
+    // backward-compatible — omitted for standard + competing_experts.
+    loop: LoopMetaSchema.optional(),
   })
   .superRefine((data, ctx) => {
     const nodeIds = new Set<string>();
@@ -222,6 +243,34 @@ export const OrchestrationPlanSchema = z
         }
       });
     });
+
+    // Loop metadata (loop_with_break) — every referenced id must be a
+    // real node, the controller must NOT be a body node, and the back
+    // edge endpoints must be body nodes. Keeps the runtime's bounded
+    // loop honest about which nodes it re-invokes.
+    if (data.loop) {
+      const l = data.loop;
+      const ref = (id: string, where: string) => {
+        if (!nodeIds.has(id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['loop', where],
+            message: "loop." + where + " '" + id + "' does not match any node id",
+          });
+        }
+      };
+      ref(l.controllerId, 'controllerId');
+      l.bodyNodeIds.forEach((id) => ref(id, 'bodyNodeIds'));
+      ref(l.backEdge.from, 'backEdge.from');
+      ref(l.backEdge.to, 'backEdge.to');
+      if (l.bodyNodeIds.includes(l.controllerId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['loop', 'controllerId'],
+          message: 'controllerId must not also be a body node',
+        });
+      }
+    }
   });
 
 export type OrchestrationPlan = z.infer<typeof OrchestrationPlanSchema>;

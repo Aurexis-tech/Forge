@@ -28,6 +28,31 @@ export interface DerivedEdge {
   payload: string;
 }
 
+// OPTIONAL bounded-loop metadata, attached ONLY by the loop_with_break
+// pattern's expand(). The graph ITSELF stays acyclic (body subgraph +
+// controller, validated by assembleGraph) — the cyclic behaviour lives
+// in the runtime executor, which reads this metadata to re-invoke the
+// body up to `maxIterations` times. The `backEdge` is metadata, NOT a
+// real DerivedEdge: a real back edge would make the DAG cyclic and fail
+// validateTaskGraph. Patterns without a loop leave this undefined and
+// are completely unaffected.
+export interface LoopMetadata {
+  // The single node (role 'controller') that decides continue vs break
+  // after each body iteration.
+  controllerId: string;
+  // The body subgraph node ids, in execution order (excludes the controller).
+  bodyNodeIds: string[];
+  // Hard cap on iterations. Already clamped to [1, ENGINE_LOOP_CEILING]
+  // by expand(); the runtime re-clamps as defence in depth.
+  maxIterations: number;
+  // Natural-language break condition (drives the controller's logic).
+  breakCondition: string;
+  // The conceptual back edge: each iteration's body ENTRY consumes the
+  // PREVIOUS iteration's body TERMINAL output. `from` = body terminal
+  // node, `to` = body entry node. Metadata only.
+  backEdge: { from: string; to: string };
+}
+
 export interface DerivedGraph {
   nodeIds: string[];
   edges: DerivedEdge[];
@@ -36,6 +61,9 @@ export interface DerivedGraph {
   upstreamByNode: Record<string, string[]>;
   // Issues from the REUSED Phase 1 cycle check. Empty array = healthy graph.
   issues: DagIssue[];
+  // Present ONLY for loop_with_break. Optional + additive — standard +
+  // competing_experts never set it.
+  loop?: LoopMetadata;
 }
 
 export class SystemGraphError extends Error {

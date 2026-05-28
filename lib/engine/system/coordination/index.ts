@@ -14,6 +14,7 @@ import type { DerivedGraph } from '../planner/graph';
 import type { CoordinationPatternDef } from './types';
 import { STANDARD } from './standard';
 import { COMPETING_EXPERTS } from './competing-experts';
+import { LOOP_WITH_BREAK } from './loop-with-break';
 
 export class PatternRegistrationError extends Error {
   constructor(
@@ -81,6 +82,7 @@ export function ensurePatternsRegistered(): void {
   if (registered && REGISTRY.has('standard')) return;
   if (!REGISTRY.has(STANDARD.id)) registerPattern(STANDARD);
   if (!REGISTRY.has(COMPETING_EXPERTS.id)) registerPattern(COMPETING_EXPERTS);
+  if (!REGISTRY.has(LOOP_WITH_BREAK.id)) registerPattern(LOOP_WITH_BREAK);
   registered = true;
 }
 
@@ -109,6 +111,12 @@ export function expandCoordination(spec: SystemSpec): DerivedGraph {
 }
 
 export type { CoordinationPatternDef } from './types';
-export { JUDGE_ROLE, isJudgeRole } from './roles';
+export {
+  JUDGE_ROLE,
+  isJudgeRole,
+  CONTROLLER_ROLE,
+  isControllerRole,
+} from './roles';
 export { STANDARD } from './standard';
 export { COMPETING_EXPERTS } from './competing-experts';
+export { LOOP_WITH_BREAK } from './loop-with-break';
