@@ -68,6 +68,13 @@ import {
   STORAGE_MIGRATION_PATH,
   UPLOAD_POLICY_PATH,
 } from './file-upload';
+import {
+  adminViewableEntities,
+  emitAdminGuardFile,
+  emitAdminLayoutFile,
+  ADMIN_GUARD_PATH,
+  ADMIN_LAYOUT_PATH,
+} from './admin-dashboard';
 
 export class SoftwareCodegenError extends Error {
   readonly cause?: unknown;
@@ -208,6 +215,36 @@ export async function generateSoftwareCode(args: {
       storageFiles.push(
         await materialise(signedUrlRoutePath(s.slug), emitSignedUrlRoute(s)),
       );
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // 2c. Admin dashboard — STRUCTURAL barrier 2 (NOT LLM): the server-side
+  //     guard (lib/auth/admin.ts requireAdmin) + the /admin segment guard
+  //     layout. Barrier 1 (the additive read-only RLS admin-read policy) is
+  //     in 0001 (above). The admin VIEW page itself is the ONLY LLM-filled
+  //     artefact and goes through the page family.
+  // ---------------------------------------------------------------------
+  const adminFiles: SoftwareGeneratedFile[] = [];
+  if (spec.admin_dashboard && adminViewableEntities(spec).length > 0) {
+    const adminEmits: ReadonlyArray<readonly [string, string]> = [
+      [ADMIN_GUARD_PATH, emitAdminGuardFile()],
+      [ADMIN_LAYOUT_PATH, emitAdminLayoutFile()],
+    ];
+    for (const [path, content] of adminEmits) {
+      const sc = await staticCheckFile(path, content);
+      if (!sc.ok) {
+        warnings.push(
+          "Admin structural file '" + path + "' failed static check — Forge bug.",
+        );
+      }
+      adminFiles.push({
+        path,
+        content,
+        source: 'generated',
+        bytes: byteLength(content),
+        staticCheck: sc,
+      });
     }
   }
 
@@ -353,6 +390,7 @@ export async function generateSoftwareCode(args: {
     ...scaffoldChecked,
     migrationFile,
     ...storageFiles,
+    ...adminFiles,
     ...llmFiles,
     ...shellFiles,
   ];

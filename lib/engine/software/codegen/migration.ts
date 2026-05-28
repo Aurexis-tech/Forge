@@ -19,6 +19,7 @@
 
 import type { SoftwareSpec } from '../spec';
 import { fileUploadMetadataEntities } from './file-upload';
+import { adminViewableEntities, emitAdminReadPolicy } from './admin-dashboard';
 
 // Map the spec's narrow field-type vocabulary onto Postgres column
 // types. Closed catalog ↔ closed mapping; the LLM never picks types.
@@ -60,6 +61,10 @@ export function emitSoftwareMigration(spec: SoftwareSpec): string {
   // storage RLS policy live in a SEPARATE 0002_storage.sql, never applied
   // by the DB-only pglite driver — see file-upload.ts.)
   const allEntities = [...spec.entities, ...fileUploadMetadataEntities(spec)];
+
+  // admin-dashboard (opt-in): declared entities the admin may READ across
+  // owners. The admin-read policy is ADDITIVE + READ-ONLY (see below).
+  const adminSet = new Set(adminViewableEntities(spec));
 
   for (const entity of allEntities) {
     const table = tableName(entity.name);
@@ -129,6 +134,15 @@ export function emitSoftwareMigration(spec: SoftwareSpec): string {
           table +
           ' for select to anon using (true);',
       );
+    }
+
+    // admin-dashboard BARRIER 1 — an ADDITIVE read-only admin-read policy
+    // for an admin-viewable table. Only valid alongside the owner policy
+    // (the spec validator requires per_user_isolation when admin_dashboard
+    // is set), so non-admins remain owner-scoped (the admin clause is false
+    // → only the owner clause matches). NO admin write policy.
+    if (adminSet.has(entity.name)) {
+      lines.push(emitAdminReadPolicy(table));
     }
     lines.push('');
   }

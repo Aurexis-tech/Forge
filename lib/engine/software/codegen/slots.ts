@@ -53,6 +53,7 @@ import {
 import { tableName } from './migration';
 import { crudResourcePages } from './crud-resource';
 import { fileUploadGalleryPages } from './file-upload';
+import { adminDashboardPages } from './admin-dashboard';
 import {
   buildRefinementContextMessage,
   critiqueAndRefine,
@@ -275,7 +276,8 @@ async function fillPageSlot(input: ResolveSlotInput): Promise<SlotResolution> {
   const page =
     spec.pages.find((p) => p.id === target) ??
     crudResourcePages(spec).find((p) => p.id === target) ??
-    fileUploadGalleryPages(spec).find((p) => p.id === target);
+    fileUploadGalleryPages(spec).find((p) => p.id === target) ??
+    adminDashboardPages(spec).find((p) => p.id === target);
   if (!page) {
     throw new SoftwareSlotError(
       "page slot '" + task.id + "' references unknown page '" + target + "'",

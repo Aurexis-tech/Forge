@@ -39,6 +39,10 @@ import {
   expandCrudResource,
 } from '../codegen/crud-resource';
 import { fileUploadGalleryPages } from '../codegen/file-upload';
+import {
+  adminDashboardPages,
+  adminViewableEntities,
+} from '../codegen/admin-dashboard';
 
 // Same shape as system/planner/graph.ts so the route/UI layer can
 // treat both graphs uniformly when it needs to.
@@ -338,6 +342,26 @@ export function deriveSoftwareGraph(spec: SoftwareSpec): SoftwareDerivedGraph {
       depends_on: [],
       slot: { kind: 'page_component', target: galleryPage.id },
       files: ['app/(app)/' + galleryPage.id.replace(/_/g, '-') + '/page.tsx'],
+    });
+  }
+
+  // --- 3d. Admin dashboard page -----------------------------------------
+  // The admin VIEW page (server component, LLM-filled) inside a STRUCTURAL
+  // guarded shell. The RLS admin-read policy (barrier 1, in the migration)
+  // + the /admin segment guard layout (barrier 2, structural) are emitted
+  // deterministically — only this VIEW reaches the LLM. Depends on the
+  // migrations of the entities it reads.
+  for (const adminPage of adminDashboardPages(spec)) {
+    const deps = adminViewableEntities(spec)
+      .map((name) => migrationIdByEntity.get(name))
+      .filter((id): id is string => Boolean(id));
+    tasks.push({
+      id: 'page_' + adminPage.id,
+      layer: 'ui',
+      description: adminPage.purpose,
+      depends_on: deps,
+      slot: { kind: 'page_component', target: adminPage.id },
+      files: ['app/(app)/' + adminPage.id.replace(/_/g, '-') + '/page.tsx'],
     });
   }
 

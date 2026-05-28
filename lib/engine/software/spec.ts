@@ -153,6 +153,17 @@ export const SoftwareSpecSchema = z
     // CRUD-resource (existing per-entity derivation, byte-identical).
     // Each name must be a declared entity (validated below).
     crud_resources: z.array(EntityNameSchema).max(20).optional(),
+    // OPTIONAL: an admin dashboard — the ONE slot that deliberately crosses
+    // owner-scoping (an admin reads rows that aren't theirs). `entities` are
+    // declared entities the admin may READ across owners. Owner-scoping for
+    // everyone else is UNTOUCHED: the admin access is an ADDITIVE read-only
+    // RLS policy + a server-side guard, both keyed on server-controlled JWT
+    // app_metadata (a user cannot self-promote). Absent → no admin
+    // dashboard (byte-identical). Requires per_user_isolation (validated
+    // below — the admin policy is additive on top of the owner policy).
+    admin_dashboard: z
+      .object({ entities: z.array(EntityNameSchema).min(1).max(20) })
+      .optional(),
     // OPTIONAL: file-upload slots — owner-scoped private file storage
     // (private bucket + vetted owner-scoped storage RLS policy + owner-
     // scoped metadata table + validated upload + signed-URL download +
@@ -293,6 +304,41 @@ export const SoftwareSpecSchema = z
           });
         }
       });
+    }
+
+    // admin_dashboard (opt-in): the admin-read RLS policy is ADDITIVE on the
+    // owner policy, so it REQUIRES auth + per-user isolation (otherwise there
+    // is no owner-scoping to cross). Each viewable entity must be declared,
+    // and the synthesized 'admin' page id must not collide with a declared
+    // page. (The page id literal mirrors ADMIN_DASHBOARD_PAGE_ID in
+    // admin-dashboard.ts; inlined here to keep spec the dependency leaf.)
+    if (data.admin_dashboard) {
+      if (!data.auth.requires_auth || !data.auth.per_user_isolation) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['admin_dashboard'],
+          message:
+            'admin_dashboard crosses owner-scoping and requires auth.requires_auth + auth.per_user_isolation (the admin-read policy is additive on the owner policy)',
+        });
+      }
+      data.admin_dashboard.entities.forEach((name, i) => {
+        if (!entityNames.has(name)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['admin_dashboard', 'entities', i],
+            message:
+              "admin_dashboard.entities references unknown entity '" + name + "'",
+          });
+        }
+      });
+      if (pageIds.has('admin')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['admin_dashboard'],
+          message:
+            "admin_dashboard generates an 'admin' page id that collides with a declared page id",
+        });
+      }
     }
   });
 
