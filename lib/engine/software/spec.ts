@@ -64,6 +64,33 @@ const FieldSchema = z.object({
   type: z.enum(FIELD_TYPES),
 });
 
+// Hard ceiling on a file-upload slot's configurable size limit. The engine
+// owns the cap so a bad spec can't allow a pathologically large upload.
+export const MAX_UPLOAD_SIZE_MB_CEILING = 100;
+
+// One file-upload slot: a private, owner-scoped storage resource. `name`
+// is the PascalCase metadata entity (e.g. 'Attachment'); the size limit +
+// content-type allowlist are SERVER-ENFORCED (validated server-side, not a
+// client hint). Owner-scoping + the storage policy are structural (vetted
+// templates) — see lib/engine/software/codegen/file-upload.ts.
+const FileUploadSchema = z.object({
+  name: EntityNameSchema,
+  max_size_mb: z.number().int().min(1).max(MAX_UPLOAD_SIZE_MB_CEILING),
+  // MIME types, e.g. 'image/png'. Non-empty allowlist — a slot must
+  // declare what it accepts; nothing is accepted by default.
+  content_types: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(120)
+        .regex(/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+*-]*$/i, 'content_type must be a MIME type like image/png'),
+    )
+    .min(1)
+    .max(40),
+});
+
 // PascalCase entity name -> lower_snake_case table/page slug. Mirrors
 // migration.tableName() / crud-resource.crudResourcePageId(); inlined here
 // to keep the spec module dependency-free (spec.ts is the leaf the codegen
@@ -126,6 +153,13 @@ export const SoftwareSpecSchema = z
     // CRUD-resource (existing per-entity derivation, byte-identical).
     // Each name must be a declared entity (validated below).
     crud_resources: z.array(EntityNameSchema).max(20).optional(),
+    // OPTIONAL: file-upload slots — owner-scoped private file storage
+    // (private bucket + vetted owner-scoped storage RLS policy + owner-
+    // scoped metadata table + validated upload + signed-URL download +
+    // gallery page). Each `name` synthesizes a metadata table + a gallery
+    // page; storage owner-scoping is STRUCTURAL. Absent → no storage
+    // (byte-identical). Requires per_user_isolation (validated below).
+    file_uploads: z.array(FileUploadSchema).max(10).optional(),
   })
   .superRefine((data, ctx) => {
     // Unique page ids.
@@ -202,6 +236,59 @@ export const SoftwareSpecSchema = z
               name +
               "' generates a list-page id '" +
               synthesizedPageId +
+              "' that collides with a declared page id",
+          });
+        }
+      });
+    }
+
+    // file_uploads (opt-in file-upload slot): owner-scoped private storage,
+    // so they REQUIRE auth + per-user isolation. Each name synthesizes a
+    // metadata table + a gallery page; reject collisions with declared
+    // entities (the metadata table would clash), other uploads, or
+    // declared pages (the gallery page would clash).
+    const uploads = data.file_uploads ?? [];
+    if (uploads.length > 0) {
+      if (!data.auth.requires_auth || !data.auth.per_user_isolation) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['file_uploads'],
+          message:
+            'file_uploads are owner-scoped and require auth.requires_auth + auth.per_user_isolation',
+        });
+      }
+      const entitySlugs = new Set(data.entities.map((e) => entitySlug(e.name)));
+      const seenUpload = new Set<string>();
+      uploads.forEach((u, i) => {
+        const slug = entitySlug(u.name);
+        if (entityNames.has(u.name) || entitySlugs.has(slug)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['file_uploads', i, 'name'],
+            message:
+              "file_uploads name '" +
+              u.name +
+              "' collides with a declared entity — the metadata table would clash",
+          });
+        }
+        if (seenUpload.has(slug)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['file_uploads', i, 'name'],
+            message: "duplicate file_uploads name '" + u.name + "'",
+          });
+        }
+        seenUpload.add(slug);
+        const galleryPageId = slug + '_files';
+        if (pageIds.has(galleryPageId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['file_uploads', i, 'name'],
+            message:
+              "file_uploads name '" +
+              u.name +
+              "' generates a gallery page id '" +
+              galleryPageId +
               "' that collides with a declared page id",
           });
         }

@@ -57,6 +57,17 @@ import {
   resolveSlot,
   SoftwareSlotError,
 } from './slots';
+import {
+  emitSignedUrlRoute,
+  emitStorageMigration,
+  emitUploadPolicyFile,
+  emitUploadRoute,
+  fileUploadSlots,
+  signedUrlRoutePath,
+  uploadRoutePath,
+  STORAGE_MIGRATION_PATH,
+  UPLOAD_POLICY_PATH,
+} from './file-upload';
 
 export class SoftwareCodegenError extends Error {
   readonly cause?: unknown;
@@ -151,6 +162,54 @@ export async function generateSoftwareCode(args: {
     bytes: byteLength(migrationContent),
     staticCheck: await staticCheckFile(migrationPath(), migrationContent),
   };
+
+  // ---------------------------------------------------------------------
+  // 2b. File-upload slots — STRUCTURAL, deterministic emit (NOT LLM):
+  //     - 0002_storage.sql: a PRIVATE bucket + vetted owner-scoped storage
+  //       RLS policy. Separate from 0001 so the DB-only pglite isolation
+  //       driver (which applies only 0001) never trips over the storage
+  //       schema. Storage-level isolation is proven STRUCTURALLY by this
+  //       vetted policy text + DEFERRED to a real-Supabase run.
+  //     - lib/upload/policy.ts: server-enforced size + content-type
+  //       validation (the upload route calls validateUpload before storage).
+  //     - per-slot upload route + signed-URL download route.
+  //     The metadata table itself lands in 0001 (above) via the entity walk.
+  //     The LLM never sees or authors any of these.
+  // ---------------------------------------------------------------------
+  const storageFiles: SoftwareGeneratedFile[] = [];
+  const uploadSlots = fileUploadSlots(spec);
+  if (uploadSlots.length > 0) {
+    const materialise = async (
+      path: string,
+      content: string,
+    ): Promise<SoftwareGeneratedFile> => {
+      const sc = await staticCheckFile(path, content);
+      if (!sc.ok) {
+        warnings.push(
+          "File-upload structural file '" + path + "' failed static check — Forge bug.",
+        );
+      }
+      return {
+        path,
+        content,
+        source: 'generated',
+        bytes: byteLength(content),
+        staticCheck: sc,
+      };
+    };
+    storageFiles.push(
+      await materialise(STORAGE_MIGRATION_PATH, emitStorageMigration(spec)),
+    );
+    storageFiles.push(
+      await materialise(UPLOAD_POLICY_PATH, emitUploadPolicyFile(spec)),
+    );
+    for (const s of uploadSlots) {
+      storageFiles.push(await materialise(uploadRoutePath(s.slug), emitUploadRoute(s)));
+      storageFiles.push(
+        await materialise(signedUrlRoutePath(s.slug), emitSignedUrlRoute(s)),
+      );
+    }
+  }
 
   // ---------------------------------------------------------------------
   // 3. Per-slot resolution. Each task routes through `resolveSlot`,
@@ -293,6 +352,7 @@ export async function generateSoftwareCode(args: {
   const files: SoftwareGeneratedFile[] = [
     ...scaffoldChecked,
     migrationFile,
+    ...storageFiles,
     ...llmFiles,
     ...shellFiles,
   ];

@@ -18,6 +18,7 @@
 // in tests/e2e/software-codegen-dryrun.test.ts assert this directly.
 
 import type { SoftwareSpec } from '../spec';
+import { fileUploadMetadataEntities } from './file-upload';
 
 // Map the spec's narrow field-type vocabulary onto Postgres column
 // types. Closed catalog ↔ closed mapping; the LLM never picks types.
@@ -52,7 +53,15 @@ export function emitSoftwareMigration(spec: SoftwareSpec): string {
   lines.push("-- RLS is enabled on every entity table by construction.");
   lines.push('');
 
-  for (const entity of spec.entities) {
+  // Declared entities PLUS the synthetic owner-scoped metadata tables for
+  // any file-upload slots. Folding the metadata tables in here means they
+  // get owner_id + RLS by the SAME structural path as a declared entity —
+  // and are covered by the pglite DB isolation test. (The storage bucket +
+  // storage RLS policy live in a SEPARATE 0002_storage.sql, never applied
+  // by the DB-only pglite driver — see file-upload.ts.)
+  const allEntities = [...spec.entities, ...fileUploadMetadataEntities(spec)];
+
+  for (const entity of allEntities) {
     const table = tableName(entity.name);
     lines.push('-- ' + entity.name);
     lines.push('create table if not exists public.' + table + ' (');

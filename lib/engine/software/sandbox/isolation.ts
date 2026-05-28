@@ -33,6 +33,7 @@
 // ---------------------------------------------------------------------------
 
 import type { SoftwareSpec } from '../spec';
+import { fileUploadMetadataEntities } from '../codegen/file-upload';
 
 const DRIVER_TIMEOUT_MS = 60_000;
 
@@ -52,7 +53,16 @@ function tableName(entityName: string): string {
 // (the migration emits a public-read policy instead).
 export function entitiesToIsolate(spec: SoftwareSpec): string[] {
   if (!spec.auth.requires_auth) return [];
-  return spec.entities.map((e) => tableName(e.name));
+  // Declared entities PLUS the owner-scoped metadata tables synthesized for
+  // file-upload slots. The metadata tables live in 0001_init.sql with the
+  // same owner_id + RLS as a declared entity, so the DB isolation test
+  // covers them (B can't read/update/delete A's file metadata rows). The
+  // STORAGE-level isolation (B can't download A's actual files) is NOT
+  // covered here — pglite is DB-only; that proof is deferred to a real run.
+  return [
+    ...spec.entities.map((e) => tableName(e.name)),
+    ...fileUploadMetadataEntities(spec).map((e) => tableName(e.name)),
+  ];
 }
 
 // ---------------------------------------------------------------------------

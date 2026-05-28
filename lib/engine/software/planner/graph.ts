@@ -38,6 +38,7 @@ import {
   crudResourcePageDescriptor,
   expandCrudResource,
 } from '../codegen/crud-resource';
+import { fileUploadGalleryPages } from '../codegen/file-upload';
 
 // Same shape as system/planner/graph.ts so the route/UI layer can
 // treat both graphs uniformly when it needs to.
@@ -319,6 +320,24 @@ export function deriveSoftwareGraph(spec: SoftwareSpec): SoftwareDerivedGraph {
       depends_on: routeIdsByEntity.get(entity.name) ?? [],
       slot: { kind: 'page_component', target: desc.id },
       files: ['app/(app)/' + desc.id.replace(/_/g, '-') + '/page.tsx'],
+    });
+  }
+
+  // --- 3c. File-upload gallery pages ------------------------------------
+  // Each file-upload slot gets ONE synthesized server-component gallery
+  // page (lists the user's own files). The upload + signed-URL routes, the
+  // storage bucket/policy, and the metadata table are STRUCTURAL (emitted
+  // deterministically by the codegen assembler, NOT slot tasks) — only the
+  // gallery page is LLM-filled via the page family. The page id is the
+  // slot slug + '_files'; the spec validator guarantees no collision.
+  for (const galleryPage of fileUploadGalleryPages(spec)) {
+    tasks.push({
+      id: 'page_' + galleryPage.id,
+      layer: 'ui',
+      description: galleryPage.purpose,
+      depends_on: [],
+      slot: { kind: 'page_component', target: galleryPage.id },
+      files: ['app/(app)/' + galleryPage.id.replace(/_/g, '-') + '/page.tsx'],
     });
   }
 
