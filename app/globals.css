@@ -31,6 +31,21 @@
   --faint: #5b6475;       /* tertiary / pending                              */
   --line: rgba(255, 255, 255, 0.08); /* hairline borders                     */
   --bg: #05060a;          /* obsidian void                                   */
+
+  /* === MOTION TOKENS ================================================
+     The CSS mirror of lib/forge-motion.ts (the canonical source). Keep
+     the numbers in sync. Used by the keyframe-driven motions below; the
+     global prefers-reduced-motion rule collapses every one to ~instant.
+     See /docs/design-language.md §4. */
+  --motion-forge-moment: 1500ms;
+  --motion-stage-cool: 600ms;
+  --motion-hover-warm: 180ms;
+  --motion-reveal-base: 500ms;
+  --motion-reveal-step: 120ms;
+  --motion-heat-bar: 1400ms;
+  --ease-cool: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-warm: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-forge: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html,
@@ -87,6 +102,35 @@ body::before {
   outline: 2px solid #ff9a4d;
   outline-offset: 2px;
   border-radius: 6px;
+}
+
+/* Text-input focus heat-glow — ONE place, every text input across the app.
+   Calm until you reach to act: on focus the field warms with the same
+   faint inner heat-glow the intake textarea pioneered. Per-component
+   amber focus utilities (same #ff9a4d hex) compose cleanly on top. The
+   transition eases at the hover-warm tempo; the global reduced-motion
+   rule below freezes it to an instant (but still visible) state change. */
+textarea,
+input[type='text'],
+input[type='password'],
+input[type='email'],
+input[type='number'],
+input[type='url'],
+input[type='search'],
+input:not([type]) {
+  transition: border-color var(--motion-hover-warm) var(--ease-warm),
+    box-shadow var(--motion-hover-warm) var(--ease-warm);
+}
+textarea:focus,
+input[type='text']:focus,
+input[type='password']:focus,
+input[type='email']:focus,
+input[type='number']:focus,
+input[type='url']:focus,
+input[type='search']:focus,
+input:not([type]):focus {
+  border-color: var(--heat-glow);
+  box-shadow: inset 0 0 44px -14px rgba(255, 154, 77, 0.5);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -195,4 +239,101 @@ body::before {
   animation-iteration-count: infinite;
   animation-fill-mode: both;
   will-change: transform, opacity;
+}
+
+/* --- The signature motion layer --------------------------------------
+   Bounded, purposeful, reduced-motion safe. Durations/easings come from
+   the --motion-* / --ease-* vars (mirror of lib/forge-motion.ts). The
+   global prefers-reduced-motion rule above collapses every one to an
+   instant settle — the SAME end state, just not animated. None of these
+   loop forever except the loading heat-bar (which lives only while a
+   bounded operation is in flight — the conventional spinner exception).
+
+   THE FORGE MOMENT — the strike on FORGE IT. A white-hot overlay flashes
+   over the acted-on surface, then radiates and settles to nothing. Runs
+   in PARALLEL with submit; never gates it. Single play, forwards. */
+@keyframes forge-moment {
+  0%   { opacity: 0; }
+  14%  { opacity: 1; }    /* the strike — white-hot spark */
+  48%  { opacity: 0.45; } /* heat radiates outward */
+  100% { opacity: 0; }    /* fully settled — solid */
+}
+.forge-moment-overlay {
+  animation: forge-moment var(--motion-forge-moment) var(--ease-forge) forwards;
+}
+
+/* The acted-on card's own heat surge during the forge moment: its glow
+   blooms to a white-hot spark, then cools back to a settled hairline. */
+@keyframes forge-moment-card {
+  0%   { box-shadow: 0 0 40px -8px rgba(255, 154, 77, 0.35); }
+  16%  { box-shadow: 0 0 72px 4px rgba(255, 230, 199, 0.72); }
+  100% { box-shadow: 0 0 40px -12px rgba(255, 154, 77, 0.0); }
+}
+.forge-moment-card {
+  animation: forge-moment-card var(--motion-forge-moment) var(--ease-forge) forwards;
+}
+
+/* STAGE WARM — a just-reached pipeline stage warms dim → molten once, on
+   arrival. Replaces the old infinite pulse (motion discipline: nothing
+   loops but the ambient field). The cooled/pending dots ease their color
+   swap via a transition (set on the element); this keyframe is the
+   active dot's one-shot bloom. Single play, holds the molten end state. */
+@keyframes forge-stage-warm {
+  0% {
+    background-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 0 0 rgba(255, 186, 115, 0);
+  }
+  100% {
+    background-color: var(--heat-molten);
+    box-shadow: 0 0 14px 2px rgba(255, 186, 115, 0.7);
+  }
+}
+.forge-stage-warm {
+  animation: forge-stage-warm var(--motion-stage-cool) var(--ease-warm) both;
+}
+
+/* Every pipeline dot eases its colour/glow swap at the cooling tempo, so
+   an in-place cursor advance reads as molten cooling to cyan rather than
+   a hard cut. (The active dot's one-shot bloom is forge-stage-warm above;
+   this is the cooled/pending settle.) Frozen instant by reduced-motion. */
+.forge-stage-dot {
+  transition: background-color var(--motion-stage-cool) var(--ease-cool),
+    box-shadow var(--motion-stage-cool) var(--ease-cool);
+}
+
+/* HOVER LIFT — interactive surfaces rise a couple px and warm their
+   border/glow on hover, eased at the hover-warm tempo. "This is
+   interactive." Settles on mouse-leave. Reduced-motion freezes the
+   transition (the border/colour change still shows, just not animated). */
+.forge-lift {
+  transition: transform var(--motion-hover-warm) var(--ease-warm),
+    border-color var(--motion-hover-warm) var(--ease-warm),
+    box-shadow var(--motion-hover-warm) var(--ease-warm);
+}
+.forge-lift:hover {
+  transform: translateY(-2px);
+}
+
+/* LOADING HEAT-BAR — a thin bar whose heat sweeps cool → ember → glow
+   while a bounded operation is in flight. The one sanctioned repeating
+   motion outside the ambient field, and only because it lives exactly as
+   long as the wait. Reduced-motion freezes it to a static heat gradient
+   (still legible as "working"). */
+@keyframes forge-heat-bar {
+  0%   { background-position: 0% 50%;   opacity: 0.65; }
+  50%  { background-position: 100% 50%; opacity: 1; }
+  100% { background-position: 0% 50%;   opacity: 0.65; }
+}
+.forge-heat-bar {
+  background-image: linear-gradient(
+    90deg,
+    var(--cool-cyan),
+    var(--heat-ember),
+    var(--heat-glow),
+    var(--heat-ember),
+    var(--cool-cyan)
+  );
+  background-size: 200% 100%;
+  border-radius: 9999px;
+  animation: forge-heat-bar var(--motion-heat-bar) ease-in-out infinite;
 }

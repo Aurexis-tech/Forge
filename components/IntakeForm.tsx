@@ -16,12 +16,14 @@ import { SectionHeader } from '@/components/forge/SectionHeader';
 import { StagePipeline, CANONICAL_STAGES } from '@/components/forge/StagePipeline';
 import { useForgeStore } from '@/lib/store';
 import { INTAKE_COPY, INTAKE_EXAMPLES } from '@/lib/intake-content';
+import { MOTION, motionMs } from '@/lib/forge-motion';
 
 export function IntakeForm() {
   const router = useRouter();
   const setCoreState = useForgeStore((s) => s.setCoreState);
   const [prompt, setPrompt] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [forging, setForging] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -34,6 +36,12 @@ export function IntakeForm() {
     }
     setSubmitting(true);
     setCoreState('working');
+    // THE FORGE MOMENT — fire the bounded heat surge in PARALLEL with the
+    // request. The strike begins now; the fetch + navigation proceed
+    // independently below and are never gated by the ~1.5s animation
+    // (under reduced motion motionMs() is 0, so it settles instantly).
+    setForging(true);
+    window.setTimeout(() => setForging(false), motionMs(MOTION.forgeMoment));
     try {
       const res = await fetch('/api/projects', {
         method: 'POST',
@@ -51,12 +59,30 @@ export function IntakeForm() {
       setCoreState('error');
       setError(err instanceof Error ? err.message : 'Something went wrong.');
       setSubmitting(false);
+      setForging(false); // a failed strike cools immediately
     }
   }
 
   return (
     <div className="w-full max-w-2xl">
-      <EmberCard tone="none" className="p-8">
+      <EmberCard
+        tone="none"
+        className={'relative p-8' + (forging ? ' forge-moment-card' : '')}
+      >
+        {/* THE FORGE MOMENT overlay — a white-hot spark blooms over the
+            acted-on surface, then radiates and settles. Bounded, single
+            play, pointer-events-none so it never blocks; frozen to instant
+            under prefers-reduced-motion. */}
+        {forging ? (
+          <div
+            aria-hidden
+            className="forge-moment-overlay pointer-events-none absolute inset-0 z-10 rounded-2xl"
+            style={{
+              backgroundImage:
+                'radial-gradient(60% 50% at 50% 42%, rgba(255,230,199,0.55), rgba(255,154,77,0.22) 45%, transparent 72%)',
+            }}
+          />
+        ) : null}
         <form onSubmit={onSubmit} className="flex flex-col gap-7">
           <SectionHeader
             level={1}

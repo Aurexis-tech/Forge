@@ -39,7 +39,7 @@ export function ProjectCard({ project, journey, mold }: ProjectCardData) {
     >
       <EmberCard
         tone={tone}
-        className="h-full transition group-hover:border-heat-glow/50 group-hover:shadow-amber"
+        className="h-full transition duration-200 group-hover:-translate-y-1 group-hover:border-heat-glow/50 group-hover:shadow-amber"
       >
         <div className="flex min-w-0 flex-col gap-4">
           <div className="flex min-w-0 items-start justify-between gap-3">

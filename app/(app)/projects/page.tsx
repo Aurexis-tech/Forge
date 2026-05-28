@@ -10,6 +10,7 @@ import { SectionHeader } from '@/components/forge/SectionHeader';
 import { ProjectCard } from '@/components/ProjectCard';
 import { Reveal } from '@/components/Reveal';
 import { requireUser } from '@/lib/auth';
+import { MOTION } from '@/lib/forge-motion';
 import { loadProjectCards } from '@/lib/project-cards';
 
 export const dynamic = 'force-dynamic';
@@ -31,27 +32,31 @@ export default async function HomePage() {
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-12 py-16">
-      <SectionHeader
-        level={1}
-        eyebrow="overview"
-        title="All projects"
-        subcopy="Every forge you’ve started, newest first — across all four molds, including ones still being detected."
-        action={<NewForgeAction />}
-      />
+      <Reveal>
+        <SectionHeader
+          level={1}
+          eyebrow="overview"
+          title="All projects"
+          subcopy="Every forge you’ve started, newest first — across all four molds, including ones still being detected."
+          action={<NewForgeAction />}
+        />
+      </Reveal>
 
       {cards.length === 0 ? (
-        <EmberCard tone="none">
-          <p className="text-sm leading-relaxed text-forge-dim">
-            Nothing forged yet. Head to{' '}
-            <Link href="/forge" className="text-forge-amber hover:underline">
-              New Forge
-            </Link>{' '}
-            and describe what you want to build — an agent, a system, a full
-            app, or infrastructure. The Forge detects which.
-          </p>
-        </EmberCard>
+        <Reveal delayMs={MOTION.revealStep}>
+          <EmberCard tone="none">
+            <p className="text-sm leading-relaxed text-forge-dim">
+              Nothing forged yet. Head to{' '}
+              <Link href="/forge" className="text-forge-amber hover:underline">
+                New Forge
+              </Link>{' '}
+              and describe what you want to build — an agent, a system, a full
+              app, or infrastructure. The Forge detects which.
+            </p>
+          </EmberCard>
+        </Reveal>
       ) : (
-        <Reveal>
+        <Reveal delayMs={MOTION.revealStep}>
           <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {cards.map((card) => (
               <li key={card.project.id}>

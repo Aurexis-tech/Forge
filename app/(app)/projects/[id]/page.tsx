@@ -5,6 +5,8 @@ import { EmberCard } from '@/components/forge/EmberCard';
 import { HeatBadge } from '@/components/forge/HeatBadge';
 import { SectionHeader } from '@/components/forge/SectionHeader';
 import { StagePipeline } from '@/components/forge/StagePipeline';
+import { Reveal } from '@/components/Reveal';
+import { MOTION } from '@/lib/forge-motion';
 import { GenerateBuildPanel } from '@/components/build/GenerateBuildPanel';
 import { GeneratedBuildPanel } from '@/components/build/GeneratedBuildPanel';
 import type { StaticStatus } from '@/components/build/FileTree';
@@ -637,24 +639,26 @@ export default async function ProjectDetailPage({
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 py-12">
-      <div className="flex flex-col gap-4">
-        <Link
-          href="/projects"
-          className="font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim hover:text-forge-text"
-        >
-          ← archive
-        </Link>
-        <SectionHeader
-          level={1}
-          eyebrow={'project · ' + project.id.slice(0, 8)}
-          title={project.name}
-          action={
-            <HeatBadge tone={journey.isLive ? 'cool' : 'dim'} dot={journey.isLive}>
-              {journey.isLive ? 'live' : project.status}
-            </HeatBadge>
-          }
-        />
-      </div>
+      <Reveal>
+        <div className="flex flex-col gap-4">
+          <Link
+            href="/projects"
+            className="font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim hover:text-forge-text"
+          >
+            ← archive
+          </Link>
+          <SectionHeader
+            level={1}
+            eyebrow={'project · ' + project.id.slice(0, 8)}
+            title={project.name}
+            action={
+              <HeatBadge tone={journey.isLive ? 'cool' : 'dim'} dot={journey.isLive}>
+                {journey.isLive ? 'live' : project.status}
+              </HeatBadge>
+            }
+          />
+        </div>
+      </Reveal>
 
       {/* Mirror the page's journey into the persistent 3D world. */}
       <JourneyBridge journey={journey} />
@@ -664,22 +668,24 @@ export default async function ProjectDetailPage({
           to cyan, everything ahead is dim; a live project settles cool.
           Warm card while still forging, cool once it's live. Readable
           regardless of WebGL availability. */}
-      <EmberCard tone={journey.isLive ? 'cool' : 'warm'}>
-        <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
-          journey · stage {String(journey.cursor.index).padStart(2, '0')} ·{' '}
-          {journey.cursor.label}
-          {journey.cursor.detail ? (
-            <span className="text-forge-dim"> · {journey.cursor.detail}</span>
-          ) : null}
-        </p>
-        <StagePipeline
-          stages={journey.stages.map((s) => ({ id: s.id, label: s.label }))}
-          activeIndex={Math.max(
-            0,
-            journey.stages.findIndex((s) => s.id === journey.cursor.id),
-          )}
-        />
-      </EmberCard>
+      <Reveal delayMs={MOTION.revealStep}>
+        <EmberCard tone={journey.isLive ? 'cool' : 'warm'}>
+          <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
+            journey · stage {String(journey.cursor.index).padStart(2, '0')} ·{' '}
+            {journey.cursor.label}
+            {journey.cursor.detail ? (
+              <span className="text-forge-dim"> · {journey.cursor.detail}</span>
+            ) : null}
+          </p>
+          <StagePipeline
+            stages={journey.stages.map((s) => ({ id: s.id, label: s.label }))}
+            activeIndex={Math.max(
+              0,
+              journey.stages.findIndex((s) => s.id === journey.cursor.id),
+            )}
+          />
+        </EmberCard>
+      </Reveal>
 
       {/* Shipped agents get the dashboard up top, before all the workshop panels. */}
       {shipped && validAgentSpec && build ? (

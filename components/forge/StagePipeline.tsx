@@ -29,9 +29,13 @@ export const CANONICAL_STAGES: ReadonlyArray<PipelineStage> = [
   { id: 'live', label: 'Live' },
 ];
 
-type Temp = 'cooled' | 'molten' | 'pending';
+export type Temp = 'cooled' | 'molten' | 'pending';
 
-function tempFor(index: number, activeIndex: number, isLast: boolean): Temp {
+// PURE: which temperature a stage is, given where the cursor sits. The
+// stage-transition animation is driven entirely by this — advancing the
+// activeIndex re-classifies the dots (the just-reached one warms, the
+// previous one cools). Exported so the motion behaviour is unit-testable.
+export function tempFor(index: number, activeIndex: number, isLast: boolean): Temp {
   if (index < activeIndex) return 'cooled';
   if (index > activeIndex) return 'pending';
   // active: the final stage settles cool ("live"); any earlier active
@@ -40,9 +44,12 @@ function tempFor(index: number, activeIndex: number, isLast: boolean): Temp {
 }
 
 const DOT: Record<Temp, string> = {
-  // Molten = hottest, glowing + a slow pulse (frozen by reduced-motion).
+  // Molten = hottest. It warms dim → molten ONCE on arrival (forge-stage-
+  // warm, a bounded single play — no infinite pulse; the only looping
+  // motion is the ambient field). Reduced-motion freezes it to a solid
+  // molten dot.
   molten:
-    'bg-heat-molten shadow-[0_0_14px_2px_rgba(255,186,115,0.7)] animate-pulse',
+    'bg-heat-molten shadow-[0_0_14px_2px_rgba(255,186,115,0.7)] forge-stage-warm',
   // Cooled = the heat has settled to cyan.
   cooled: 'bg-cool-cyan/80 shadow-[0_0_8px_1px_rgba(79,212,240,0.45)]',
   // Pending = unlit.
@@ -93,7 +100,9 @@ export function StagePipeline({
               />
               <span
                 aria-hidden
-                className={'h-2 w-2 shrink-0 rounded-full ' + DOT[temp]}
+                className={
+                  'forge-stage-dot h-2 w-2 shrink-0 rounded-full ' + DOT[temp]
+                }
               />
               {/* right connector */}
               <span

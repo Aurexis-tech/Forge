@@ -117,7 +117,10 @@ describe('the 5 forge primitives', () => {
     expect(s).toMatch(/bg-heat-molten/); // active = molten
     expect(s).toMatch(/bg-cool-cyan/); // completed = cooled
     expect(s).toMatch(/text-forge-faint/); // pending = dim
-    expect(s).toMatch(/animate-pulse/); // active dot pulses (reduced-motion freezes)
+    // Motion discipline: the active dot warms ONCE on arrival (a bounded
+    // single play), not an infinite pulse — see forge-motion.test.ts.
+    expect(s).toMatch(/forge-stage-warm/);
+    expect(s).not.toMatch(/animate-pulse/);
     expect(s).toMatch(/Intent/);
     expect(s).toMatch(/Live/);
   });

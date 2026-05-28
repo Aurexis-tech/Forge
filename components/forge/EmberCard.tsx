@@ -41,7 +41,7 @@ export function EmberCard({
         'relative overflow-hidden rounded-2xl border border-[color:var(--line)] ' +
         'bg-forge-panel p-6 shadow-glass backdrop-blur-md ' +
         (hover
-          ? 'transition hover:border-heat-glow/40 hover:shadow-amber '
+          ? 'forge-lift hover:border-heat-glow/40 hover:shadow-amber '
           : '') +
         className
       }

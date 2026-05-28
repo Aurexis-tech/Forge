@@ -47,10 +47,17 @@ export function ForgeButton({
       }
     >
       <span>{children}</span>
-      <span
-        aria-hidden
-        className="inline-block h-1.5 w-1.5 rounded-full bg-heat-glow shadow-amber transition group-hover:scale-150 group-hover:bg-heat-spark"
-      />
+      {busy ? (
+        // Forge-themed loading: a thin bar whose heat sweeps cool → ember
+        // → glow while the work is in flight. Frozen to a static heat
+        // gradient under reduced-motion (still legible as "working").
+        <span aria-hidden className="forge-heat-bar h-1 w-8" />
+      ) : (
+        <span
+          aria-hidden
+          className="inline-block h-1.5 w-1.5 rounded-full bg-heat-glow shadow-amber transition group-hover:scale-150 group-hover:bg-heat-spark"
+        />
+      )}
     </button>
   );
 }

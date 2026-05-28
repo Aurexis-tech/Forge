@@ -10,6 +10,7 @@ import { SectionHeader } from '@/components/forge/SectionHeader';
 import { ProjectCard } from '@/components/ProjectCard';
 import { Reveal } from '@/components/Reveal';
 import { requireUser } from '@/lib/auth';
+import { MOTION } from '@/lib/forge-motion';
 import { MOLD_META } from '@/lib/molds';
 import { loadProjectCards } from '@/lib/project-cards';
 import type { ProjectKind } from '@/lib/types';
@@ -32,22 +33,26 @@ export async function MoldSpacePage({ mold }: { mold: ProjectKind }) {
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-12 py-16">
-      <SectionHeader
-        level={1}
-        eyebrow="mold"
-        title={meta.title}
-        subcopy={meta.description}
-        action={<NewForgeAction />}
-      />
+      <Reveal>
+        <SectionHeader
+          level={1}
+          eyebrow="mold"
+          title={meta.title}
+          subcopy={meta.description}
+          action={<NewForgeAction />}
+        />
+      </Reveal>
 
       {cards.length === 0 ? (
-        <EmberCard tone="none">
-          <p className="text-sm leading-relaxed text-forge-dim">
-            {meta.emptyLine}
-          </p>
-        </EmberCard>
+        <Reveal delayMs={MOTION.revealStep}>
+          <EmberCard tone="none">
+            <p className="text-sm leading-relaxed text-forge-dim">
+              {meta.emptyLine}
+            </p>
+          </EmberCard>
+        </Reveal>
       ) : (
-        <Reveal>
+        <Reveal delayMs={MOTION.revealStep}>
           <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {cards.map((card) => (
               <li key={card.project.id}>

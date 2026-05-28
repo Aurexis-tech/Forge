@@ -81,22 +81,72 @@ Rhythm: eyebrow (mono, cyan) → display heading → body subcopy. See
 
 ## 4. Motion vocabulary
 
-All motion is cancelled by the global `prefers-reduced-motion` rule in
-`app/globals.css` — every animation below degrades to a calm static state.
+**Motion with intention.** Four rules, no exceptions:
 
-- **Embers** (`forge-css-ember` keyframe) — the signature ambient motion.
-  A *restrained* field of slow rising sparks in the lattice background
-  (a dozen, 9–14s each), reused from the landing's `CssEmbers`. Not a
-  fireworks show.
-- **Breathe** (`forge-breathe` / `forge-ambient-breathe`) — the molten
-  glow swells and settles on a long period. Atmosphere, not attention.
-- **The forge moment** — irreversible actions get a brief (~1–1.5s) heat
-  surge / spark / crystallization, then settle. (Wired per-action in a
-  later track; `ForgeButton` already presses hotter on `:active`.)
-- **Stage cooling** — see the pipeline below: the active stage is molten;
-  it cools to cyan as newer stages light.
-- **Reveal-on-scroll** (`Reveal`) — sections fade + lift in; content is
-  always visible without motion under reduced-motion.
+1. **Bounded.** Every motion *settles*. The only continuous motion in the
+   app is the ambient ember + breathe in `ForgeBackdrop`. Nothing else
+   loops — except the loading heat-bar, which lives only as long as the
+   bounded operation it reports.
+2. **Purposeful.** Each motion means something: hover = "this is
+   interactive"; a stage warming = "this is what changed"; the forge
+   moment = "this is the irreversible act." No meaning → no motion.
+3. **Never blocking.** Motion happens *next to* or *after* the
+   interaction, never before it. Submit fires the forge moment; the
+   request and navigation do not wait for it.
+4. **Reduced-motion honored — and verified.** The global
+   `prefers-reduced-motion` rule in `app/globals.css` collapses every
+   animation/transition to ~instant; `motionMs()` collapses every
+   JS-timed duration to `0`. The **same end state** always happens — just
+   not animated.
+
+### Motion tokens — one place
+
+Durations + easings live in **`lib/forge-motion.ts`** (the canonical
+source) and are mirrored as `--motion-*` / `--ease-*` CSS custom
+properties in `app/globals.css` for the keyframe-driven motions. Reference
+them by name; never hard-code a duration in a component.
+
+| Token | Value | Meaning |
+|---|---|---|
+| `forgeMoment` | `1500ms` | the heat surge on FORGE IT |
+| `stageCool` | `600ms` | a pipeline stage warming/cooling as the cursor moves |
+| `hoverWarm` | `180ms` | hover/focus heat warming in/out |
+| `revealBase` | `500ms` | a revealed element's fade+lift |
+| `revealStep` | `120ms` | the stagger step between revealed elements |
+| `heatBar` | `1400ms` | one cycle of the loading heat-bar |
+
+Easings: `cool` (decelerate-to-settle), `warm` (confident ease-in-out),
+`forge` (= cool, the strike). `motionMs(token, reduced?)` returns `0`
+under reduced motion, else the token — the single shortcut every timed
+motion consults.
+
+### The vocabulary
+
+- **Embers** (`forge-css-ember`) + **Breathe** (`forge-ambient-breathe`)
+  — the *only* sanctioned continuous motion. Restrained ambient field in
+  the `ForgeBackdrop`. Atmosphere, not attention.
+- **The forge moment** (`forge-moment-overlay` / `forge-moment-card`) —
+  FORGE IT strikes a bounded ~1.5s white-hot surge over the acted-on
+  `EmberCard`, then radiates and settles. Fires **in parallel** with the
+  submit/navigation — never gates it. Instant under reduced-motion.
+- **Stage warm / cool** (`forge-stage-warm` + `.forge-stage-dot`) — the
+  just-reached pipeline stage warms dim → molten *once* on arrival
+  (single play, no infinite pulse); the dots ease their colour swap at the
+  `stageCool` tempo so an advancing cursor reads as molten cooling to
+  cyan. Instant swap under reduced-motion.
+- **Hover lift** (`.forge-lift`) — interactive surfaces (`EmberCard`,
+  cards) rise ~2px + warm their border/glow on hover at the `hoverWarm`
+  tempo; `ForgeButton` intensifies on hover then strikes hotter on
+  `:active`. Text inputs warm with a focus-only inner heat-glow (one rule
+  in `globals.css` covers every input). Static under reduced-motion.
+- **Orchestrated reveal** (`Reveal` + `revealStep`) — a page reveals in a
+  small stagger: header (0) → primary card(s) (`revealStep`) → secondary
+  (`revealStep × 2`); under ~400ms total. Content is fully visible
+  immediately under reduced-motion.
+- **Loading heat-bar** (`.forge-heat-bar`) — where the app waits, a thin
+  bar sweeps cool → ember → glow. The lone repeating motion outside the
+  ambient field, and only for the duration of the wait. Frozen to a
+  static heat gradient under reduced-motion.
 
 ---
 

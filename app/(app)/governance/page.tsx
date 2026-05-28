@@ -7,6 +7,8 @@ import Link from 'next/link';
 import { EmberCard } from '@/components/forge/EmberCard';
 import { HeatBadge } from '@/components/forge/HeatBadge';
 import { SectionHeader } from '@/components/forge/SectionHeader';
+import { Reveal } from '@/components/Reveal';
+import { MOTION } from '@/lib/forge-motion';
 import { AuditTrail } from '@/components/governance/AuditTrail';
 import { BudgetForm } from '@/components/governance/BudgetForm';
 import { CostEventsTable } from '@/components/governance/CostEventsTable';
@@ -156,32 +158,36 @@ export default async function GovernancePage() {
 
   return (
     <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 py-12">
-      <SectionHeader
-        level={1}
-        eyebrow="governance · control room"
-        title="Spend, safety, and the kill switch"
-        action={
-          <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim">
-            <span>signed in · {user.email ?? user.id.slice(0, 8)}</span>
-            <form action="/api/auth/sign-out" method="POST">
-              <button
-                type="submit"
-                className="rounded-lg border border-white/10 px-3 py-1 transition hover:border-white/30 hover:text-forge-text"
-              >
-                sign out
-              </button>
-            </form>
-          </div>
-        }
-      />
+      <Reveal>
+        <SectionHeader
+          level={1}
+          eyebrow="governance · control room"
+          title="Spend, safety, and the kill switch"
+          action={
+            <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim">
+              <span>signed in · {user.email ?? user.id.slice(0, 8)}</span>
+              <form action="/api/auth/sign-out" method="POST">
+                <button
+                  type="submit"
+                  className="rounded-lg border border-white/10 px-3 py-1 transition hover:border-white/30 hover:text-forge-text"
+                >
+                  sign out
+                </button>
+              </form>
+            </div>
+          }
+        />
+      </Reveal>
 
-      <KillSwitchPanel
-        active={!!data.globalKill && data.globalKill.scope === 'global'}
-        reason={data.globalKill?.reason ?? null}
-        setBy={data.globalKill?.set_by ?? null}
-      />
+      <Reveal delayMs={MOTION.revealStep}>
+        <KillSwitchPanel
+          active={!!data.globalKill && data.globalKill.scope === 'global'}
+          reason={data.globalKill?.reason ?? null}
+          setBy={data.globalKill?.set_by ?? null}
+        />
+      </Reveal>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <Reveal delayMs={MOTION.revealStep} className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <EmberCard tone="none">
           <div className="flex flex-col gap-3">
             <SpendMeter
@@ -218,12 +224,13 @@ export default async function GovernancePage() {
             />
           </div>
         </EmberCard>
-      </div>
+      </Reveal>
 
-      <EmberCard tone="none">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
-          active runtimes ({data.activeRuntimes.length})
-        </h2>
+      <Reveal delayMs={MOTION.revealStep * 2}>
+        <EmberCard tone="none">
+          <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
+            active runtimes ({data.activeRuntimes.length})
+          </h2>
         {data.activeRuntimes.length === 0 ? (
           <p className="mt-3 text-sm text-forge-dim">
             No active or paused runtimes. Activated agents will appear here
@@ -263,25 +270,30 @@ export default async function GovernancePage() {
             ))}
           </ul>
         )}
-      </EmberCard>
+        </EmberCard>
+      </Reveal>
 
-      <EmberCard tone="none">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
-          recent cost events
-        </h2>
-        <div className="mt-3 overflow-x-auto">
-          <CostEventsTable events={data.events} />
-        </div>
-      </EmberCard>
+      <Reveal delayMs={MOTION.revealStep * 2}>
+        <EmberCard tone="none">
+          <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
+            recent cost events
+          </h2>
+          <div className="mt-3 overflow-x-auto">
+            <CostEventsTable events={data.events} />
+          </div>
+        </EmberCard>
+      </Reveal>
 
-      <EmberCard tone="none">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
-          audit trail
-        </h2>
-        <div className="mt-3">
-          <AuditTrail rows={data.audit} />
-        </div>
-      </EmberCard>
+      <Reveal delayMs={MOTION.revealStep * 2}>
+        <EmberCard tone="none">
+          <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
+            audit trail
+          </h2>
+          <div className="mt-3">
+            <AuditTrail rows={data.audit} />
+          </div>
+        </EmberCard>
+      </Reveal>
     </section>
   );
 }
