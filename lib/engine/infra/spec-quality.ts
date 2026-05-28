@@ -21,7 +21,7 @@ export const INFRA_SPEC_ADDENDUM: readonly SpecQualityCriterion[] = [
     id: 'infra_resources_from_catalog',
     label: 'Every resource picked from the RESOURCE_TYPES catalog',
     imperative:
-      'Each `resources[].type` MUST be one of: `postgres_db`, `object_store`, `queue`, `worker`, `cron`, `http_service`. Pick the closest match; do not invent new types. When the user mentions a third-party service ("Datadog", "Stripe"), capture it via the relevant resource\'s `config` map — not as a new resource type.',
+      'Each `resources[].type` MUST be one of: `postgres_db`, `object_store`, `queue`, `worker`, `cron`, `http_service`, `cache`, `secret_store`, `cdn`. Pick the closest match; do not invent new types. When the user mentions a third-party service ("Datadog", "Stripe"), capture it via the relevant resource\'s `config` map — not as a new resource type.',
     rationale:
       'The IaC composer maps each resource type to a fixed module. An unrecognised type silently drops the resource from the composed plan.',
   },

@@ -43,6 +43,10 @@ export const RESOURCE_TYPES = [
   'worker',
   'cron',
   'http_service',
+  // Gap-filling additions — each maps to a vetted secure-by-default module:
+  'cache',        // managed_cache (ElastiCache): encrypted + private (in-VPC)
+  'secret_store', // secrets_manager (Secrets Manager): KMS + least-privilege
+  'cdn',          // cdn (CloudFront): HTTPS-only + private origin (OAC)
 ] as const;
 
 export type ResourceType = (typeof RESOURCE_TYPES)[number];

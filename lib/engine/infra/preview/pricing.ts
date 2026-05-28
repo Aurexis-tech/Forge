@@ -41,6 +41,9 @@ export const PRICING_CONTAINER_WORKER_USD_PER_MO: number = 35;
 export const PRICING_SCHEDULER_USD_PER_MO: number = 2;
 export const PRICING_HTTP_SERVICE_USD_PER_MO: number = 40;
 export const PRICING_LOGS_METRICS_PIPELINE_USD_PER_MO: number = 15;
+export const PRICING_MANAGED_CACHE_USD_PER_MO: number = 25;
+export const PRICING_SECRETS_MANAGER_USD_PER_MO: number = 5;
+export const PRICING_CDN_USD_PER_MO: number = 20;
 
 // Sizing reference points — what the base figure covers.
 export const POSTGRES_BASE_STORAGE_GB = 20;
@@ -56,6 +59,9 @@ const INFRA_PRICING_TABLE: Record<InfraModuleId, number> = {
   scheduler: PRICING_SCHEDULER_USD_PER_MO,
   http_service: PRICING_HTTP_SERVICE_USD_PER_MO,
   logs_metrics_pipeline: PRICING_LOGS_METRICS_PIPELINE_USD_PER_MO,
+  managed_cache: PRICING_MANAGED_CACHE_USD_PER_MO,
+  secrets_manager: PRICING_SECRETS_MANAGER_USD_PER_MO,
+  cdn: PRICING_CDN_USD_PER_MO,
 };
 
 // ---------------- Helpers -------------------------------------------------
@@ -143,6 +149,9 @@ export function estimateStepUsdPerMonth(args: StepCostInputs): number {
     case 'managed_queue':
     case 'scheduler':
     case 'logs_metrics_pipeline':
+    case 'managed_cache':
+    case 'secrets_manager':
+    case 'cdn':
       return base;
     default: {
       // The catalog is closed, but defensively cover any future addition.

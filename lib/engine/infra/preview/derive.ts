@@ -74,6 +74,22 @@ const RESOURCES_BY_MODULE: Record<InfraModuleId, ReadonlyArray<string>> = {
     'dead-letter queue',
     'KMS-backed message encryption',
   ],
+  managed_cache: [
+    'managed in-memory cache (Redis)',
+    'private VPC subnet group (no public endpoint)',
+    'KMS at-rest + TLS in-transit encryption',
+  ],
+  secrets_manager: [
+    'managed secret store',
+    'KMS-backed encryption',
+    'least-privilege resource policy',
+    'automatic rotation policy',
+  ],
+  cdn: [
+    'CDN distribution (CloudFront)',
+    'HTTPS-only viewer policy (modern TLS floor)',
+    'origin access control (private origin)',
+  ],
   container_worker: [
     'containerised worker service',
     'autoscaling group (bounded)',

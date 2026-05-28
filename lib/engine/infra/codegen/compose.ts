@@ -290,6 +290,19 @@ const WIRING_RULES: Partial<
   ],
   private_object_store: [],
   managed_queue: [],
+  // managed_cache is private-by-default: it attaches to the VPC + private
+  // subnets + security group, exactly like the database. No public endpoint.
+  managed_cache: [
+    { upstream_output: 'vpc_id', downstream_input: 'vpc_id' },
+    { upstream_output: 'private_subnet_ids', downstream_input: 'subnet_ids' },
+    {
+      upstream_output: 'security_group_id',
+      downstream_input: 'security_group_id',
+    },
+  ],
+  // secrets_manager is standalone — no upstream outputs to wire. Its secure
+  // defaults (KMS + least-privilege resource policy) are baked into the module.
+  secrets_manager: [],
   container_worker: [
     { upstream_output: 'vpc_id', downstream_input: 'vpc_id' },
     { upstream_output: 'private_subnet_ids', downstream_input: 'subnet_ids' },
@@ -301,6 +314,8 @@ const WIRING_RULES: Partial<
     },
     { upstream_output: 'queue_arn', downstream_input: 'queue_arn' },
     { upstream_output: 'bucket_arn', downstream_input: 'bucket_arn' },
+    { upstream_output: 'cache_endpoint', downstream_input: 'cache_endpoint' },
+    { upstream_output: 'secret_arn', downstream_input: 'app_secret_arn' },
   ],
   http_service: [
     { upstream_output: 'vpc_id', downstream_input: 'vpc_id' },
@@ -311,6 +326,16 @@ const WIRING_RULES: Partial<
       upstream_output: 'connection_secret_arn',
       downstream_input: 'db_secret_arn',
     },
+    { upstream_output: 'cache_endpoint', downstream_input: 'cache_endpoint' },
+    { upstream_output: 'secret_arn', downstream_input: 'app_secret_arn' },
+  ],
+  // cdn fronts an origin it depends on via the spec topology: an
+  // http_service (service_url) or an object store (bucket). The origin
+  // stays private — origin access control is baked into the module.
+  cdn: [
+    { upstream_output: 'service_url', downstream_input: 'origin_url' },
+    { upstream_output: 'bucket_name', downstream_input: 'origin_bucket' },
+    { upstream_output: 'bucket_arn', downstream_input: 'origin_bucket_arn' },
   ],
   scheduler: [
     { upstream_output: 'service_name', downstream_input: 'target_service_name' },

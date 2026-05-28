@@ -132,6 +132,34 @@ export const INFRA_MODULES = [
       'IAM-scoped producer/consumer access',
     ],
   },
+  {
+    id: 'managed_cache',
+    layer: 'data',
+    label: 'Managed cache (Redis)',
+    purpose:
+      'Provision a managed in-memory cache inside the private network. Encrypted at rest + in transit, never exposed to the public internet.',
+    applies_to: ['cache'],
+    secure_defaults: [
+      'encryption at rest (KMS)',
+      'encryption in transit (TLS)',
+      'private VPC access only (no public endpoint)',
+      'security-group-restricted, IAM-scoped access',
+    ],
+  },
+  {
+    id: 'secrets_manager',
+    layer: 'data',
+    label: 'Secrets manager',
+    purpose:
+      'Provision a managed secret store. Secrets are KMS-encrypted at rest and reachable only via a least-privilege IAM resource policy; no public access.',
+    applies_to: ['secret_store'],
+    secure_defaults: [
+      'KMS-encrypted at rest',
+      'least-privilege IAM resource policy',
+      'no public access',
+      'automatic rotation policy enabled',
+    ],
+  },
 
   // --- compute layer -----------------------------------------------------
   {
@@ -175,6 +203,20 @@ export const INFRA_MODULES = [
       'health-check + readiness probes',
     ],
   },
+  {
+    id: 'cdn',
+    layer: 'compute',
+    label: 'CDN (content delivery)',
+    purpose:
+      'Front an origin (http_service or object store) with a managed CDN. HTTPS-only with a modern TLS floor; the origin stays private via origin access control (never publicly readable).',
+    applies_to: ['cdn'],
+    secure_defaults: [
+      'HTTPS-only (redirect HTTP -> HTTPS)',
+      'modern TLS floor (TLSv1.2+)',
+      'private origin via origin access control (no public bucket/origin)',
+      'edge cache encrypted at rest',
+    ],
+  },
 
   // --- observability layer ----------------------------------------------
   {
@@ -207,6 +249,9 @@ export const MODULE_BY_RESOURCE: Record<ResourceType, InfraModuleId> = {
   worker:       'container_worker',
   cron:         'scheduler',
   http_service: 'http_service',
+  cache:        'managed_cache',
+  secret_store: 'secrets_manager',
+  cdn:          'cdn',
 };
 
 export function moduleById(id: InfraModuleId): InfraModule {

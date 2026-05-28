@@ -117,6 +117,46 @@ export const IAC_CATALOG = {
       kms_encryption: true,
     },
   },
+  managed_cache: {
+    source: 'aurexis-forge/managed-cache/composable',
+    version: '1.0.0',
+    inputs: ['region', 'node_type', 'engine_version'],
+    outputs: ['cache_endpoint', 'cache_port'],
+    secure_default_flags: {
+      // In-VPC only (no public endpoint); encrypted at rest + in transit.
+      private_by_default: true,
+      tls: true,
+      least_privilege_iam: true,
+      kms_encryption: true,
+    },
+  },
+  secrets_manager: {
+    source: 'aurexis-forge/secrets-manager/composable',
+    version: '1.0.0',
+    inputs: ['region', 'rotation_days'],
+    outputs: ['secret_arn', 'secret_name'],
+    secure_default_flags: {
+      // KMS-encrypted; reachable only via a least-privilege resource policy.
+      private_by_default: true,
+      tls: true,
+      least_privilege_iam: true,
+      kms_encryption: true,
+    },
+  },
+  cdn: {
+    source: 'aurexis-forge/cdn/composable',
+    version: '1.0.0',
+    inputs: ['region', 'price_class', 'origin_url', 'origin_bucket'],
+    outputs: ['distribution_domain', 'distribution_id'],
+    secure_default_flags: {
+      // Origin stays private (origin access control); HTTPS-only with a
+      // modern TLS floor; edge cache encrypted at rest.
+      private_by_default: true,
+      tls: true,
+      least_privilege_iam: true,
+      kms_encryption: true,
+    },
+  },
   container_worker: {
     source: 'aurexis-forge/container-worker/composable',
     version: '1.0.0',

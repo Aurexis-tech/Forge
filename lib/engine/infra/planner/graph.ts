@@ -73,8 +73,22 @@ export class InfraGraphError extends Error {
 // dependency direction (compute → data, never the other way).
 // ---------------------------------------------------------------------------
 
-const DATA_RESOURCE_TYPES = new Set(['postgres_db', 'object_store', 'queue']);
-const COMPUTE_RESOURCE_TYPES = new Set(['worker', 'cron', 'http_service']);
+// cache + secret_store are data-layer stores (attach to the private
+// network, no public endpoint). cdn is a compute-layer edge that fronts an
+// origin it depends on via the spec topology.
+const DATA_RESOURCE_TYPES = new Set([
+  'postgres_db',
+  'object_store',
+  'queue',
+  'cache',
+  'secret_store',
+]);
+const COMPUTE_RESOURCE_TYPES = new Set([
+  'worker',
+  'cron',
+  'http_service',
+  'cdn',
+]);
 
 // ---------------------------------------------------------------------------
 // Entry point.

@@ -66,6 +66,9 @@ function resourceTypesSlice(): string {
     '  - worker        — long-running background process that consumes a queue or processes records.',
     '  - cron          — SCHEDULED job that fires on an interval ("every hour", "nightly").',
     '  - http_service  — HTTP endpoint / API that other tools call.',
+    '  - cache         — in-memory cache (Redis-like). Use for "cache", "speed up reads", "session store".',
+    '  - secret_store  — managed secret store. Use for "store API keys/credentials", "secrets manager".',
+    '  - cdn           — content delivery / edge in front of an http_service or object store ("CDN", "serve assets fast globally").',
     '',
     'Available types (use ONLY these): ' + RESOURCE_TYPES.join(', '),
     '',
@@ -76,6 +79,9 @@ function resourceTypesSlice(): string {
     '  - queue:        { "ordering"?: "fifo"|"unordered" }',
     '  - postgres_db:  { "version"?: "16", "schema_hint"?: "events table with id, source, ts, payload" }',
     '  - object_store: { "bucket_hint"?: "raw-events" }',
+    '  - cache:        { "node_type"?: "small", "engine_version"?: "7" }',
+    '  - secret_store: { "rotation_days"?: 30 }',
+    '  - cdn:          { "price_class"?: "100" }   // wire the origin via a topology edge cdn -> <http_service|object_store>',
   ].join('\n');
 }
 
