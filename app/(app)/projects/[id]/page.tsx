@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { GlassPanel } from '@/components/GlassPanel';
+import { EmberCard } from '@/components/forge/EmberCard';
+import { HeatBadge } from '@/components/forge/HeatBadge';
+import { SectionHeader } from '@/components/forge/SectionHeader';
+import { StagePipeline } from '@/components/forge/StagePipeline';
 import { GenerateBuildPanel } from '@/components/build/GenerateBuildPanel';
 import { GeneratedBuildPanel } from '@/components/build/GeneratedBuildPanel';
 import type { StaticStatus } from '@/components/build/FileTree';
@@ -18,7 +22,6 @@ import { DeployFailedPanel } from '@/components/vercel/DeployFailedPanel';
 import { DeployFlow } from '@/components/vercel/DeployFlow';
 import { AgentDashboard } from '@/components/dashboard/AgentDashboard';
 import { JourneyBridge } from '@/components/journey/JourneyBridge';
-import { JourneyOverlay } from '@/components/journey/JourneyOverlay';
 import { ActivateRuntimeFlow } from '@/components/runtime/ActivateRuntimeFlow';
 import { RuntimeView } from '@/components/runtime/RuntimeView';
 import { RunTestPanel } from '@/components/sandbox/RunTestPanel';
@@ -634,33 +637,49 @@ export default async function ProjectDetailPage({
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 py-12">
-      <header>
+      <div className="flex flex-col gap-4">
         <Link
           href="/projects"
           className="font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim hover:text-forge-text"
         >
           ← archive
         </Link>
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
-              project · {project.id.slice(0, 8)}
-            </p>
-            <h1 className="mt-2 text-3xl font-medium text-forge-text">
-              {project.name}
-            </h1>
-          </div>
-          <span className="rounded-full border border-forge-amber/40 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.3em] text-forge-amber">
-            {project.status}
-          </span>
-        </div>
-      </header>
+        <SectionHeader
+          level={1}
+          eyebrow={'project · ' + project.id.slice(0, 8)}
+          title={project.name}
+          action={
+            <HeatBadge tone={journey.isLive ? 'cool' : 'dim'} dot={journey.isLive}>
+              {journey.isLive ? 'live' : project.status}
+            </HeatBadge>
+          }
+        />
+      </div>
 
       {/* Mirror the page's journey into the persistent 3D world. */}
       <JourneyBridge journey={journey} />
 
-      {/* The labelled strip — readable regardless of WebGL availability. */}
-      <JourneyOverlay journey={journey} />
+      {/* The cooling spine — the ACTUAL journey stage in brand language:
+          the just-acted stage is molten, everything behind it has cooled
+          to cyan, everything ahead is dim; a live project settles cool.
+          Warm card while still forging, cool once it's live. Readable
+          regardless of WebGL availability. */}
+      <EmberCard tone={journey.isLive ? 'cool' : 'warm'}>
+        <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
+          journey · stage {String(journey.cursor.index).padStart(2, '0')} ·{' '}
+          {journey.cursor.label}
+          {journey.cursor.detail ? (
+            <span className="text-forge-dim"> · {journey.cursor.detail}</span>
+          ) : null}
+        </p>
+        <StagePipeline
+          stages={journey.stages.map((s) => ({ id: s.id, label: s.label }))}
+          activeIndex={Math.max(
+            0,
+            journey.stages.findIndex((s) => s.id === journey.cursor.id),
+          )}
+        />
+      </EmberCard>
 
       {/* Shipped agents get the dashboard up top, before all the workshop panels. */}
       {shipped && validAgentSpec && build ? (
@@ -675,14 +694,14 @@ export default async function ProjectDetailPage({
         />
       ) : null}
 
-      <GlassPanel>
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.3em] text-forge-cyan">
+      <EmberCard tone="none">
+        <h2 className="font-mono text-[10px] uppercase tracking-[0.3em] text-cool-cyan">
           raw intent
         </h2>
         <p className="mt-3 whitespace-pre-wrap font-mono text-sm leading-relaxed text-forge-text">
           {spec?.raw_prompt ?? '—'}
         </p>
-      </GlassPanel>
+      </EmberCard>
 
       <SpecArea projectId={project.id} spec={spec} />
 

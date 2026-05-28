@@ -5,7 +5,7 @@
 // appears in its mold space once classified.
 
 import Link from 'next/link';
-import { GlassPanel } from '@/components/GlassPanel';
+import { EmberCard } from '@/components/forge/EmberCard';
 import { SectionHeader } from '@/components/forge/SectionHeader';
 import { ProjectCard } from '@/components/ProjectCard';
 import { Reveal } from '@/components/Reveal';
@@ -40,7 +40,7 @@ export default async function HomePage() {
       />
 
       {cards.length === 0 ? (
-        <GlassPanel>
+        <EmberCard tone="none">
           <p className="text-sm leading-relaxed text-forge-dim">
             Nothing forged yet. Head to{' '}
             <Link href="/forge" className="text-forge-amber hover:underline">
@@ -49,7 +49,7 @@ export default async function HomePage() {
             and describe what you want to build — an agent, a system, a full
             app, or infrastructure. The Forge detects which.
           </p>
-        </GlassPanel>
+        </EmberCard>
       ) : (
         <Reveal>
           <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">

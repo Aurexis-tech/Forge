@@ -118,9 +118,11 @@ describe('app pages adopt the shared foundation', () => {
 // Motion / affordances — hover + focus discipline preserved
 // ===========================================================================
 describe('hover + focus affordances', () => {
-  it('project cards keep the amber glow hover treatment', () => {
+  it('project cards keep the heat-glow hover treatment (now an EmberCard)', () => {
     const card = read('components/ProjectCard.tsx');
-    expect(card).toMatch(/group-hover:border-forge-amber/);
+    // Propagated to the forge language: EmberCard surface, heat-glow on hover.
+    expect(card).toMatch(/EmberCard/);
+    expect(card).toMatch(/group-hover:border-heat-glow/);
     expect(card).toMatch(/group-hover:shadow-amber/);
   });
 

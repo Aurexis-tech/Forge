@@ -5,7 +5,7 @@
 // pages stay thin. Same atmosphere + rhythm + motion as Home.
 
 import Link from 'next/link';
-import { GlassPanel } from '@/components/GlassPanel';
+import { EmberCard } from '@/components/forge/EmberCard';
 import { SectionHeader } from '@/components/forge/SectionHeader';
 import { ProjectCard } from '@/components/ProjectCard';
 import { Reveal } from '@/components/Reveal';
@@ -41,11 +41,11 @@ export async function MoldSpacePage({ mold }: { mold: ProjectKind }) {
       />
 
       {cards.length === 0 ? (
-        <GlassPanel>
+        <EmberCard tone="none">
           <p className="text-sm leading-relaxed text-forge-dim">
             {meta.emptyLine}
           </p>
-        </GlassPanel>
+        </EmberCard>
       ) : (
         <Reveal>
           <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">

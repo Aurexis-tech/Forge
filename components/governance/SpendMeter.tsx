@@ -1,4 +1,6 @@
+import { HeatBadge } from '@/components/forge/HeatBadge';
 import { formatCurrency } from '@/lib/currencies';
+import { spendHeatLabel, spendHeatTone } from '@/lib/forge-heat';
 import type { Budget, BudgetPeriod } from '@/lib/types';
 import { CurrencyBadge } from './CurrencyPicker';
 
@@ -51,6 +53,11 @@ export function SpendMeter({
             {period} spend
           </p>
           <CurrencyBadge code={displayCurrency} />
+          {/* The budget heating up: cool with headroom → ember → glow →
+              molten as spend approaches and crosses the cap. */}
+          <HeatBadge tone={spendHeatTone(spendUsd, limitUsd)} dot>
+            {spendHeatLabel(spendUsd, limitUsd)}
+          </HeatBadge>
         </div>
         <p className="font-mono text-sm text-forge-text">
           {formatCurrency(spendDisplay, displayCurrency)}

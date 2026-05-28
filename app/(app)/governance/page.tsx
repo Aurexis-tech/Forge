@@ -4,7 +4,9 @@
 // authenticated user so RLS + ownership are both enforced.
 
 import Link from 'next/link';
-import { GlassPanel } from '@/components/GlassPanel';
+import { EmberCard } from '@/components/forge/EmberCard';
+import { HeatBadge } from '@/components/forge/HeatBadge';
+import { SectionHeader } from '@/components/forge/SectionHeader';
 import { AuditTrail } from '@/components/governance/AuditTrail';
 import { BudgetForm } from '@/components/governance/BudgetForm';
 import { CostEventsTable } from '@/components/governance/CostEventsTable';
@@ -154,27 +156,24 @@ export default async function GovernancePage() {
 
   return (
     <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 py-12">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
-            governance · control room
-          </p>
-          <h1 className="mt-2 text-3xl font-medium text-forge-text">
-            Spend, safety, and the kill switch
-          </h1>
-        </div>
-        <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim">
-          <span>signed in · {user.email ?? user.id.slice(0, 8)}</span>
-          <form action="/api/auth/sign-out" method="POST">
-            <button
-              type="submit"
-              className="rounded-lg border border-white/10 px-3 py-1 transition hover:border-white/30 hover:text-forge-text"
-            >
-              sign out
-            </button>
-          </form>
-        </div>
-      </header>
+      <SectionHeader
+        level={1}
+        eyebrow="governance · control room"
+        title="Spend, safety, and the kill switch"
+        action={
+          <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim">
+            <span>signed in · {user.email ?? user.id.slice(0, 8)}</span>
+            <form action="/api/auth/sign-out" method="POST">
+              <button
+                type="submit"
+                className="rounded-lg border border-white/10 px-3 py-1 transition hover:border-white/30 hover:text-forge-text"
+              >
+                sign out
+              </button>
+            </form>
+          </div>
+        }
+      />
 
       <KillSwitchPanel
         active={!!data.globalKill && data.globalKill.scope === 'global'}
@@ -183,7 +182,7 @@ export default async function GovernancePage() {
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <GlassPanel>
+        <EmberCard tone="none">
           <div className="flex flex-col gap-3">
             <SpendMeter
               period="daily"
@@ -200,8 +199,8 @@ export default async function GovernancePage() {
               currentDisplayAmount={data.daily.limitDisplay}
             />
           </div>
-        </GlassPanel>
-        <GlassPanel>
+        </EmberCard>
+        <EmberCard tone="none">
           <div className="flex flex-col gap-3">
             <SpendMeter
               period="monthly"
@@ -218,11 +217,11 @@ export default async function GovernancePage() {
               currentDisplayAmount={data.monthly.limitDisplay}
             />
           </div>
-        </GlassPanel>
+        </EmberCard>
       </div>
 
-      <GlassPanel>
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-cyan">
+      <EmberCard tone="none">
+        <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
           active runtimes ({data.activeRuntimes.length})
         </h2>
         {data.activeRuntimes.length === 0 ? (
@@ -240,7 +239,7 @@ export default async function GovernancePage() {
                 <div className="flex flex-col gap-0.5">
                   <Link
                     href={'/projects/' + rt.project_id}
-                    className="font-mono text-sm text-forge-text hover:text-forge-amber hover:underline"
+                    className="font-mono text-sm text-forge-text hover:text-heat-glow hover:underline"
                   >
                     {rt.project_name ?? rt.project_id.slice(0, 8)}
                   </Link>
@@ -248,41 +247,41 @@ export default async function GovernancePage() {
                     {rt.mode} · {rt.schedule_cron} · {rt.run_count} runs
                   </span>
                 </div>
-                <span
-                  className={
-                    'rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.25em] ' +
-                    (rt.status === 'active'
-                      ? 'border-forge-amber/50 text-forge-amber'
+                <HeatBadge
+                  tone={
+                    rt.status === 'active'
+                      ? 'glow'
                       : rt.status === 'errored'
                         ? 'border-rose-400/50 text-rose-300'
-                        : 'border-white/15 text-forge-dim')
+                        : 'dim'
                   }
+                  dot={rt.status === 'active'}
                 >
                   {rt.status}
-                </span>
+                </HeatBadge>
               </li>
             ))}
           </ul>
         )}
-      </GlassPanel>
+      </EmberCard>
 
-      <GlassPanel>
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-cyan">
+      <EmberCard tone="none">
+        <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
           recent cost events
         </h2>
         <div className="mt-3 overflow-x-auto">
           <CostEventsTable events={data.events} />
         </div>
-      </GlassPanel>
+      </EmberCard>
 
-      <GlassPanel>
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-cyan">
+      <EmberCard tone="none">
+        <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
           audit trail
         </h2>
         <div className="mt-3">
           <AuditTrail rows={data.audit} />
         </div>
-      </GlassPanel>
+      </EmberCard>
     </section>
   );
 }

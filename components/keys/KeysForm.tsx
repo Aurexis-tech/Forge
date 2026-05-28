@@ -5,7 +5,9 @@
 // renders or fetches the full key.
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { GlassPanel } from '@/components/GlassPanel';
+import { EmberCard } from '@/components/forge/EmberCard';
+import { HeatBadge } from '@/components/forge/HeatBadge';
+import { keyStatusTone } from '@/lib/forge-heat';
 
 type Provider = 'anthropic' | 'e2b';
 
@@ -74,9 +76,9 @@ export function KeysForm() {
         </p>
       ) : null}
 
-      <GlassPanel>
+      <EmberCard tone="none">
         <div className="flex flex-col gap-3">
-          <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-cyan">
+          <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
             why keys live here
           </p>
           <p className="text-sm text-forge-text/90">
@@ -86,7 +88,7 @@ export function KeysForm() {
             them</span>; the UI only ever shows the last four characters.
           </p>
         </div>
-      </GlassPanel>
+      </EmberCard>
 
       <ProviderCard
         provider="anthropic"
@@ -123,6 +125,7 @@ function ProviderCard({
   const [info, setInfo] = useState<string | null>(null);
 
   const connected = status?.connected ?? false;
+  const tone = keyStatusTone(connected);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -177,11 +180,11 @@ function ProviderCard({
   }
 
   return (
-    <GlassPanel>
+    <EmberCard tone={tone.card}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
+            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
               {copy.label}
             </p>
             <p className="mt-1 text-sm text-forge-text/90">{copy.blurb}</p>
@@ -252,7 +255,7 @@ function ProviderCard({
           </div>
         </form>
       </div>
-    </GlassPanel>
+    </EmberCard>
   );
 }
 
@@ -266,22 +269,16 @@ function ConnectedPill({
   loading: boolean;
 }) {
   if (loading) {
-    return (
-      <span className="rounded-full border border-white/15 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim">
-        loading…
-      </span>
-    );
+    return <HeatBadge tone="dim">loading…</HeatBadge>;
   }
   if (connected) {
+    // Verified + in use → warm (working heat); the key powers builds.
     return (
-      <span className="rounded-full border border-emerald-400/40 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.3em] text-emerald-300">
+      <HeatBadge tone={keyStatusTone(true).badge} dot>
         connected · ••••{keyLast4 ?? '????'}
-      </span>
+      </HeatBadge>
     );
   }
-  return (
-    <span className="rounded-full border border-white/15 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim">
-      not connected
-    </span>
-  );
+  // Missing → quiet, no heat earned.
+  return <HeatBadge tone="dim">not connected</HeatBadge>;
 }
