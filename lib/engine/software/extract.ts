@@ -80,6 +80,10 @@ export async function extractSoftwareSpec(
   // --- Pass 1 ---
   const first = await complete({
     system: SOFTWARE_SPEC_SYSTEM_PROMPT,
+    // Stable, deterministic system prefix above the cache minimum —
+    // cache it (5-min ephemeral) so repair / re-extraction read it back
+    // at 0.1x. Variable intent stays in the user message.
+    cacheSystem: true,
     messages: [{ role: 'user', content: userMessage }],
     governance: govPass1,
   });
@@ -100,6 +104,7 @@ export async function extractSoftwareSpec(
   try {
     repair = await complete({
       system: SOFTWARE_SPEC_SYSTEM_PROMPT,
+      cacheSystem: true,
       messages: [
         { role: 'user', content: userMessage },
         { role: 'assistant', content: first.text },

@@ -27,7 +27,9 @@ import {
   buildRepairUserMessage,
   buildRouteUserMessage,
   PAGE_SYSTEM_PROMPT,
+  PAGE_SYSTEM_PROMPT_CACHED,
   ROUTE_SYSTEM_PROMPT,
+  ROUTE_SYSTEM_PROMPT_CACHED,
 } from '@/lib/engine/software/codegen/prompts';
 import {
   QUALITY_BAR,
@@ -182,13 +184,14 @@ describe('software ROUTE user message — list_route', () => {
   });
 
   it('has every required section in order', () => {
+    // SCAFFOLD INTERFACE + WORKED EXEMPLAR moved to the cached system
+    // block (ROUTE_SYSTEM_PROMPT_CACHED) — they're global-stable
+    // reference material, no longer repeated per slot.
     const sections = [
       'PURPOSE',
       'SLOT CONTRACT',
-      'SCAFFOLD INTERFACE',
       'LAYER',
       'SIBLING CONTRACT',
-      'WORKED EXEMPLAR',
       'GENERATE THIS FILE NOW',
     ];
     let lastIdx = -1;
@@ -221,19 +224,27 @@ describe('software ROUTE user message — list_route', () => {
     expect(message).toContain('DELETE /api/expense/[id]');
   });
 
-  it('embeds the route WORKED EXEMPLAR with the owner-pinned write pattern', () => {
-    expect(message).toMatch(/WORKED EXEMPLAR.*DO NOT COPY VERBATIM/);
-    // The exemplar visibly demonstrates owner-pinning and server client
-    expect(message).toContain('createServerClient');
-    expect(message).toContain('currentUserId');
-    expect(message).toContain('owner_id: userId');
-    // No TODO inside the exemplar
-    expect(message).not.toMatch(/\bTODO\b/);
+  it('no longer embeds the WORKED EXEMPLAR or SCAFFOLD INTERFACE in the user message', () => {
+    // Both moved to the cached ROUTE_SYSTEM_PROMPT_CACHED block.
+    expect(message).not.toContain('WORKED EXEMPLAR');
+    expect(message).not.toContain('SCAFFOLD INTERFACE');
   });
 
-  it('embeds SCAFFOLD INTERFACE verbatim with no service-role reference', () => {
-    expect(message).toContain('createServerClient');
-    expect(message).toMatch(/SUPABASE_SERVICE_ROLE_KEY is intentionally NOT exposed/);
+  it('cached route system block embeds exemplar + scaffold interface', () => {
+    expect(ROUTE_SYSTEM_PROMPT_CACHED).toMatch(/WORKED EXEMPLAR.*DO NOT COPY VERBATIM/);
+    expect(ROUTE_SYSTEM_PROMPT_CACHED).toContain('owner_id: userId');
+    expect(ROUTE_SYSTEM_PROMPT_CACHED).toMatch(
+      /SUPABASE_SERVICE_ROLE_KEY is intentionally NOT exposed/,
+    );
+    // It opens with the base ROUTE_SYSTEM_PROMPT (clean prefix).
+    expect(ROUTE_SYSTEM_PROMPT_CACHED.startsWith(ROUTE_SYSTEM_PROMPT)).toBe(true);
+    // NB: the base system prompt legitimately contains "TODO" in its
+    // "Do NOT include TODO" rule, so we check only the exemplar code.
+    const exemplar = ROUTE_SYSTEM_PROMPT_CACHED.match(
+      /WORKED EXEMPLAR[\s\S]*?```([\s\S]*?)```/,
+    );
+    expect(exemplar).not.toBeNull();
+    expect(exemplar![1]).not.toMatch(/\bTODO\b/);
   });
 
   it('final instruction names the file path + method', () => {
@@ -291,13 +302,13 @@ describe('software PAGE user message', () => {
   });
 
   it('has every required section in order', () => {
+    // SCAFFOLD INTERFACE + WORKED EXEMPLAR moved to the cached
+    // PAGE_SYSTEM_PROMPT_CACHED block.
     const sections = [
       'PURPOSE',
       'SLOT CONTRACT',
-      'SCAFFOLD INTERFACE',
       'LAYER',
       'SIBLING CONTRACT',
-      'WORKED EXEMPLAR',
       'GENERATE THIS FILE NOW',
     ];
     let lastIdx = -1;
@@ -327,24 +338,26 @@ describe('software PAGE user message', () => {
     expect(message).toMatch(/\/api\/expense\s+\(GET = list/);
   });
 
-  it("embeds the page WORKED EXEMPLAR as a server component (no 'use client' directive)", () => {
-    expect(message).toMatch(/WORKED EXEMPLAR.*DO NOT COPY VERBATIM/);
-    expect(message).toContain('export default async function WidgetListPage');
-    expect(message).toContain('createServerClient');
-    // Extract just the exemplar code block — between the WORKED
-    // EXEMPLAR heading and the closing notice — so assertions about
-    // "what's inside the exemplar" don't trip on legitimate
-    // mentions elsewhere (the SCAFFOLD_INTERFACE mentions
-    // lib/supabase/browser in its "never import" comment; the
-    // LAYER section discusses 'use client' as forbidden).
-    const exemplarMatch = message.match(/WORKED EXEMPLAR[\s\S]*?```([\s\S]*?)```/);
+  it('no longer embeds the WORKED EXEMPLAR or SCAFFOLD INTERFACE in the user message', () => {
+    expect(message).not.toContain('WORKED EXEMPLAR');
+    expect(message).not.toContain('SCAFFOLD INTERFACE');
+  });
+
+  it("cached page system block embeds the server-component exemplar (no 'use client')", () => {
+    expect(PAGE_SYSTEM_PROMPT_CACHED).toMatch(/WORKED EXEMPLAR.*DO NOT COPY VERBATIM/);
+    expect(PAGE_SYSTEM_PROMPT_CACHED).toContain('export default async function WidgetListPage');
+    expect(PAGE_SYSTEM_PROMPT_CACHED).toContain('createServerClient');
+    // It opens with the base PAGE_SYSTEM_PROMPT (clean prefix).
+    expect(PAGE_SYSTEM_PROMPT_CACHED.startsWith(PAGE_SYSTEM_PROMPT)).toBe(true);
+    // Extract just the exemplar code block so assertions about "what's
+    // inside the exemplar" don't trip on legitimate mentions elsewhere.
+    const exemplarMatch = PAGE_SYSTEM_PROMPT_CACHED.match(
+      /WORKED EXEMPLAR[\s\S]*?```([\s\S]*?)```/,
+    );
     expect(exemplarMatch).not.toBeNull();
     const exemplarCode = exemplarMatch![1];
-    // No 'use client' DIRECTIVE inside the exemplar code block.
     expect(exemplarCode).not.toMatch(/^\s*['"]use client['"]\s*;?\s*$/m);
-    // No browser client imported inside the exemplar code.
     expect(exemplarCode).not.toMatch(/lib\/supabase\/browser/);
-    // No TODO anywhere in the exemplar.
     expect(exemplarCode).not.toMatch(/\bTODO\b/);
   });
 

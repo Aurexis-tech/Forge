@@ -17,8 +17,8 @@ import { complete } from '@/lib/engine/llm';
 import { generateSoftwareCode } from '@/lib/engine/software/codegen/generate';
 import { deriveSoftwareGraph } from '@/lib/engine/software/planner/graph';
 import {
-  ROUTE_SYSTEM_PROMPT,
-  PAGE_SYSTEM_PROMPT,
+  ROUTE_SYSTEM_PROMPT_CACHED,
+  PAGE_SYSTEM_PROMPT_CACHED,
 } from '@/lib/engine/software/codegen/prompts';
 import {
   SoftwareBuildPlanSchema,
@@ -123,7 +123,7 @@ describe('CRUD-resource codegen via the vetted families', () => {
     // --- the get-by-id route went through the ROUTE family ---
     const getRouteCall = completeMock.mock.calls.find(
       (c) =>
-        (c[0] as { system: string }).system === ROUTE_SYSTEM_PROMPT &&
+        (c[0] as { system: string }).system === ROUTE_SYSTEM_PROMPT_CACHED &&
         ((c[0] as { messages: Array<{ content: string }> }).messages[0]?.content ?? '').includes(
           'GET /api/note/[id]',
         ),
@@ -133,7 +133,7 @@ describe('CRUD-resource codegen via the vetted families', () => {
     // --- the create route pins owner_id server-side (route family criterion) ---
     const createRouteCall = completeMock.mock.calls.find(
       (c) =>
-        (c[0] as { system: string }).system === ROUTE_SYSTEM_PROMPT &&
+        (c[0] as { system: string }).system === ROUTE_SYSTEM_PROMPT_CACHED &&
         ((c[0] as { messages: Array<{ content: string }> }).messages[0]?.content ?? '').includes(
           'POST /api/note',
         ),
@@ -145,7 +145,7 @@ describe('CRUD-resource codegen via the vetted families', () => {
 
     // --- the resource page went through the PAGE family (server component) ---
     const pageCall = completeMock.mock.calls.find(
-      (c) => (c[0] as { system: string }).system === PAGE_SYSTEM_PROMPT,
+      (c) => (c[0] as { system: string }).system === PAGE_SYSTEM_PROMPT_CACHED,
     );
     expect(pageCall).toBeDefined();
   });

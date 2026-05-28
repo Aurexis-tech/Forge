@@ -86,6 +86,11 @@ export async function extractSpec(
   // --- Pass 1 ---
   const first = await complete({
     system: SPEC_SYSTEM_PROMPT,
+    // The system prompt (role + SPEC_QUALITY_BAR + schema) is a stable,
+    // deterministic prefix above the Sonnet cache minimum — cache it so
+    // a re-extraction (clarification refinement, repair) reads it back
+    // at 0.1x. The variable intent/clarifications stay in the message.
+    cacheSystem: true,
     messages: [{ role: 'user', content: userMessage }],
     governance: govPass1,
   });
@@ -106,6 +111,7 @@ export async function extractSpec(
   try {
     repair = await complete({
       system: SPEC_SYSTEM_PROMPT,
+      cacheSystem: true,
       messages: [
         { role: 'user', content: userMessage },
         { role: 'assistant', content: first.text },

@@ -26,6 +26,12 @@ export interface RecordCostInput {
   model?: string | null;
   input_tokens?: number;
   output_tokens?: number;
+  // Prompt-cache token counts (Anthropic). `input_tokens` is the
+  // post-breakpoint (uncached) count; these two capture cache writes +
+  // reads so the ledger can compute the real, discounted amount_usd and
+  // surface a real hit-rate. Default 0 for non-LLM / non-cached events.
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
   compute_ms?: number;
   ref?: string | null;
   // 'platform' = we owe the provider (need to charge); 'byok' = user's
@@ -50,6 +56,8 @@ export async function recordCost(
         model: input.model ?? null,
         input_tokens: input.input_tokens ?? 0,
         output_tokens: input.output_tokens ?? 0,
+        cache_creation_input_tokens: input.cache_creation_input_tokens ?? 0,
+        cache_read_input_tokens: input.cache_read_input_tokens ?? 0,
         compute_ms: input.compute_ms ?? 0,
         amount_usd: amount,
         key_source: input.key_source ?? 'platform',
@@ -85,6 +93,10 @@ export function computeAmountUsd(input: RecordCostInput): number {
         input.model,
         input.input_tokens ?? 0,
         input.output_tokens ?? 0,
+        {
+          cacheCreationTokens: input.cache_creation_input_tokens ?? 0,
+          cacheReadTokens: input.cache_read_input_tokens ?? 0,
+        },
       );
     case 'sandbox':
       return sandboxCostUsd(input.compute_ms ?? 0);

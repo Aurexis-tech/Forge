@@ -21,6 +21,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CODEGEN_SYSTEM_PROMPT,
   buildCodegenRepairMessage,
+  buildCodegenSystemPrompt,
   buildCodegenUserMessage,
   type HandoffContract,
 } from '@/lib/engine/codegen/prompts';
@@ -171,7 +172,6 @@ describe('codegen user message — Phase 1 single-agent file', () => {
   const message = buildCodegenUserMessage({
     spec: sampleSpec,
     plan: samplePlan,
-    toolInterface: sampleInterface,
     filePath: 'src/index.ts',
     filePurpose: 'Entrypoint that runs one watch cycle.',
     allFiles: sampleAllFiles,
@@ -180,14 +180,15 @@ describe('codegen user message — Phase 1 single-agent file', () => {
   it('has every required section in order', () => {
     // Sections should appear in this fixed order. We assert by
     // checking ordered substring positions.
+    // SCAFFOLD INTERFACE + WORKED EXEMPLAR moved to the cached system
+    // block (buildCodegenSystemPrompt) — they're forge-stable reference
+    // material, no longer repeated in the per-file user message.
     const sections = [
       'PURPOSE',
       'INPUTS',
       'OUTPUTS',
       'TOOLS AVAILABLE',
-      'SCAFFOLD INTERFACE',
       'ROLE IN PLAN',
-      'WORKED EXEMPLAR',
       'GENERATE THIS FILE NOW',
     ];
     let lastIdx = -1;
@@ -227,8 +228,8 @@ describe('codegen user message — Phase 1 single-agent file', () => {
     expect(message).toContain('why: Summarise the diff.');
   });
 
-  it('includes the SCAFFOLD INTERFACE text verbatim', () => {
-    expect(message).toContain(sampleInterface.trim());
+  it('no longer includes the SCAFFOLD INTERFACE in the user message (moved to cached system block)', () => {
+    expect(message).not.toContain('SCAFFOLD INTERFACE');
   });
 
   it('surfaces the plan role: scaffold, target, tasks, all files', () => {
@@ -240,14 +241,46 @@ describe('codegen user message — Phase 1 single-agent file', () => {
     expect(message).toContain('src/lib/tools/index.ts  [scaffold]:');
   });
 
+  it('no longer embeds the WORKED EXEMPLAR in the user message (moved to cached system block)', () => {
+    expect(message).not.toContain('WORKED EXEMPLAR');
+    expect(message).not.toContain('normaliseName');
+  });
+});
+
+// ===========================================================================
+// CACHED SYSTEM BLOCK — system prompt + forge-stable reference material
+// ===========================================================================
+describe('buildCodegenSystemPrompt — cached prefix (system + exemplar + scaffold)', () => {
+  const systemBlock = buildCodegenSystemPrompt({ toolInterface: sampleInterface });
+
+  it('still embeds the QUALITY_BAR (base system prompt) verbatim', () => {
+    expect(systemBlock).toContain(qualityBarPromptBullets());
+    expect(systemBlock).toContain(CODEGEN_SYSTEM_PROMPT);
+  });
+
   it('embeds the WORKED EXEMPLAR with a "do not copy verbatim" disclaimer', () => {
-    expect(message).toMatch(/WORKED EXEMPLAR.*DO NOT COPY VERBATIM/);
-    // The exemplar must visibly satisfy the QUALITY_BAR — quick
-    // smoke-checks on identifiable patterns.
-    expect(message).toContain('normaliseName');
-    expect(message).toMatch(/throw new Error\(.normaliseName:/);
-    // No TODO inside the exemplar — would be self-defeating.
-    expect(message).not.toMatch(/\bTODO\b/);
+    expect(systemBlock).toMatch(/WORKED EXEMPLAR.*DO NOT COPY VERBATIM/);
+    expect(systemBlock).toContain('normaliseName');
+    expect(systemBlock).toMatch(/throw new Error\(.normaliseName:/);
+    // NB: the system prompt legitimately contains the word "TODO" in its
+    // "Do NOT include TODO" rule, so we don't assert its absence over the
+    // whole block — only that the exemplar code itself has none.
+    const exemplar = systemBlock.match(/WORKED EXEMPLAR[\s\S]*?```([\s\S]*?)```/);
+    expect(exemplar).not.toBeNull();
+    expect(exemplar![1]).not.toMatch(/\bTODO\b/);
+  });
+
+  it('embeds the SCAFFOLD INTERFACE text verbatim', () => {
+    expect(systemBlock).toContain('SCAFFOLD INTERFACE');
+    expect(systemBlock).toContain(sampleInterface.trim());
+  });
+
+  it('is DETERMINISTIC: identical bytes for the same scaffold interface', () => {
+    const a = buildCodegenSystemPrompt({ toolInterface: sampleInterface });
+    const b = buildCodegenSystemPrompt({ toolInterface: sampleInterface });
+    expect(a).toBe(b);
+    // No timestamps / random ids leak into the cached prefix.
+    expect(a).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
   });
 });
 
@@ -264,7 +297,6 @@ describe('codegen user message — Phase 2 system-node file', () => {
   const message = buildCodegenUserMessage({
     spec: sampleSpec,
     plan: samplePlan,
-    toolInterface: sampleInterface,
     filePath: 'src/modules/summariser/index.ts',
     filePurpose: 'Per-source summariser sub-agent.',
     allFiles: sampleAllFiles,
@@ -294,13 +326,15 @@ describe('codegen user message — Phase 2 system-node file', () => {
     expect(message).toMatch(/async function `run\(input:/);
   });
 
-  it('places HANDOFF CONTRACT between ROLE IN PLAN and WORKED EXEMPLAR', () => {
+  it('places HANDOFF CONTRACT between ROLE IN PLAN and the final instruction', () => {
+    // WORKED EXEMPLAR moved to the cached system block, so the handoff
+    // now sits between ROLE IN PLAN and GENERATE THIS FILE NOW.
     const roleIdx = message.indexOf('ROLE IN PLAN');
     const handoffIdx = message.indexOf('HANDOFF CONTRACT');
-    const exemplarIdx = message.indexOf('WORKED EXEMPLAR');
+    const finalIdx = message.indexOf('GENERATE THIS FILE NOW');
     expect(roleIdx).toBeGreaterThanOrEqual(0);
     expect(handoffIdx).toBeGreaterThan(roleIdx);
-    expect(exemplarIdx).toBeGreaterThan(handoffIdx);
+    expect(finalIdx).toBeGreaterThan(handoffIdx);
   });
 
   it('represents external (null fromNodeId) inputs explicitly', () => {
@@ -313,8 +347,7 @@ describe('codegen user message — Phase 2 system-node file', () => {
     const m = buildCodegenUserMessage({
       spec: sampleSpec,
       plan: samplePlan,
-      toolInterface: sampleInterface,
-      filePath: 'src/modules/first/index.ts',
+        filePath: 'src/modules/first/index.ts',
       filePurpose: 'First node — receives trigger payload.',
       allFiles: sampleAllFiles,
       handoffContract: triggerHandoff,

@@ -89,6 +89,39 @@ export const CODEGEN_SYSTEM_PROMPT: string = (() => {
 })();
 
 // ===========================================================================
+// CACHED SYSTEM BLOCK — system prompt + the FORGE-STABLE reference
+// material (WORKED EXEMPLAR + SCAFFOLD INTERFACE).
+// ===========================================================================
+//
+// PROMPT-CACHING SEAM. The worked exemplar (a global constant) and the
+// scaffold interface (constant for the whole build — every file in a
+// forge shares one scaffold) are reference material, not per-file
+// request data. Lifting them out of the per-file user message and into
+// the system block makes the system block:
+//
+//   - a CLEAN, DETERMINISTIC prefix (no per-file variability), and
+//   - byte-IDENTICAL across every file generated in a single forge,
+//
+// so `complete({ cacheSystem: true })` caches it once and reads it back
+// at 0.1x input price on files 2..N. Content is unchanged — the model
+// still sees the exact same exemplar + interface text, just framed as
+// standing context rather than repeated in each user turn.
+//
+// The base CODEGEN_SYSTEM_PROMPT is exported separately (above) so the
+// eval/drift tests can still assert the QUALITY_BAR is embedded verbatim.
+export function buildCodegenSystemPrompt(args: {
+  toolInterface: string;
+}): string {
+  return [
+    CODEGEN_SYSTEM_PROMPT,
+    '',
+    sectionExemplar(),
+    '',
+    sectionScaffoldInterface(args.toolInterface),
+  ].join('\n');
+}
+
+// ===========================================================================
 // USER MESSAGE — STRUCTURED CONTEXT
 // ===========================================================================
 //
@@ -129,7 +162,6 @@ export interface HandoffContract {
 export interface CodegenUserMessageArgs {
   spec: AgentSpec;
   plan: BuildPlan;
-  toolInterface: string;
   filePath: string;
   filePurpose: string;
   allFiles: ReadonlyArray<{
@@ -141,6 +173,12 @@ export interface CodegenUserMessageArgs {
   handoffContract?: HandoffContract;
 }
 
+// The per-file VARIABLE message. The forge-stable reference blocks
+// (WORKED EXEMPLAR + SCAFFOLD INTERFACE) now live in the cached system
+// block (buildCodegenSystemPrompt) — see the caching note there — so
+// this message carries only what changes per file. That keeps the
+// cached prefix deterministic and the variable content strictly after
+// the cache breakpoint.
 export function buildCodegenUserMessage(args: CodegenUserMessageArgs): string {
   // Sections in a fixed order. Each section returns a labelled block;
   // null sections (e.g. handoff contract on Phase 1 calls) are dropped.
@@ -149,10 +187,8 @@ export function buildCodegenUserMessage(args: CodegenUserMessageArgs): string {
     sectionInputs(args.spec),
     sectionOutputs(args.spec),
     sectionTools(args.spec, args.plan),
-    sectionScaffoldInterface(args.toolInterface),
     sectionPlanRole(args),
     args.handoffContract ? sectionHandoff(args.handoffContract) : null,
-    sectionExemplar(),
     sectionFinalInstruction(args),
   ];
   return sections.filter((s): s is string => s !== null).join('\n\n');

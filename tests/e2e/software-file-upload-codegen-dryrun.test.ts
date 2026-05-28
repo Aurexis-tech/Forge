@@ -16,7 +16,7 @@ vi.mock('@/lib/engine/llm', async (importOriginal) => {
 import { complete } from '@/lib/engine/llm';
 import { generateSoftwareCode } from '@/lib/engine/software/codegen/generate';
 import { deriveSoftwareGraph } from '@/lib/engine/software/planner/graph';
-import { PAGE_SYSTEM_PROMPT } from '@/lib/engine/software/codegen/prompts';
+import { PAGE_SYSTEM_PROMPT_CACHED } from '@/lib/engine/software/codegen/prompts';
 import {
   SoftwareBuildPlanSchema,
   type SoftwareBuildPlan,
@@ -102,7 +102,7 @@ describe('file-upload codegen — structural storage, LLM only for the gallery p
 
     // --- the gallery page DID go through the PAGE family ---
     const pageCall = completeMock.mock.calls.find(
-      (c) => (c[0] as { system: string }).system === PAGE_SYSTEM_PROMPT,
+      (c) => (c[0] as { system: string }).system === PAGE_SYSTEM_PROMPT_CACHED,
     );
     expect(pageCall).toBeDefined();
   });

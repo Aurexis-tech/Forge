@@ -128,15 +128,46 @@ export function getRuntimeUsdPerSec(): number {
 //                          cost-computation helpers
 // ============================================================================
 
-/** Compute USD cost from a real LLM response's token counts. */
+// Prompt-cache pricing multipliers, relative to the base input rate
+// (Anthropic, verified May 2026):
+//   - cache READ (a hit / refresh): 0.1x base input
+//   - cache WRITE (5-minute TTL):   1.25x base input
+// We use the 5-minute write multiplier because complete() writes the
+// default (5m) ephemeral cache. Override here if a 1h TTL is adopted
+// (2.0x). These are intentionally local constants — the same place the
+// base rates live.
+export const CACHE_READ_MULTIPLIER = 0.1;
+export const CACHE_WRITE_5M_MULTIPLIER = 1.25;
+
+export interface LlmCacheTokens {
+  /** Tokens written to the cache this call (1.25x base input). */
+  cacheCreationTokens?: number;
+  /** Tokens read from the cache this call (0.1x base input). */
+  cacheReadTokens?: number;
+}
+
+/**
+ * Compute USD cost from a real LLM response's token counts.
+ *
+ * `inputTokens` is the UNCACHED input count (post-breakpoint when
+ * caching is active) billed at the base rate. The optional cache
+ * breakdown is billed at the discounted / surcharged cache rates so the
+ * ledger reflects the true cost of a cached call. Omitting the cache
+ * argument preserves the original behaviour exactly (back-compat).
+ */
 export function llmCostUsd(
   model: string,
   inputTokens: number,
   outputTokens: number,
+  cache?: LlmCacheTokens,
 ): number {
   const rate = getModelRate(model);
+  const cacheCreation = cache?.cacheCreationTokens ?? 0;
+  const cacheRead = cache?.cacheReadTokens ?? 0;
   return (
     (inputTokens / 1_000_000) * rate.input_per_mtok +
+    (cacheCreation / 1_000_000) * rate.input_per_mtok * CACHE_WRITE_5M_MULTIPLIER +
+    (cacheRead / 1_000_000) * rate.input_per_mtok * CACHE_READ_MULTIPLIER +
     (outputTokens / 1_000_000) * rate.output_per_mtok
   );
 }

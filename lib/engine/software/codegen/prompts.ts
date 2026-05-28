@@ -151,6 +151,37 @@ export const PAGE_SYSTEM_PROMPT: string = (() => {
 })();
 
 // ===========================================================================
+// CACHED SYSTEM BLOCKS — system prompt + GLOBAL-STABLE reference
+// material (family WORKED EXEMPLAR + SCAFFOLD INTERFACE).
+// ===========================================================================
+//
+// PROMPT-CACHING SEAM. The route/page exemplars and the SCAFFOLD_INTERFACE
+// are global module constants — identical on every slot of every software
+// forge. Lifting them out of the per-slot user message into the system
+// block makes the cached prefix a fully deterministic, byte-stable global
+// constant, so `complete({ cacheSystem: true })` reads it back at 0.1x on
+// slots 2..N. Content is unchanged — the model sees the same exemplar +
+// interface text, framed as standing context rather than repeated per slot.
+//
+// ROUTE_SYSTEM_PROMPT / PAGE_SYSTEM_PROMPT remain exported (above) so the
+// eval/drift tests can still assert the bars are embedded verbatim.
+export const ROUTE_SYSTEM_PROMPT_CACHED: string = [
+  ROUTE_SYSTEM_PROMPT,
+  '',
+  routeExemplarSection(),
+  '',
+  routeScaffoldSection(),
+].join('\n');
+
+export const PAGE_SYSTEM_PROMPT_CACHED: string = [
+  PAGE_SYSTEM_PROMPT,
+  '',
+  pageExemplarSection(),
+  '',
+  pageScaffoldSection(),
+].join('\n');
+
+// ===========================================================================
 // ROUTE USER MESSAGE — structured per-slot context.
 // ===========================================================================
 
@@ -168,14 +199,16 @@ export interface RouteUserMessageArgs {
   filePath: string;
 }
 
+// Per-slot VARIABLE message. The global-stable reference blocks (WORKED
+// EXEMPLAR + SCAFFOLD INTERFACE) now live in the cached ROUTE_SYSTEM_PROMPT_CACHED
+// block — see the caching note there — so this message carries only the
+// per-slot variability, strictly after the cache breakpoint.
 export function buildRouteUserMessage(args: RouteUserMessageArgs): string {
   return [
     routePurposeSection(args),
     routeSlotContractSection(args),
-    routeScaffoldSection(),
     routeLayerSection(args),
     routeSiblingContractSection(args),
-    routeExemplarSection(),
     routeFinalInstruction(args),
   ].join('\n\n');
 }
@@ -421,14 +454,16 @@ export interface PageUserMessageArgs {
   filePath: string;
 }
 
+// Per-slot VARIABLE message. The global-stable reference blocks (WORKED
+// EXEMPLAR + SCAFFOLD INTERFACE) now live in the cached PAGE_SYSTEM_PROMPT_CACHED
+// block — see the caching note there — so this message carries only the
+// per-page variability, strictly after the cache breakpoint.
 export function buildPageUserMessage(args: PageUserMessageArgs): string {
   return [
     pagePurposeSection(args),
     pageSlotContractSection(args),
-    pageScaffoldSection(),
     pageLayerSection(),
     pageSiblingContractSection(args),
-    pageExemplarSection(),
     pageFinalInstruction(args),
   ].join('\n\n');
 }

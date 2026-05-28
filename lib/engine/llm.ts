@@ -39,6 +39,14 @@ const DEFAULT_MAX_TOKENS = 2500;
 export interface LLMUsage {
   input_tokens: number;
   output_tokens: number;
+  // Prompt-cache accounting (Anthropic). Optional so existing
+  // `{ input_tokens: 0, output_tokens: 0 }` literals stay valid and no
+  // caller is forced to change. `input_tokens` from the API is the
+  // count AFTER the last cache breakpoint; the two cache fields capture
+  // what was written to / read from the cache. Sum of all three = the
+  // full input the model saw. Absent (or 0) when caching is off.
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
 }
 
 export interface LLMMessage {
@@ -110,6 +118,15 @@ export interface CompleteOptions {
   // If omitted at runtime we treat it as "no user, no project" — which is
   // intentional only for harness work; production callers always pass it.
   governance?: GovernanceScope;
+  // PROMPT CACHING — when true (and `system` is present), the system
+  // prompt is sent as a single cache-controlled content block
+  // (cache_control: { type: 'ephemeral' }, the 5-minute default TTL).
+  // Repeated calls within a forge that share a byte-identical system
+  // prefix then read it from cache at 0.1x input price. Purely additive:
+  // the Anthropic API silently skips caching any prefix below the model
+  // minimum (no error), so callers may set this whenever the system
+  // block is a stable, deterministic prefix. No effect on output.
+  cacheSystem?: boolean;
 }
 
 export async function complete(opts: CompleteOptions): Promise<LLMResult> {
@@ -142,6 +159,24 @@ export async function complete(opts: CompleteOptions): Promise<LLMResult> {
     (opts.system ?? '').length +
     opts.messages.reduce((acc, m) => acc + m.content.length, 0);
 
+  // System param: a plain string by default, or a single cache-controlled
+  // text block when caching is requested. Built once outside the retry
+  // loop — it's identical on every attempt. The `cache_control` lives on
+  // the block so the entire system prefix (tools->system) is the cache
+  // breakpoint; the variable user message that follows is never cached.
+  const systemParam: string | Anthropic.TextBlockParam[] | undefined =
+    opts.system === undefined
+      ? undefined
+      : opts.cacheSystem
+        ? [
+            {
+              type: 'text',
+              text: opts.system,
+              cache_control: { type: 'ephemeral' },
+            },
+          ]
+        : opts.system;
+
   // The retry loop. The retry helper threads the attempt number +
   // attemptRef ('', '.retry.1', '.retry.2', ...) through, which we
   // append to the ledger ref so each successful billed call lands
@@ -167,7 +202,7 @@ export async function complete(opts: CompleteOptions): Promise<LLMResult> {
           {
             model,
             max_tokens: maxTokens,
-            ...(opts.system ? { system: opts.system } : {}),
+            ...(systemParam !== undefined ? { system: systemParam } : {}),
             messages: opts.messages.map((m) => ({
               role: m.role,
               content: m.content,
@@ -211,9 +246,17 @@ export async function complete(opts: CompleteOptions): Promise<LLMResult> {
     .map((block) => (block.type === 'text' ? block.text : ''))
     .join('');
 
+  // Prompt-cache token capture. The SDK types these as `number | null`
+  // (null when the field doesn't apply); coerce to 0. `input_tokens` is
+  // already the post-breakpoint count when caching is active.
+  const cacheCreation = resp.usage.cache_creation_input_tokens ?? 0;
+  const cacheRead = resp.usage.cache_read_input_tokens ?? 0;
+
   const usage: LLMUsage = {
     input_tokens: resp.usage.input_tokens,
     output_tokens: resp.usage.output_tokens,
+    cache_creation_input_tokens: cacheCreation,
+    cache_read_input_tokens: cacheRead,
   };
 
   // --- governance: recordCost AFTER, with REAL usage --------------------
@@ -229,6 +272,8 @@ export async function complete(opts: CompleteOptions): Promise<LLMResult> {
     model: resp.model,
     input_tokens: usage.input_tokens,
     output_tokens: usage.output_tokens,
+    cache_creation_input_tokens: cacheCreation,
+    cache_read_input_tokens: cacheRead,
     key_source: resolved.source,
     ref: (governance.ref ?? null) === null
       ? null
@@ -248,7 +293,17 @@ export function sumUsage(...parts: LLMUsage[]): LLMUsage {
     (acc, u) => ({
       input_tokens: acc.input_tokens + u.input_tokens,
       output_tokens: acc.output_tokens + u.output_tokens,
+      cache_creation_input_tokens:
+        (acc.cache_creation_input_tokens ?? 0) +
+        (u.cache_creation_input_tokens ?? 0),
+      cache_read_input_tokens:
+        (acc.cache_read_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0),
     }),
-    { input_tokens: 0, output_tokens: 0 },
+    {
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+    },
   );
 }

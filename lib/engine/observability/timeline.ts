@@ -440,6 +440,13 @@ function humaniseAuditAction(
 function eventFromCost(row: CostEvent): ForgeTimelineEvent {
   const phase = phaseForRef(row.ref);
   const refTail = row.ref ?? '(no ref)';
+  // Surface a prompt-cache hit inline so the timeline visibly shows the
+  // savings lever firing (cache reads are billed at 0.1x). Older rows
+  // predating the cache columns read back as 0 → no suffix.
+  const cacheRead = row.cache_read_input_tokens ?? 0;
+  const cacheCreation = row.cache_creation_input_tokens ?? 0;
+  const cacheNote =
+    cacheRead > 0 ? ' · cache_read ' + cacheRead : cacheCreation > 0 ? ' · cache_write ' + cacheCreation : '';
   return {
     id: row.id,
     timestamp: row.created_at,
@@ -454,7 +461,8 @@ function eventFromCost(row: CostEvent): ForgeTimelineEvent {
       ' · ' +
       phase +
       ' · ' +
-      refTail,
+      refTail +
+      cacheNote,
     ref: row.ref,
     cost_usd: row.amount_usd,
     details: {
@@ -462,6 +470,8 @@ function eventFromCost(row: CostEvent): ForgeTimelineEvent {
       model: row.model,
       input_tokens: row.input_tokens,
       output_tokens: row.output_tokens,
+      cache_creation_input_tokens: cacheCreation,
+      cache_read_input_tokens: cacheRead,
       compute_ms: row.compute_ms,
       key_source: row.key_source,
       ref: row.ref,

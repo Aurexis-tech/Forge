@@ -271,7 +271,6 @@ describe('equivalence — codegen TOOLS section (8 legacy tools)', () => {
     const message = buildCodegenUserMessage({
       spec,
       plan,
-      toolInterface: 'stub',
       filePath: 'src/index.ts',
       filePurpose: 'entry',
       allFiles: [{ path: 'src/index.ts', purpose: 'entry', source: 'generated' }],

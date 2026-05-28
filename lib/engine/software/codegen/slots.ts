@@ -44,8 +44,8 @@ import type {
 } from '../planner/schema';
 import type { SlotKind } from '../planner/template';
 import {
-  PAGE_SYSTEM_PROMPT,
-  ROUTE_SYSTEM_PROMPT,
+  PAGE_SYSTEM_PROMPT_CACHED,
+  ROUTE_SYSTEM_PROMPT_CACHED,
   buildPageUserMessage,
   buildRepairUserMessage,
   buildRouteUserMessage,
@@ -232,7 +232,7 @@ async function fillRouteSlot(input: ResolveSlotInput): Promise<SlotResolution> {
   });
 
   const result = await runWithRepair({
-    systemPrompt: ROUTE_SYSTEM_PROMPT,
+    systemPrompt: ROUTE_SYSTEM_PROMPT_CACHED,
     userMessage,
     filePath,
     governance: {
@@ -309,7 +309,7 @@ async function fillPageSlot(input: ResolveSlotInput): Promise<SlotResolution> {
   });
 
   const result = await runWithRepair({
-    systemPrompt: PAGE_SYSTEM_PROMPT,
+    systemPrompt: PAGE_SYSTEM_PROMPT_CACHED,
     userMessage,
     filePath,
     governance: {
@@ -368,6 +368,7 @@ async function runWithRepair(
     first = await complete({
       model: CODEGEN_MODEL,
       system: args.systemPrompt,
+      cacheSystem: true,
       messages: [{ role: 'user', content: args.userMessage }],
       maxTokens: 4000,
       governance: {
@@ -412,6 +413,7 @@ async function runWithRepair(
     repair = await complete({
       model: CODEGEN_MODEL,
       system: args.systemPrompt,
+      cacheSystem: true,
       messages: [
         { role: 'user', content: args.userMessage },
         { role: 'assistant', content: content1 },
@@ -489,6 +491,7 @@ async function applySlotCritiqueGate(
       const refine = await complete({
         model: CODEGEN_MODEL,
         system: args.systemPrompt,
+        cacheSystem: true,
         messages: [
           { role: 'user', content: args.userMessage },
           { role: 'assistant', content: previousCode },

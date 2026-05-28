@@ -18,7 +18,7 @@ import {
 import type { AgentSpec } from '../spec/schema';
 import type { BuildPlan } from '../planner/schema';
 import {
-  CODEGEN_SYSTEM_PROMPT,
+  buildCodegenSystemPrompt,
   buildCodegenRepairMessage,
   buildCodegenUserMessage,
   type HandoffContract,
@@ -315,10 +315,16 @@ export interface GenerateOneAgentFileOutput {
 export async function generateOneAgentFile(
   args: GenerateOneAgentFileArgs,
 ): Promise<GenerateOneAgentFileOutput> {
+  // Cached system block = system prompt + forge-stable reference
+  // material (exemplar + scaffold interface). Byte-identical across
+  // every file in this build, so cacheSystem reads it back at 0.1x on
+  // files 2..N. The user message below carries only per-file variability.
+  const systemPrompt = buildCodegenSystemPrompt({
+    toolInterface: args.toolInterface,
+  });
   const userMessage = buildCodegenUserMessage({
     spec: args.spec,
     plan: args.plan,
-    toolInterface: args.toolInterface,
     filePath: args.filePath,
     filePurpose: args.filePurpose,
     allFiles: args.allFiles,
@@ -328,7 +334,8 @@ export async function generateOneAgentFile(
   // --- Pass 1 ---
   const first = await complete({
     model: CODEGEN_MODEL,
-    system: CODEGEN_SYSTEM_PROMPT,
+    system: systemPrompt,
+    cacheSystem: true,
     messages: [{ role: 'user', content: userMessage }],
     maxTokens: 4000,
     governance: { ...args.governance, ref: (args.governance.ref ?? 'codegen') + '.pass1' },
@@ -341,6 +348,7 @@ export async function generateOneAgentFile(
     // gate (no-op when CRITIQUE_GATE_ENABLED is false).
     const gated = await applyCritiqueGate({
       args,
+      systemPrompt,
       userMessage,
       content: content1,
     });
@@ -356,7 +364,8 @@ export async function generateOneAgentFile(
   // --- Repair retry ---
   const repair = await complete({
     model: CODEGEN_MODEL,
-    system: CODEGEN_SYSTEM_PROMPT,
+    system: systemPrompt,
+    cacheSystem: true,
     messages: [
       { role: 'user', content: userMessage },
       { role: 'assistant', content: content1 },
@@ -377,6 +386,7 @@ export async function generateOneAgentFile(
   if (check2.ok) {
     const gated = await applyCritiqueGate({
       args,
+      systemPrompt,
       userMessage,
       content: content2,
     });
@@ -402,6 +412,8 @@ export async function generateOneAgentFile(
 
 interface ApplyCritiqueGateArgs {
   args: GenerateOneAgentFileArgs;
+  /** The cached system block (system prompt + exemplar + scaffold). */
+  systemPrompt: string;
   /** The exact user message used for pass-1 / repair. */
   userMessage: string;
   /** The candidate code that has already passed static-check. */
@@ -411,7 +423,7 @@ interface ApplyCritiqueGateArgs {
 async function applyCritiqueGate(
   input: ApplyCritiqueGateArgs,
 ): Promise<{ content: string }> {
-  const { args, userMessage, content } = input;
+  const { args, systemPrompt, userMessage, content } = input;
   const result = await critiqueAndRefine({
     code: content,
     filePath: args.filePath,
@@ -428,7 +440,8 @@ async function applyCritiqueGate(
       // the critique is new.
       const refine = await complete({
         model: CODEGEN_MODEL,
-        system: CODEGEN_SYSTEM_PROMPT,
+        system: systemPrompt,
+        cacheSystem: true,
         messages: [
           { role: 'user', content: userMessage },
           { role: 'assistant', content: previousCode },

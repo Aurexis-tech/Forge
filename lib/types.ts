@@ -447,6 +447,11 @@ export interface CostEvent {
   model: string | null;
   input_tokens: number;
   output_tokens: number;
+  // Prompt-cache accounting (Anthropic). input_tokens is the uncached
+  // (post-breakpoint) count; these capture cache writes + reads so the
+  // dashboard can show a real cache hit-rate + savings. Default 0.
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
   compute_ms: number;
   amount_usd: number;
   // 'platform' = the Forge's own key was used (we owe the provider);
