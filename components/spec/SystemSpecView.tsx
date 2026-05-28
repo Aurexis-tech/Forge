@@ -1,11 +1,17 @@
 // Presentational render of a SystemSpec (Phase 2). Same visual rhythm
 // as the AgentSpec SpecView so /projects/[id] feels consistent whether
 // the user landed on an agent or a system project.
+//
+// SPEC FIDELITY: optional `confidence` prop drops a per-field
+// ConfidenceBadge alongside each top-level field. Absence = today's
+// behaviour exactly.
 
 import type {
   CoordinationPattern,
   SystemSpec,
 } from '@/lib/engine/system/spec';
+import { ConfidenceBadge } from './ConfidenceBadge';
+import { levelForField, type SpecConfidence } from './confidence-display';
 
 const PATTERN_LABEL: Record<CoordinationPattern, string> = {
   pipeline: 'pipeline · A → B → C',
@@ -13,7 +19,13 @@ const PATTERN_LABEL: Record<CoordinationPattern, string> = {
   dag: 'dag · arbitrary directed graph',
 };
 
-export function SystemSpecView({ spec }: { spec: SystemSpec }) {
+export interface SystemSpecViewProps {
+  spec: SystemSpec;
+  confidence?: SpecConfidence | null;
+}
+
+export function SystemSpecView({ spec, confidence }: SystemSpecViewProps) {
+  const lvl = (field: string) => levelForField(confidence, field);
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -21,18 +33,32 @@ export function SystemSpecView({ spec }: { spec: SystemSpec }) {
           <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-cyan">
             system spec
           </p>
-          <h2 className="mt-1 text-2xl font-medium text-forge-text">
+          <h2 className="mt-1 flex flex-wrap items-center gap-2 text-2xl font-medium text-forge-text">
             {spec.sub_agents.length} sub-agents · {spec.coordination.pattern}
+            <ConfidenceBadge level={lvl('sub_agents')} compact />
           </h2>
-          <p className="mt-2 max-w-2xl text-sm text-forge-dim">{spec.goal}</p>
+          <p className="mt-2 flex flex-wrap items-center gap-2 max-w-2xl text-sm text-forge-dim">
+            {spec.goal}
+            <ConfidenceBadge level={lvl('goal')} compact />
+          </p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <Pill>max steps · {spec.max_steps}</Pill>
-          <Pill>triggers · {spec.triggers.join(', ')}</Pill>
+          <Pill>
+            <span className="flex items-center gap-1.5">
+              max steps · {spec.max_steps}
+              <ConfidenceBadge level={lvl('max_steps')} compact />
+            </span>
+          </Pill>
+          <Pill>
+            <span className="flex items-center gap-1.5">
+              triggers · {spec.triggers.join(', ')}
+              <ConfidenceBadge level={lvl('triggers')} compact />
+            </span>
+          </Pill>
         </div>
       </header>
 
-      <Section title="coordination">
+      <Section title="coordination" level={lvl('coordination_pattern')}>
         <div className="rounded-lg border border-white/10 bg-black/30 p-3">
           <p className="font-mono text-xs text-forge-amber">
             {PATTERN_LABEL[spec.coordination.pattern]}
@@ -60,7 +86,10 @@ export function SystemSpecView({ spec }: { spec: SystemSpec }) {
         </div>
       </Section>
 
-      <Section title={'sub-agents (' + spec.sub_agents.length + ')'}>
+      <Section
+        title={'sub-agents (' + spec.sub_agents.length + ')'}
+        level={lvl('sub_agents')}
+      >
         <ul className="flex flex-col gap-3">
           {spec.sub_agents.map((a) => (
             <li
@@ -120,14 +149,17 @@ function Pill({ children }: { children: React.ReactNode }) {
 function Section({
   title,
   children,
+  level,
 }: {
   title: string;
   children: React.ReactNode;
+  level?: ReturnType<typeof levelForField>;
 }) {
   return (
     <section>
-      <h3 className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-dim">
+      <h3 className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.4em] text-forge-dim">
         {title}
+        <ConfidenceBadge level={level} />
       </h3>
       <div className="mt-2">{children}</div>
     </section>

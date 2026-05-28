@@ -1,11 +1,29 @@
 // Presentational render of a SoftwareSpec. Same visual rhythm as the
 // AgentSpec / SystemSpec views so /projects/[id] feels consistent
 // whether the user landed on an agent, system, or software project.
+//
+// SPEC FIDELITY: optional `confidence` prop drops a per-field
+// ConfidenceBadge alongside each top-level field. Absence = today's
+// behaviour exactly.
 
 import type { SoftwareSpec } from '@/lib/engine/software/spec';
+import { ConfidenceBadge } from '@/components/spec/ConfidenceBadge';
+import {
+  levelForField,
+  type SpecConfidence,
+} from '@/components/spec/confidence-display';
 
-export function SoftwareSpecView({ spec }: { spec: SoftwareSpec }) {
+export interface SoftwareSpecViewProps {
+  spec: SoftwareSpec;
+  confidence?: SpecConfidence | null;
+}
+
+export function SoftwareSpecView({
+  spec,
+  confidence,
+}: SoftwareSpecViewProps) {
   const { goal, pages, entities, flows, auth, integrations } = spec;
+  const lvl = (field: string) => levelForField(confidence, field);
 
   return (
     <div className="flex flex-col gap-6">
@@ -17,21 +35,40 @@ export function SoftwareSpecView({ spec }: { spec: SoftwareSpec }) {
           <h2 className="mt-1 text-2xl font-medium text-forge-text">
             {pages.length} pages · {entities.length} entities · {flows.length} flows
           </h2>
-          <p className="mt-2 max-w-2xl text-sm text-forge-dim">{goal}</p>
+          <p className="mt-2 flex flex-wrap items-center gap-2 max-w-2xl text-sm text-forge-dim">
+            {goal}
+            <ConfidenceBadge level={lvl('goal')} compact />
+          </p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <Pill className={auth.requires_auth ? 'border-forge-amber/40 text-forge-amber' : ''}>
-            {auth.requires_auth ? 'auth required' : 'public · no auth'}
+            <span className="flex items-center gap-1.5">
+              {auth.requires_auth ? 'auth required' : 'public · no auth'}
+              <ConfidenceBadge level={lvl('auth_requires_auth')} compact />
+            </span>
           </Pill>
           {auth.per_user_isolation ? (
-            <Pill>per-user data</Pill>
+            <Pill>
+              <span className="flex items-center gap-1.5">
+                per-user data
+                <ConfidenceBadge level={lvl('auth_per_user_isolation')} compact />
+              </span>
+            </Pill>
           ) : (
-            <Pill>shared data</Pill>
+            <Pill>
+              <span className="flex items-center gap-1.5">
+                shared data
+                <ConfidenceBadge level={lvl('auth_per_user_isolation')} compact />
+              </span>
+            </Pill>
           )}
         </div>
       </header>
 
-      <Section title={'pages (' + pages.length + ')'}>
+      <Section
+        title={'pages (' + pages.length + ')'}
+        level={lvl('pages')}
+      >
         <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {pages.map((p) => (
             <li
@@ -50,7 +87,10 @@ export function SoftwareSpecView({ spec }: { spec: SoftwareSpec }) {
         </ul>
       </Section>
 
-      <Section title={'entities (' + entities.length + ')'}>
+      <Section
+        title={'entities (' + entities.length + ')'}
+        level={lvl('entities')}
+      >
         <ul className="flex flex-col gap-3">
           {entities.map((e) => (
             <li
@@ -74,7 +114,7 @@ export function SoftwareSpecView({ spec }: { spec: SoftwareSpec }) {
         </ul>
       </Section>
 
-      <Section title={'flows (' + flows.length + ')'}>
+      <Section title={'flows (' + flows.length + ')'} level={lvl('flows')}>
         {flows.length === 0 ? (
           <p className="text-xs text-forge-dim">no flows declared.</p>
         ) : (
@@ -97,7 +137,7 @@ export function SoftwareSpecView({ spec }: { spec: SoftwareSpec }) {
         )}
       </Section>
 
-      <Section title="auth model">
+      <Section title="auth model" level={lvl('auth_requires_auth')}>
         <div className="rounded-lg border border-white/10 bg-black/30 p-3">
           <ul className="flex flex-col gap-1 font-mono text-[11px] text-forge-text/90">
             <li>
@@ -158,14 +198,17 @@ function Pill({
 function Section({
   title,
   children,
+  level,
 }: {
   title: string;
   children: React.ReactNode;
+  level?: ReturnType<typeof levelForField>;
 }) {
   return (
     <section>
-      <h3 className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-dim">
+      <h3 className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.4em] text-forge-dim">
         {title}
+        <ConfidenceBadge level={level} />
       </h3>
       <div className="mt-2">{children}</div>
     </section>

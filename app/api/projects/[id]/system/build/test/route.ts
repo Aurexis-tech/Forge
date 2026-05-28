@@ -25,6 +25,7 @@ import {
   persistSystemRunnerResult,
 } from '@/lib/engine/system/sandbox/persistence';
 import { runSystemSandbox } from '@/lib/engine/system/sandbox/runner';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -123,6 +124,14 @@ export async function POST(_req: Request, { params }: RouteContext) {
         .eq('id', build.id);
       return needsKeyResponse(err)!;
     }
+    await auditEngineError({
+      supabase,
+      projectId,
+      action: 'system.sandbox_failed',
+      err,
+      actor: 'engine.system.sandbox',
+      extra: { build_id: build.id, sandbox_run_id: run.id },
+    });
     const message = err instanceof Error ? err.message : String(err);
     await markSystemRunCrashed(supabase, run.id, build, message);
     return NextResponse.json({ error: message }, { status: 502 });

@@ -44,3 +44,7 @@ next-env.d.ts.bak
 # `.claude/settings.json` (without .local) is fine to commit if a shared
 # team config is added later; this rule only excludes the local override.
 .claude/settings.local.json
+
+# Eval reports — generated per run, kept locally for before/after
+# comparison. The directory itself is tracked via evals/reports/.gitkeep.
+evals/reports/*.json

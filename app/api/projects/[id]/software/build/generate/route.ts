@@ -30,6 +30,7 @@ import {
   markSoftwareBuildGenerating,
   storeSoftwareBuildFiles,
 } from '@/lib/engine/software/codegen/persistence';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -116,6 +117,14 @@ export async function POST(_req: Request, { params }: RouteContext) {
         .eq('id', build.id);
       return needsKeyResponse(err)!;
     }
+    await auditEngineError({
+      supabase,
+      projectId,
+      action: 'software.codegen_failed',
+      err,
+      actor: 'engine.software.codegen',
+      extra: { build_id: build.id },
+    });
     const message = describeError(err);
     await markSoftwareBuildFailed(supabase, build.id, projectId, message);
     return NextResponse.json({ error: message }, { status: 502 });

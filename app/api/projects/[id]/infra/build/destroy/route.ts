@@ -46,6 +46,7 @@ import {
 } from '@/lib/engine/infra/cloud/killswitch-watcher';
 import { selectCloudProvider } from '@/lib/engine/infra/cloud/select';
 import { projectRouteGuard } from '@/lib/route-guard';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -230,6 +231,14 @@ export async function POST(req: Request, { params }: RouteContext) {
       .from('builds')
       .update({ status: 'apply_failed' })
       .eq('id', build.id);
+    await auditEngineError({
+      supabase,
+      projectId,
+      action: 'infra.destroy_failed',
+      err,
+      actor: 'engine.infra.destroy',
+      extra: { build_id: build.id, apply_id: applyRow.id, error: message },
+    });
     return NextResponse.json({ error: message }, { status: 502 });
   } finally {
     watcher.stop();

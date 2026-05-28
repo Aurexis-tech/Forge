@@ -2,11 +2,26 @@
 // AgentSpec / SystemSpec / SoftwareSpec views so /projects/[id] feels
 // consistent whether the user landed on an agent, system, software,
 // or infrastructure project.
+//
+// SPEC FIDELITY: optional `confidence` prop drops a per-field
+// ConfidenceBadge alongside each top-level field. Absence = today's
+// behaviour exactly.
 
 import type { InfraSpec } from '@/lib/engine/infra/spec';
+import { ConfidenceBadge } from '@/components/spec/ConfidenceBadge';
+import {
+  levelForField,
+  type SpecConfidence,
+} from '@/components/spec/confidence-display';
 
-export function InfraSpecView({ spec }: { spec: InfraSpec }) {
+export interface InfraSpecViewProps {
+  spec: InfraSpec;
+  confidence?: SpecConfidence | null;
+}
+
+export function InfraSpecView({ spec, confidence }: InfraSpecViewProps) {
   const { goal, resources, topology, region, lifecycle } = spec;
+  const lvl = (field: string) => levelForField(confidence, field);
 
   const byId = new Map(resources.map((r) => [r.id, r]));
 
@@ -20,7 +35,10 @@ export function InfraSpecView({ spec }: { spec: InfraSpec }) {
           <h2 className="mt-1 text-2xl font-medium text-forge-text">
             {resources.length} resources · {topology.length} edges
           </h2>
-          <p className="mt-2 max-w-2xl text-sm text-forge-dim">{goal}</p>
+          <p className="mt-2 flex flex-wrap items-center gap-2 max-w-2xl text-sm text-forge-dim">
+            {goal}
+            <ConfidenceBadge level={lvl('goal')} compact />
+          </p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <Pill
@@ -30,13 +48,33 @@ export function InfraSpecView({ spec }: { spec: InfraSpec }) {
                 : ''
             }
           >
-            {lifecycle}
+            <span className="flex items-center gap-1.5">
+              {lifecycle}
+              <ConfidenceBadge level={lvl('lifecycle')} compact />
+            </span>
           </Pill>
-          {region ? <Pill>region · {region}</Pill> : <Pill>region · any</Pill>}
+          {region ? (
+            <Pill>
+              <span className="flex items-center gap-1.5">
+                region · {region}
+                <ConfidenceBadge level={lvl('region')} compact />
+              </span>
+            </Pill>
+          ) : (
+            <Pill>
+              <span className="flex items-center gap-1.5">
+                region · any
+                <ConfidenceBadge level={lvl('region')} compact />
+              </span>
+            </Pill>
+          )}
         </div>
       </header>
 
-      <Section title={'resources (' + resources.length + ')'}>
+      <Section
+        title={'resources (' + resources.length + ')'}
+        level={lvl('resources')}
+      >
         <ul className="flex flex-col gap-3">
           {resources.map((r) => {
             const configKeys = Object.keys(r.config ?? {});
@@ -88,7 +126,10 @@ export function InfraSpecView({ spec }: { spec: InfraSpec }) {
         </ul>
       </Section>
 
-      <Section title={'topology (' + topology.length + ')'}>
+      <Section
+        title={'topology (' + topology.length + ')'}
+        level={lvl('topology')}
+      >
         {topology.length === 0 ? (
           <p className="text-xs text-forge-dim">no edges declared.</p>
         ) : (
@@ -111,7 +152,7 @@ export function InfraSpecView({ spec }: { spec: InfraSpec }) {
         )}
       </Section>
 
-      <Section title="lifecycle">
+      <Section title="lifecycle" level={lvl('lifecycle')}>
         <div className="rounded-lg border border-white/10 bg-black/30 p-3">
           <ul className="flex flex-col gap-1 font-mono text-[11px] text-forge-text/90">
             <li>
@@ -168,14 +209,17 @@ function Pill({
 function Section({
   title,
   children,
+  level,
 }: {
   title: string;
   children: React.ReactNode;
+  level?: ReturnType<typeof levelForField>;
 }) {
   return (
     <section>
-      <h3 className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-dim">
+      <h3 className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.4em] text-forge-dim">
         {title}
+        <ConfidenceBadge level={level} />
       </h3>
       <div className="mt-2">{children}</div>
     </section>

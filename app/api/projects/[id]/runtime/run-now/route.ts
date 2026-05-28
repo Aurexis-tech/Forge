@@ -11,6 +11,7 @@ import { ensureBYOK, needsKeyResponse } from '@/lib/route-needs-key';
 import { NeedsKeyError } from '@/lib/engine/keys';
 import { loadRuntimeForProject } from '@/lib/engine/runtime/persistence';
 import { runOnce } from '@/lib/engine/runtime/scheduler';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -80,6 +81,13 @@ export async function POST(_req: Request, { params }: RouteContext) {
       // map it back to the friendly 412 instead of leaking a 500.
       return needsKeyResponse(err)!;
     }
+    await auditEngineError({
+      supabase,
+      projectId: params.id,
+      action: 'runtime.tick_failed',
+      err,
+      actor: 'engine.runtime',
+    });
     const msg = err instanceof Error ? err.message : 'run-now failed';
     return NextResponse.json({ error: msg }, { status: 500 });
   }

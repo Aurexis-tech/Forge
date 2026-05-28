@@ -26,6 +26,10 @@ import {
   buildSystemExtractionUserMessage,
   buildSystemRepairUserMessage,
 } from './prompts';
+import {
+  computeSystemConfidence,
+  type SpecConfidence,
+} from '../spec/confidence';
 
 export class SystemExtractionError extends Error {
   readonly cause?: unknown;
@@ -50,6 +54,8 @@ export interface ExtractSystemSpecOutput {
   usage: LLMUsage;
   model: string;
   attempts: number;
+  /** Optional per-field confidence map; see lib/engine/spec/confidence.ts. */
+  confidence?: SpecConfidence;
 }
 
 export async function extractSystemSpec(
@@ -84,6 +90,7 @@ export async function extractSystemSpec(
       usage: first.usage,
       model: first.model,
       attempts: 1,
+      confidence: computeSystemConfidence(parsed1.data.spec, input.rawPrompt),
     };
   }
 
@@ -118,6 +125,7 @@ export async function extractSystemSpec(
       usage: totalUsage,
       model: repair.model,
       attempts: 2,
+      confidence: computeSystemConfidence(parsed2.data.spec, input.rawPrompt),
     };
   }
 

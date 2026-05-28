@@ -27,6 +27,10 @@ import {
   buildInfraExtractionUserMessage,
   buildInfraRepairUserMessage,
 } from './prompts';
+import {
+  computeInfraConfidence,
+  type SpecConfidence,
+} from '../spec/confidence';
 
 export class InfraExtractionError extends Error {
   readonly cause?: unknown;
@@ -51,6 +55,8 @@ export interface ExtractInfraSpecOutput {
   usage: LLMUsage;
   model: string;
   attempts: number;
+  /** Optional per-field confidence map; see lib/engine/spec/confidence.ts. */
+  confidence?: SpecConfidence;
 }
 
 export async function extractInfraSpec(
@@ -85,6 +91,7 @@ export async function extractInfraSpec(
       usage: first.usage,
       model: first.model,
       attempts: 1,
+      confidence: computeInfraConfidence(parsed1.data.spec, input.rawPrompt),
     };
   }
 
@@ -119,6 +126,7 @@ export async function extractInfraSpec(
       usage: totalUsage,
       model: repair.model,
       attempts: 2,
+      confidence: computeInfraConfidence(parsed2.data.spec, input.rawPrompt),
     };
   }
 

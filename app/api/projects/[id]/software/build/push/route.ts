@@ -38,6 +38,7 @@ import {
   markSoftwareBuildPushed,
   markSoftwareBuildPushing,
 } from '@/lib/engine/software/integrations/persistence';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -177,6 +178,14 @@ export async function POST(req: Request, { params }: RouteContext) {
           : 'unknown push error';
     await markSoftwareBuildPushFailed(supabase, build.id);
     await logSoftwarePushFailed(supabase, build, message);
+    await auditEngineError({
+      supabase,
+      projectId,
+      action: 'software.push_failed',
+      err,
+      actor: 'integration.github',
+      extra: { build_id: build.id, error: message },
+    });
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

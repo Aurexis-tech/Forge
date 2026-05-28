@@ -31,6 +31,12 @@ process.env.APP_ENC_KEY =
 // platform-key behaviour. Individual tests can override.
 process.env.REQUIRE_BYOK = 'false';
 
+// Silence the engine's structured logger across the test suite.
+// Individual tests that need to inspect log output can override
+// LOG_LEVEL inside the test, but the default is silent so the
+// 500+ test suite doesn't fill CI output with JSON noise.
+process.env.LOG_LEVEL = 'silent';
+
 // Hard-fail any test that tries to use real `fetch`. Tests that need
 // fetch behaviour should mock it explicitly. This is the last-resort
 // net for hermeticity.

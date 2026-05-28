@@ -27,6 +27,7 @@ import {
   buildExtractionUserMessage,
   buildRepairUserMessage,
 } from './prompts';
+import { computeAgentConfidence, type SpecConfidence } from './confidence';
 
 export class SpecExtractionError extends Error {
   readonly cause?: unknown;
@@ -53,6 +54,15 @@ export interface ExtractSpecOutput {
   usage: LLMUsage;
   model: string;
   attempts: number;
+  /**
+   * Per-top-level-field confidence map. Computed deterministically
+   * AFTER extraction (no extra LLM call) by comparing the produced
+   * spec against the original intent + schema defaults. Optional
+   * so existing test stubs that return canned ExtractSpecOutput
+   * objects without this field continue to work. The clarification
+   * loop computes it itself when absent.
+   */
+  confidence?: SpecConfidence;
 }
 
 export async function extractSpec(
@@ -87,6 +97,7 @@ export async function extractSpec(
       usage: first.usage,
       model: first.model,
       attempts: 1,
+      confidence: computeAgentConfidence(parsed1.data.spec, input.rawPrompt),
     };
   }
 
@@ -121,6 +132,7 @@ export async function extractSpec(
       usage: totalUsage,
       model: repair.model,
       attempts: 2,
+      confidence: computeAgentConfidence(parsed2.data.spec, input.rawPrompt),
     };
   }
 

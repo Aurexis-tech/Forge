@@ -121,6 +121,8 @@ import {
 import { BuildPlanSchema, type BuildPlan } from '@/lib/engine/planner/schema';
 import { AgentSpecSchema, type AgentSpec } from '@/lib/engine/spec/schema';
 import { getServerSupabase } from '@/lib/supabase';
+import { assembleForgeTimeline } from '@/lib/engine/observability/timeline';
+import { ForgeTimelinePanel } from '@/components/observability/ForgeTimelinePanel';
 import type {
   AgentRun,
   AgentRuntime,
@@ -866,7 +868,35 @@ export default async function ProjectDetailPage({
           governance. The per-project runtime view above is live now.
         </p>
       </GlassPanel>
+
+      {/* FORGE TIMELINE — observability data layer. Always-visible,
+          collapsed by default. The disclosure header carries the total
+          cost as a teaser. Live-tail polls every 5s when expanded AND
+          the latest build is in-progress; idle otherwise. */}
+      {await renderForgeTimeline(project.id)}
     </section>
+  );
+}
+
+async function renderForgeTimeline(
+  projectId: string,
+): Promise<React.ReactNode> {
+  const supabase = getServerSupabase();
+  const [timeline, latest] = await Promise.all([
+    assembleForgeTimeline(supabase, projectId),
+    supabase
+      .from('builds')
+      .select('status')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .then(({ data }) => (data?.[0] as { status?: string } | undefined) ?? null),
+  ]);
+  return (
+    <ForgeTimelinePanel
+      timeline={timeline}
+      buildStatus={latest?.status ?? null}
+    />
   );
 }
 
@@ -947,7 +977,13 @@ function SpecArea({
           );
         }
         return (
-          <InfraReviewPanel projectId={projectId} spec={parsedInfra.data} />
+          <InfraReviewPanel
+            projectId={projectId}
+            spec={parsedInfra.data}
+            confidence={
+              (spec.confidence_json as Record<string, never> | null) ?? null
+            }
+          />
         );
       }
       if (spec.kind === 'software') {
@@ -961,7 +997,13 @@ function SpecArea({
           );
         }
         return (
-          <SoftwareReviewPanel projectId={projectId} spec={parsedSw.data} />
+          <SoftwareReviewPanel
+            projectId={projectId}
+            spec={parsedSw.data}
+            confidence={
+              (spec.confidence_json as Record<string, never> | null) ?? null
+            }
+          />
         );
       }
       if (spec.kind === 'system') {
@@ -975,7 +1017,13 @@ function SpecArea({
           );
         }
         return (
-          <SystemReviewPanel projectId={projectId} spec={parsedSys.data} />
+          <SystemReviewPanel
+            projectId={projectId}
+            spec={parsedSys.data}
+            confidence={
+              (spec.confidence_json as Record<string, never> | null) ?? null
+            }
+          />
         );
       }
       const parsed = AgentSpecSchema.safeParse(spec.structured_spec);
@@ -987,7 +1035,15 @@ function SpecArea({
           />
         );
       }
-      return <ReviewPanel projectId={projectId} spec={parsed.data} />;
+      return (
+        <ReviewPanel
+          projectId={projectId}
+          spec={parsed.data}
+          confidence={
+            (spec.confidence_json as Record<string, never> | null) ?? null
+          }
+        />
+      );
     }
 
     case 'confirmed': {

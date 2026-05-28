@@ -10,14 +10,18 @@ import { useState, type FormEvent } from 'react';
 import { GlassPanel } from '@/components/GlassPanel';
 import { useForgeStore } from '@/lib/store';
 import { SoftwareSpecView } from './SoftwareSpecView';
+import { UncertaintyStrip } from '@/components/spec/UncertaintyStrip';
+import type { SpecConfidence } from '@/components/spec/confidence-display';
 import type { SoftwareSpec } from '@/lib/engine/software/spec';
 
 interface Props {
   projectId: string;
   spec: SoftwareSpec;
+  /** Optional per-field confidence map. Absence = today's UI exactly. */
+  confidence?: SpecConfidence | null;
 }
 
-export function SoftwareReviewPanel({ projectId, spec }: Props) {
+export function SoftwareReviewPanel({ projectId, spec, confidence }: Props) {
   const router = useRouter();
   const setCoreState = useForgeStore((s) => s.setCoreState);
   const [confirming, setConfirming] = useState(false);
@@ -118,7 +122,9 @@ export function SoftwareReviewPanel({ projectId, spec }: Props) {
           </p>
         </div>
 
-        <SoftwareSpecView spec={spec} />
+        <UncertaintyStrip mold="software" confidence={confidence} />
+
+        <SoftwareSpecView spec={spec} confidence={confidence} />
 
         {error ? (
           <p

@@ -9,14 +9,22 @@ import { useState, type FormEvent } from 'react';
 import { GlassPanel } from '@/components/GlassPanel';
 import { useForgeStore } from '@/lib/store';
 import { SystemSpecView } from './SystemSpecView';
+import { UncertaintyStrip } from './UncertaintyStrip';
+import type { SpecConfidence } from './confidence-display';
 import type { SystemSpec } from '@/lib/engine/system/spec';
 
 interface Props {
   projectId: string;
   spec: SystemSpec;
+  /**
+   * Optional per-field confidence map; renders the uncertainty
+   * strip + per-field badges when present. Absence = today's
+   * behaviour exactly.
+   */
+  confidence?: SpecConfidence | null;
 }
 
-export function SystemReviewPanel({ projectId, spec }: Props) {
+export function SystemReviewPanel({ projectId, spec, confidence }: Props) {
   const router = useRouter();
   const setCoreState = useForgeStore((s) => s.setCoreState);
   const [confirming, setConfirming] = useState(false);
@@ -115,7 +123,9 @@ export function SystemReviewPanel({ projectId, spec }: Props) {
           </p>
         </div>
 
-        <SystemSpecView spec={spec} />
+        <UncertaintyStrip mold="system" confidence={confidence} />
+
+        <SystemSpecView spec={spec} confidence={confidence} />
 
         {error ? (
           <p

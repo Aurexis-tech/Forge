@@ -1,108 +1,193 @@
-// Prompts for the Phase 3 SoftwareSpec extractor. Same shape as the
-// AgentSpec + SystemSpec extractors — kept in their own file so they're
-// easy to iterate on without touching the surrounding plumbing.
+// Prompts for the SOFTWARE spec extractor.
+//
+// REFACTOR (spec-fidelity leg) — mirrors the agent + system refactors:
+// SYSTEM prompt embeds the SPEC_QUALITY_BAR + SOFTWARE addendum;
+// user message is structured (intent / clarifications / catalog
+// slice / schema / exemplar); repair message re-asserts the bar.
 
+import {
+  specQualityBarPromptBullets,
+  specQualityBarVersionLabel,
+} from '../spec/quality';
 import { FIELD_TYPES } from './spec';
 
-export const SOFTWARE_SPEC_SYSTEM_PROMPT =
-  `You are the Aurexis Forge SOFTWARE extractor.
+// ===========================================================================
+// SYSTEM PROMPT — built once at module load.
+// ===========================================================================
+export const SOFTWARE_SPEC_SYSTEM_PROMPT: string = (() => {
+  const role =
+    'You are the Aurexis Forge SOFTWARE spec extractor. Your job is to read a user\'s natural-language intent and produce a precise, actionable SoftwareSpec — pages, entities (with typed fields), flows, and an auth model — so downstream layers (planner, codegen, sandbox) can build a small full-stack app without re-asking the user. A SOFTWARE request is when the user wants a small application with pages + a data model, not a single agent or multi-agent system. The caller routes by classifier; if the prompt is actually an agent / system, the caller will not invoke this extractor.';
 
-Your job: take a plain-language description of a SMALL WEB APP the user wants and turn it into a STRICT, structured SoftwareSpec in JSON.
+  const bar =
+    'SPEC QUALITY BAR (' +
+    specQualityBarVersionLabel('software') +
+    ') — your output MUST satisfy every one of these:\n' +
+    specQualityBarPromptBullets('software');
 
-A SOFTWARE request is when the user wants a small application — pages, a data model, flows, optional auth — rather than a single agent (Phase 1) or a multi-agent system (Phase 2). Examples: "an expenses tracker my team submits to and a manager approves", "a recipe vault I paste URLs into", "a CRM for my freelance work". The caller decides which extractor to invoke based on the classifier; if the user's prompt is actually an agent or a system, the caller will not route it here.
+  const outputRules =
+    'OUTPUT RULES — non-negotiable:\n' +
+    '- Respond with a SINGLE JSON object — no prose before or after, no markdown code fences.\n' +
+    '- The object MUST conform to the SoftwareSpec ExtractionResult schema shown below.\n' +
+    '- Required fields MUST contain real content. Never emit placeholders ("TBD", "various fields") — surface gaps via `open_questions`.';
 
-You MUST respond with a single JSON object — no prose before or after, no markdown code fences. The object MUST have exactly this shape:
+  const schema =
+    'SOFTWARE SPEC EXTRACTION SCHEMA (target shape):\n' +
+    '{\n' +
+    '  "spec": {\n' +
+    '    "goal": string,\n' +
+    '    "pages": [\n' +
+    '      { "id": string, "name": string, "purpose": string },  // id lower_snake_case, unique\n' +
+    '      ...\n' +
+    '    ],\n' +
+    '    "entities": [\n' +
+    '      {\n' +
+    '        "name":   string,                                    // PascalCase singular (e.g. "Expense")\n' +
+    '        "fields": [ { "name": string, "type": string }, ... ]  // type from FIELD_TYPES catalog\n' +
+    '      },\n' +
+    '      ...\n' +
+    '    ],\n' +
+    '    "flows": [\n' +
+    '      {\n' +
+    '        "name": string,                                      // short snake_case name (e.g. "submit_expense")\n' +
+    '        "description": string,                               // 1 sentence\n' +
+    '        "pages": [string, ...]                               // OPTIONAL — page ids the flow walks through\n' +
+    '      },\n' +
+    '      ...\n' +
+    '    ],\n' +
+    '    "auth": {\n' +
+    '      "requires_auth": boolean,\n' +
+    '      "roles": [string, ...],                                // OPTIONAL — free-form role labels\n' +
+    '      "per_user_isolation": boolean\n' +
+    '    },\n' +
+    '    "integrations": [string, ...]                            // OPTIONAL — e.g. "stripe", "sendgrid"\n' +
+    '  },\n' +
+    '  "open_questions": [string, ...]\n' +
+    '}';
 
-{
-  "spec": {
-    "goal": string,                              // ONE sentence describing what the app does
-    "pages": [
-      {
-        "id":      string,                       // lower_snake_case, unique within this spec
-        "name":    string,                       // short human-facing name (1-4 words)
-        "purpose": string                        // 1 sentence on what the user does on this page
-      }, ...
-    ],
-    "entities": [
-      {
-        "name":   string,                        // PascalCase singular noun (e.g. "Expense", "User")
-        "fields": [
-          { "name": string, "type": string }     // type ∈ ` + JSON.stringify(FIELD_TYPES) + `
-        ]
-      }, ...
-    ],
-    "flows": [
-      {
-        "name":        string,                   // short verb phrase (e.g. "Submit expense")
-        "description": string,                   // 1-2 sentences on what happens end-to-end
-        "pages":       [<page.id>, ...]          // OPTIONAL — pages this flow walks through
-      }, ...
-    ],
-    "auth": {
-      "requires_auth":      boolean,             // does the app gate behind sign-in?
-      "roles":              [string, ...],      // OPTIONAL — distinct roles ("admin", "manager", "member")
-      "per_user_isolation": boolean              // does each user only see their own data?
-    },
-    "integrations": [string, ...]                // OPTIONAL — third-party services the app needs ("stripe", "sendgrid")
-  },
-  "open_questions": [string, ...]                // 1-3 SPECIFIC questions ONLY where the prompt is genuinely ambiguous; empty array if it's clear
+  return [role, '', bar, '', outputRules, '', schema].join('\n');
+})();
+
+// ===========================================================================
+// CATALOG SLICE — FIELD_TYPES rendered for the prompt.
+// ===========================================================================
+function fieldTypesSlice(): string {
+  return [
+    'FIELD TYPE CATALOG (the closed set of `entities[].fields[].type` values):',
+    '  ' + FIELD_TYPES.join(', '),
+    '',
+    "Pick the closest match for each field. Do not invent types. For 'metadata' / unstructured blobs use 'text'. For an entity reference, use 'reference' and name the target entity in the field name (e.g. 'submitted_by' referencing User).",
+  ].join('\n');
 }
 
-RULES — read carefully:
-
-- "pages" MUST have at least 1 entry. Even a one-page app declares its single page.
-- "pages[].id" is a stable lower_snake_case identifier referenced from flows. Use short descriptive names (e.g. "dashboard", "submit_expense", "approvals_inbox"). Never re-use an id.
-
-- "entities" MUST have at least 1 entry. Each entity has at least one field. Field types are restricted to: ` + JSON.stringify(FIELD_TYPES) + `. Prefer the narrowest type that fits ("email" for an email address, not "string"; "reference" for a relationship to another entity).
-- "entities[].name" is PascalCase singular — "Expense", not "expenses".
-
-- "flows" describe core features end-to-end. flow.pages references MUST be real page ids from this spec. A flow may have no pages (a purely background flow like "weekly reminder email"); most do.
-
-- "auth.requires_auth": true for apps that gate behind sign-in (the vast majority). Set false ONLY when the user explicitly described a public-no-login app.
-- "auth.per_user_isolation": true when each authenticated user should ONLY see their own rows (the common Supabase RLS pattern); false when all signed-in users share a single global view (an internal team tool with no per-user scoping).
-- "auth.roles": include ONLY when the user described distinct roles ("a manager approves", "an admin can edit everything"). Otherwise omit.
-
-- "integrations": include third-party services the user mentioned by name OR ones obviously implied (e.g. "stripe" when "subscriptions" or "payments" is mentioned). Lower-case service slug, no version. Otherwise omit.
-
-- "open_questions": ask ONLY when you cannot reasonably guess and the missing info would change the spec materially. Examples of good questions: "Should team members see each other's submitted expenses, or only their own?", "Which currencies should the expense form support?". BAD: asking for a project name, asking how to implement, asking for visual preferences. Maximum 3. If the prompt is clear, return [].
-
-Output JSON only. No prose. No markdown.`;
-
-export function buildSoftwareExtractionUserMessage(args: {
+// ===========================================================================
+// USER MESSAGE — structured context.
+// ===========================================================================
+export interface SoftwareExtractionUserMessageArgs {
   rawPrompt: string;
-  answers?: Array<{ question: string; answer: string }>;
-  refinements?: string[];
-}): string {
-  const parts: string[] = [];
-  parts.push('USER PROMPT:');
-  parts.push(args.rawPrompt.trim());
-
-  if (args.answers && args.answers.length > 0) {
-    parts.push('');
-    parts.push(
-      'CLARIFICATIONS — the user has already answered these questions. Incorporate the answers into the spec. Do NOT ask the same questions again; open_questions should be empty unless something genuinely NEW is unclear.',
-    );
-    for (const { question, answer } of args.answers) {
-      parts.push('Q: ' + question);
-      parts.push('A: ' + answer);
-    }
-  }
-
-  if (args.refinements && args.refinements.length > 0) {
-    parts.push('');
-    parts.push(
-      'USER REFINEMENTS — the user reviewed your previous draft and wants these changes applied precisely:',
-    );
-    for (const r of args.refinements) parts.push('- ' + r);
-  }
-
-  return parts.join('\n');
+  answers?: ReadonlyArray<{ question: string; answer: string }>;
+  refinements?: ReadonlyArray<string>;
 }
 
+export function buildSoftwareExtractionUserMessage(
+  args: SoftwareExtractionUserMessageArgs,
+): string {
+  return [
+    sectionIntent(args.rawPrompt),
+    args.answers && args.answers.length > 0
+      ? sectionClarifications(args.answers)
+      : null,
+    args.refinements && args.refinements.length > 0
+      ? sectionRefinements(args.refinements)
+      : null,
+    fieldTypesSlice(),
+    sectionExemplar(),
+    sectionFinalInstruction(),
+  ]
+    .filter((s): s is string => s !== null)
+    .join('\n\n');
+}
+
+function sectionIntent(rawPrompt: string): string {
+  return ['USER INTENT (verbatim):', rawPrompt.trim()].join('\n');
+}
+
+function sectionClarifications(
+  answers: ReadonlyArray<{ question: string; answer: string }>,
+): string {
+  const lines: string[] = [
+    'CLARIFICATIONS — the user has already answered these questions. Incorporate the answers; do not re-ask.',
+  ];
+  for (const { question, answer } of answers) {
+    lines.push('Q: ' + question);
+    lines.push('A: ' + answer);
+  }
+  return lines.join('\n');
+}
+
+function sectionRefinements(refinements: ReadonlyArray<string>): string {
+  const lines: string[] = [
+    'USER REFINEMENTS — apply these changes precisely:',
+  ];
+  for (const r of refinements) lines.push('- ' + r);
+  return lines.join('\n');
+}
+
+function sectionExemplar(): string {
+  return [
+    'WORKED EXEMPLAR (illustrative — DO NOT COPY VERBATIM)',
+    '',
+    'Intent:   "A reading queue: I paste article URLs, the app tags each one, and I can mark them as read."',
+    '',
+    'Good spec:',
+    '{',
+    '  "spec": {',
+    '    "goal": "A personal reading queue: paste article URLs, see tagged unread items, mark them as read.",',
+    '    "pages": [',
+    '      { "id": "queue",         "name": "Queue",       "purpose": "List unread articles with tags + a checkbox to mark each as read." },',
+    '      { "id": "add_article",   "name": "Add article", "purpose": "Paste a URL; the app saves it tagged for later." },',
+    '      { "id": "archive",       "name": "Archive",     "purpose": "Browse articles already marked as read." }',
+    '    ],',
+    '    "entities": [',
+    '      {',
+    '        "name": "Article",',
+    '        "fields": [',
+    '          { "name": "url",        "type": "url" },',
+    '          { "name": "title",      "type": "string" },',
+    '          { "name": "tags",       "type": "text" },',
+    '          { "name": "added_at",   "type": "datetime" },',
+    '          { "name": "read",       "type": "boolean" },',
+    '          { "name": "read_at",    "type": "datetime" }',
+    '        ]',
+    '      }',
+    '    ],',
+    '    "flows": [',
+    '      { "name": "add_article",   "description": "User pastes a URL and lands on the queue with the new item.",       "pages": ["add_article", "queue"] },',
+    '      { "name": "mark_as_read",  "description": "User toggles the read checkbox; the item moves from queue to archive.", "pages": ["queue", "archive"] }',
+    '    ],',
+    '    "auth": { "requires_auth": true, "per_user_isolation": true },',
+    '    "integrations": []',
+    '  },',
+    '  "open_questions": []',
+    '}',
+    '',
+    'Notice: three named pages (not one generic "main"), Article entity with concrete field types from the catalog (url / boolean / datetime), named flows linking pages, auth explicit (requires_auth + per_user_isolation), no integrations invented.',
+  ].join('\n');
+}
+
+function sectionFinalInstruction(): string {
+  return [
+    'PRODUCE THE EXTRACTION NOW',
+    'Return ONLY the JSON object described above. No prose. No fences.',
+  ].join('\n');
+}
+
+// ===========================================================================
+// REPAIR MESSAGE
+// ===========================================================================
 export function buildSoftwareRepairUserMessage(error: string): string {
-  return (
-    'Your previous response could not be parsed: ' + error + '\n\n' +
-    'Return ONLY the corrected JSON object — no prose, no markdown code fences. ' +
-    'Keep the same content, just fix the structure / fields that violated the schema.'
-  );
+  return [
+    'Your previous response could not be parsed: ' + error,
+    '',
+    'Return ONLY the corrected JSON object — no prose, no markdown code fences. Keep the spec content; fix the structure / fields that violated the schema. Continue to satisfy the SPEC QUALITY BAR (base + software addendum) you were given.',
+  ].join('\n');
 }

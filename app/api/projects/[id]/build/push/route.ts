@@ -7,6 +7,7 @@ import {
   GitHubPushError,
   pushBuildToGitHub,
 } from '@/lib/engine/integrations/github';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 import type { Build, BuildFile } from '@/lib/types';
 
@@ -232,11 +233,16 @@ export async function POST(req: Request, { params }: RouteContext) {
       .from('builds')
       .update({ status: 'push_failed' })
       .eq('id', build.id);
-    await supabase.from('audit_log').insert({
-      project_id: projectId,
+    // Enriched audit row with classified error category. Replaces the
+    // hand-rolled audit_log insert above so the timeline sees the
+    // category alongside the existing detail.
+    await auditEngineError({
+      supabase,
+      projectId,
       action: 'repo.push_failed',
+      err,
       actor: 'integration.github',
-      detail: { build_id: build.id, error: message },
+      extra: { build_id: build.id, error: message },
     });
     return NextResponse.json({ error: message }, { status: 502 });
   }

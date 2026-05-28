@@ -4,12 +4,15 @@
 // the source of truth even if a route forgot an ownership check.
 
 import { getServerSupabase, type ForgeSupabase } from '@/lib/supabase';
+import { engineLog } from '../log';
 import type {
   BudgetPeriod,
   CostEvent,
   CostEventKind,
   KeySource,
 } from '@/lib/types';
+
+const log = engineLog('ledger');
 import {
   llmCostUsd,
   runtimeCostUsd,
@@ -55,7 +58,10 @@ export async function recordCost(
       .select('id')
       .single();
     if (error || !data) {
-      console.error('[forge.ledger] insert failed:', error?.message);
+      log.error('insert failed', {
+        ref: input.ref ?? undefined,
+        error: error?.message ?? 'unknown',
+      });
       return { amount_usd: amount, event_id: null };
     }
     return { amount_usd: amount, event_id: (data as { id: string }).id };
@@ -63,7 +69,10 @@ export async function recordCost(
     // Ledger failures must NEVER blow up the calling path — but they MUST
     // be loud. The guard's fail-closed posture will block the next call
     // if budget calculation can't read the ledger.
-    console.error('[forge.ledger] threw:', err);
+    log.error('insert threw', {
+      ref: input.ref ?? undefined,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return { amount_usd: amount, event_id: null };
   }
 }

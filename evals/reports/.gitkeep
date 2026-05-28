@@ -1,0 +1,3 @@
+# evals/reports/ holds timestamped JSON eval reports.
+# Reports are kept locally for before/after comparison; they're
+# gitignored (see .gitignore) but this file holds the directory.

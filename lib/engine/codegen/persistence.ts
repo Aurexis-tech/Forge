@@ -308,3 +308,119 @@ export async function loadBuildFiles(
   if (error) throw error;
   return (data ?? []) as BuildFile[];
 }
+
+// ===========================================================================
+// CRITIQUE-REFINE AUDIT HELPERS
+//
+// Wrap the audit_log insert pattern for the five events the
+// engine-owned critique gate (lib/engine/codegen/critique.ts) can
+// emit. Per the gate's privacy posture, detail records META ONLY —
+// counts + per-criterion met/unmet + file path. NEVER the code
+// text, NEVER the critique note text. (Same posture as the
+// clarification-loop audit helpers in spec/persistence.ts.)
+//
+// The gate's CritiqueAuditHooks interface is structural; outer
+// callers wire these helpers into the hooks object by closing over
+// `supabase + projectId`.
+// ===========================================================================
+
+export interface CritiqueAuditArgsBase {
+  supabase: ForgeSupabase;
+  projectId: string;
+  filePath: string;
+  /** governance.ref so the audit trail correlates with the cost ledger. */
+  governanceRef?: string | null;
+}
+
+export async function logCodegenCritiqueStarted(
+  args: CritiqueAuditArgsBase,
+): Promise<void> {
+  await args.supabase.from('audit_log').insert({
+    project_id: args.projectId,
+    action: 'codegen.critique_started',
+    actor: 'engine.codegen',
+    detail: {
+      file_path: args.filePath,
+      governance_ref: args.governanceRef ?? null,
+    },
+  });
+}
+
+export interface CritiqueCompletedAuditArgs extends CritiqueAuditArgsBase {
+  overallScore: number;
+  criteriaMet: number;
+  criteriaTotal: number;
+  passesThreshold: boolean;
+}
+
+export async function logCodegenCritiqueCompleted(
+  args: CritiqueCompletedAuditArgs,
+): Promise<void> {
+  await args.supabase.from('audit_log').insert({
+    project_id: args.projectId,
+    action: 'codegen.critique_completed',
+    actor: 'engine.codegen',
+    detail: {
+      file_path: args.filePath,
+      overall_score: args.overallScore,
+      criteria_met: args.criteriaMet,
+      criteria_total: args.criteriaTotal,
+      passes_threshold: args.passesThreshold,
+      governance_ref: args.governanceRef ?? null,
+    },
+  });
+}
+
+export interface CritiqueRefineTriggeredAuditArgs
+  extends CritiqueAuditArgsBase {
+  overallScore: number;
+}
+
+export async function logCodegenRefineTriggered(
+  args: CritiqueRefineTriggeredAuditArgs,
+): Promise<void> {
+  await args.supabase.from('audit_log').insert({
+    project_id: args.projectId,
+    action: 'codegen.refine_triggered',
+    actor: 'engine.codegen',
+    detail: {
+      file_path: args.filePath,
+      overall_score: args.overallScore,
+      governance_ref: args.governanceRef ?? null,
+    },
+  });
+}
+
+export async function logCodegenRefineUsed(
+  args: CritiqueAuditArgsBase,
+): Promise<void> {
+  await args.supabase.from('audit_log').insert({
+    project_id: args.projectId,
+    action: 'codegen.refine_used',
+    actor: 'engine.codegen',
+    detail: {
+      file_path: args.filePath,
+      governance_ref: args.governanceRef ?? null,
+    },
+  });
+}
+
+export interface CritiqueRefineRejectedAuditArgs
+  extends CritiqueAuditArgsBase {
+  reason: 'static_check_failed' | 'regenerate_error';
+}
+
+export async function logCodegenRefineRejectedFallback(
+  args: CritiqueRefineRejectedAuditArgs,
+): Promise<void> {
+  await args.supabase.from('audit_log').insert({
+    project_id: args.projectId,
+    action: 'codegen.refine_rejected_fallback',
+    actor: 'engine.codegen',
+    detail: {
+      file_path: args.filePath,
+      reason: args.reason,
+      governance_ref: args.governanceRef ?? null,
+    },
+  });
+}

@@ -4,6 +4,7 @@ import { ensureBYOK, needsKeyResponse } from '@/lib/route-needs-key';
 import { NeedsKeyError } from '@/lib/engine/keys';
 import { LLMError } from '@/lib/engine/llm';
 import { CodegenError, generateCode } from '@/lib/engine/codegen/generate';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import {
   completeCodegen,
   ensureCodegenBuild,
@@ -82,6 +83,19 @@ export async function POST(_req: Request, { params }: RouteContext) {
         .eq('id', build.id);
       return needsKeyResponse(err)!;
     }
+    // Thread the EngineError category / code / userMessage into the
+    // audit trail so the Forge timeline + the (next-prompt) UI panel
+    // distinguish a transient blip from a real bug at a glance. The
+    // helper classifies the throw and writes ONE audit_log row with
+    // the standardised detail keys.
+    await auditEngineError({
+      supabase,
+      projectId,
+      action: 'codegen.run_failed',
+      err,
+      actor: 'engine.codegen',
+      extra: { build_id: build.id },
+    });
     const message = describeError(err);
     await markBuildFailed(supabase, build.id, projectId, message);
     return NextResponse.json({ error: message }, { status: 502 });

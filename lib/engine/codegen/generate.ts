@@ -21,8 +21,18 @@ import {
   CODEGEN_SYSTEM_PROMPT,
   buildCodegenRepairMessage,
   buildCodegenUserMessage,
+  type HandoffContract,
 } from './prompts';
+import {
+  buildRefinementContextMessage,
+  critiqueAndRefine,
+  type CritiqueAuditHooks,
+} from './critique';
 import { resolveScaffold, type ScaffoldFile } from './scaffold';
+import {
+  dedupeSelectedToolNames,
+  mergePackageJsonDependencies,
+} from '../tools';
 import {
   staticCheckFile,
   type StaticCheckResult,
@@ -77,6 +87,24 @@ export async function generateCode(args: {
     );
   }
   const scaffoldPaths = new Set(scaffold.files.map((f) => f.path));
+
+  // Tools this build actually uses — drives the package.json dependency
+  // merge below so a build only ships deps for the tools it selected.
+  // Computed early so a dependency-version conflict fails the build
+  // BEFORE any LLM spend.
+  const selectedToolNames = dedupeSelectedToolNames(
+    plan.tools.map((t) => t.registry_id),
+  );
+
+  // Merge the selected tools' scaffoldDependencies into the base
+  // package.json now — a version conflict throws a typed EngineError
+  // here, before any LLM spend.
+  const basePackageJson =
+    scaffold.files.find((f) => f.path === 'package.json')?.content ?? null;
+  const mergedPackageJson =
+    basePackageJson === null
+      ? null
+      : mergePackageJsonDependencies(basePackageJson, selectedToolNames);
 
   // --- 2. Determine LLM targets --------------------------------------------
   // Every plan file that is NOT in the scaffold becomes an LLM target.
@@ -181,7 +209,13 @@ export async function generateCode(args: {
   // --- 4. Static-check scaffold files (sanity — must always pass) ----------
   const scaffoldWithChecks: GeneratedFile[] = [];
   for (const f of scaffold.files) {
-    const sc = await staticCheckFile(f.path, f.content);
+    // package.json gets the per-build merged dependencies; every other
+    // scaffold file ships verbatim.
+    const content =
+      f.path === 'package.json' && mergedPackageJson !== null
+        ? mergedPackageJson
+        : f.content;
+    const sc = await staticCheckFile(f.path, content);
     if (!sc.ok) {
       warnings.push(
         "Scaffold file '" + f.path + "' failed static check — this is a Forge bug.",
@@ -189,9 +223,9 @@ export async function generateCode(args: {
     }
     scaffoldWithChecks.push({
       path: f.path,
-      content: f.content,
+      content,
       source: 'scaffold',
-      bytes: byteLength(f.content),
+      bytes: byteLength(content),
       staticCheck: sc,
     });
   }
@@ -250,6 +284,24 @@ export interface GenerateOneAgentFileArgs {
     source: 'scaffold' | 'generated';
   }>;
   governance: GovernanceScope;
+  /**
+   * Optional handoff contract — present only when this call comes
+   * from the Phase 2 system codegen path (one module per node). The
+   * prompt assembler renders an explicit HANDOFF CONTRACT section so
+   * the per-node module is generated with its neighbours in mind.
+   *
+   * Phase 1 (single-agent) callers leave this undefined; the
+   * assembler omits the section entirely.
+   */
+  handoffContract?: HandoffContract;
+  /**
+   * Optional audit hooks for the critique-refine gate. Wired by
+   * outer callers that have supabase + project context. Without
+   * hooks the gate still runs (when enabled) and threads through
+   * the cost ledger, but emits no audit_log rows — useful in
+   * sandbox / test contexts.
+   */
+  critiqueAudit?: CritiqueAuditHooks;
 }
 
 export interface GenerateOneAgentFileOutput {
@@ -270,6 +322,7 @@ export async function generateOneAgentFile(
     filePath: args.filePath,
     filePurpose: args.filePurpose,
     allFiles: args.allFiles,
+    handoffContract: args.handoffContract,
   });
 
   // --- Pass 1 ---
@@ -284,8 +337,15 @@ export async function generateOneAgentFile(
   const content1 = sanitiseFileOutput(first.text);
   const check1 = await staticCheckFile(args.filePath, content1);
   if (check1.ok) {
-    return {
+    // Static-check passed on pass-1 — apply the critique-refine
+    // gate (no-op when CRITIQUE_GATE_ENABLED is false).
+    const gated = await applyCritiqueGate({
+      args,
+      userMessage,
       content: content1,
+    });
+    return {
+      content: gated.content,
       usage: first.usage,
       model: first.model,
       attempts: 1,
@@ -309,13 +369,81 @@ export async function generateOneAgentFile(
   const content2 = sanitiseFileOutput(repair.text);
   const check2 = await staticCheckFile(args.filePath, content2);
 
+  // Critique-refine ONLY runs when the candidate passed
+  // static-check. When the repair still failed (check2.ok=false),
+  // we surface the broken candidate to the caller as-is — the
+  // critique gate doesn't try to grade un-compilable code.
+  let finalContent = content2;
+  if (check2.ok) {
+    const gated = await applyCritiqueGate({
+      args,
+      userMessage,
+      content: content2,
+    });
+    finalContent = gated.content;
+  }
+
   return {
-    content: content2,
+    content: finalContent,
     usage: sumUsage(first.usage, repair.usage),
     model: repair.model,
     attempts: 2,
     staticCheck: check2,
   };
+}
+
+// ---------------------------------------------------------------------------
+// CRITIQUE GATE — bridges the existing per-file generator into the
+// engine-owned critique-refine helper (./critique.ts). Returns the
+// (possibly-refined) code; never throws — the helper falls back to
+// the original on any error. Pure passthrough when the env flag is
+// off.
+// ---------------------------------------------------------------------------
+
+interface ApplyCritiqueGateArgs {
+  args: GenerateOneAgentFileArgs;
+  /** The exact user message used for pass-1 / repair. */
+  userMessage: string;
+  /** The candidate code that has already passed static-check. */
+  content: string;
+}
+
+async function applyCritiqueGate(
+  input: ApplyCritiqueGateArgs,
+): Promise<{ content: string }> {
+  const { args, userMessage, content } = input;
+  const result = await critiqueAndRefine({
+    code: content,
+    filePath: args.filePath,
+    filePurpose: args.filePurpose,
+    // Anchor the critic with one sentence from the spec — keeps the
+    // critique grounded without re-sending the whole spec blob.
+    specSummary: args.spec.goal,
+    governance: args.governance,
+    audit: args.critiqueAudit,
+    regenerate: async ({ previousCode, critique, governance }) => {
+      // Re-call the codegen pipeline using the SAME system prompt +
+      // user message, plus the prior code + the critic's notes as
+      // the next turn. Reuses the existing prompt context — only
+      // the critique is new.
+      const refine = await complete({
+        model: CODEGEN_MODEL,
+        system: CODEGEN_SYSTEM_PROMPT,
+        messages: [
+          { role: 'user', content: userMessage },
+          { role: 'assistant', content: previousCode },
+          {
+            role: 'user',
+            content: buildRefinementContextMessage(critique, previousCode),
+          },
+        ],
+        maxTokens: 4000,
+        governance,
+      });
+      return sanitiseFileOutput(refine.text);
+    },
+  });
+  return { content: result.code };
 }
 
 // --- Helpers ---------------------------------------------------------------

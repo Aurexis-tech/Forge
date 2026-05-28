@@ -27,6 +27,7 @@ import {
 } from '@/lib/engine/integrations/vercel';
 import { BuildPlanSchema, type BuildPlan } from '@/lib/engine/planner/schema';
 import { AgentSpecSchema, type AgentSpec } from '@/lib/engine/spec/schema';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 import type {
   Build,
@@ -348,11 +349,16 @@ export async function POST(req: Request, { params }: RouteContext) {
       .update({ status: 'failed' })
       .eq('id', depId);
 
-    await supabase.from('audit_log').insert({
-      project_id: projectId,
+    // Enriched audit row with classified error category. Replaces the
+    // hand-rolled audit_log insert above so the timeline sees the
+    // category alongside the existing detail.
+    await auditEngineError({
+      supabase,
+      projectId,
       action: 'deploy.failed',
+      err,
       actor: 'integration.vercel',
-      detail: {
+      extra: {
         build_id: build.id,
         error: message,
         log_tail: logTail ? logTail.slice(-2000) : null,

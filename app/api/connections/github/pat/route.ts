@@ -13,6 +13,7 @@ import { NextResponse } from 'next/server';
 import { Octokit } from '@octokit/rest';
 import { z } from 'zod';
 import { requireUser, UnauthorizedError } from '@/lib/auth';
+import { withRetry } from '@/lib/engine/retry';
 import { upsertConnection } from '@/lib/engine/integrations/connections';
 import { getServerSupabase } from '@/lib/supabase';
 
@@ -56,7 +57,12 @@ export async function POST(req: Request) {
   let login = 'unknown';
   let scopes: string | null = null;
   try {
-    const res = await octokit.users.getAuthenticated();
+    // Retry transient GitHub blips (5xx/429/network). Bad-token
+    // (401/403) is non-retriable — the loop exits on first attempt.
+    const res = await withRetry(
+      () => octokit.users.getAuthenticated(),
+      { maxAttempts: 3, baseDelayMs: 500 },
+    );
     login = res.data.login ?? 'unknown';
     const rawScopes = res.headers['x-oauth-scopes'];
     scopes = typeof rawScopes === 'string' && rawScopes.length > 0

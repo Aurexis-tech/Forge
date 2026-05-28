@@ -13,6 +13,7 @@ import {
   persistRunnerResult,
 } from '@/lib/engine/sandbox/persistence';
 import { runSandbox } from '@/lib/engine/sandbox/runner';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -98,6 +99,17 @@ export async function POST(_req: Request, { params }: RouteContext) {
         .eq('id', build.id);
       return needsKeyResponse(err)!;
     }
+    // Thread the EngineError category / code / userMessage into
+    // the audit trail so the Forge timeline distinguishes a
+    // transient sandbox blip from a real bug.
+    await auditEngineError({
+      supabase,
+      projectId,
+      action: 'sandbox.run_failed',
+      err,
+      actor: 'engine.sandbox',
+      extra: { build_id: build.id, sandbox_run_id: run.id },
+    });
     const message = err instanceof Error ? err.message : String(err);
     await markRunCrashed(supabase, run.id, build, message);
     return NextResponse.json({ error: message }, { status: 502 });

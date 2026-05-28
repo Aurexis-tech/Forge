@@ -61,6 +61,11 @@ export interface Spec {
   // Defaults to 'agent' for every row created before Phase 2.
   kind: ProjectKind | string;
   created_at: string;
+  // Spec-fidelity leg: optional per-top-level-field confidence map
+  // (stated | inferred | guessed | missing). Added by migration 0028.
+  // Existing reads ignore it; the show-spec gate UI consumes it via
+  // components/spec/confidence-display.ts. Null for historical rows.
+  confidence_json?: Json | null;
 }
 
 export type PlanStatus =

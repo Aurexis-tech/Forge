@@ -32,6 +32,7 @@ import {
   persistSoftwareRunnerResult,
 } from '@/lib/engine/software/sandbox/persistence';
 import { runSoftwareSandbox } from '@/lib/engine/software/sandbox/runner';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -123,6 +124,14 @@ export async function POST(_req: Request, { params }: RouteContext) {
         .eq('id', build.id);
       return needsKeyResponse(err)!;
     }
+    await auditEngineError({
+      supabase,
+      projectId,
+      action: 'software.sandbox_failed',
+      err,
+      actor: 'engine.software.sandbox',
+      extra: { build_id: build.id, sandbox_run_id: run.id },
+    });
     const message = err instanceof Error ? err.message : String(err);
     await markSoftwareSandboxRunCrashed(supabase, run.id, build, message);
     return NextResponse.json({ error: message }, { status: 502 });

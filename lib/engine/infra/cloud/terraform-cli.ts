@@ -36,6 +36,8 @@ import type {
   ResourceAction,
 } from './provider';
 import { sanitizeJsonForLog } from './provider';
+import { EngineError } from '../../errors';
+import { withRetry } from '../../retry';
 
 const PLAN_TIMEOUT_MS = 5 * 60_000;
 
@@ -63,7 +65,7 @@ export class TerraformCliProvider implements CloudProvider {
         await writeFile(dest, f.content, 'utf8');
       }
 
-      await run('terraform', ['init', '-input=false', '-no-color'], {
+      await runWithRetry('terraform', ['init', '-input=false', '-no-color'], {
         cwd: dir,
         envExtras: creds.env,
       });
@@ -71,7 +73,7 @@ export class TerraformCliProvider implements CloudProvider {
       // it back to `terraform apply` verbatim. -out= is what locks
       // confirm-vs-apply parity.
       const artifactPath = join(dir, 'aurexis.tfplan');
-      const planOutput = await run(
+      const planOutput = await runWithRetry(
         'terraform',
         [
           'plan',
@@ -123,7 +125,7 @@ export class TerraformCliProvider implements CloudProvider {
         Buffer.from(input.planArtifactB64, 'base64'),
       );
 
-      await run('terraform', ['init', '-input=false', '-no-color'], {
+      await runWithRetry('terraform', ['init', '-input=false', '-no-color'], {
         cwd: dir,
         envExtras: creds.env,
         signal: input.signal,
@@ -132,7 +134,7 @@ export class TerraformCliProvider implements CloudProvider {
       let aborted = false;
       let errorMessage: string | null = null;
       try {
-        await run(
+        await runWithRetry(
           'terraform',
           [
             'apply',
@@ -227,7 +229,7 @@ export class TerraformCliProvider implements CloudProvider {
       // as it's on disk in the child's workdir.
       state = null;
 
-      await run('terraform', ['init', '-input=false', '-no-color'], {
+      await runWithRetry('terraform', ['init', '-input=false', '-no-color'], {
         cwd: dir,
         envExtras: creds.env,
         signal: input.signal,
@@ -236,7 +238,7 @@ export class TerraformCliProvider implements CloudProvider {
       let aborted = false;
       let errorMessage: string | null = null;
       try {
-        await run(
+        await runWithRetry(
           'terraform',
           [
             'destroy',
@@ -419,6 +421,62 @@ interface RunOptions {
   // stopping. The route layer attaches a kill-switch watcher to this
   // signal.
   signal?: AbortSignal;
+}
+
+// Retry transient terraform shell-outs. The cloud APIs terraform
+// talks to (AWS / GCP / Azure / Supabase Management) have routine
+// 5xx / 429 / DNS / timeout blips; without retry, a single
+// transient failure forces a whole plan/apply rerun.
+//
+// We classify by INSPECTING the stderr tail of a TerraformCliError
+// — terraform surfaces provider failures there. Anything that
+// looks transient flips the thrown error to a retriable
+// EngineError; everything else (real validation failures, syntax
+// errors, etc.) propagates as-is so the retry helper sees a
+// non-retriable error and gives up.
+async function runWithRetry(
+  bin: string,
+  args: ReadonlyArray<string>,
+  opts: RunOptions,
+): Promise<string> {
+  return withRetry(
+    async () => {
+      try {
+        return await run(bin, args, opts);
+      } catch (err) {
+        throw transientifyTerraformError(err);
+      }
+    },
+    {
+      // 3 attempts: original + 2 retries. Same defaults as
+      // complete()'s LLM wrap.
+      maxAttempts: 3,
+      // Terraform blips often recover within seconds; the helper's
+      // default 500ms base is fine, but provider-level 429 hints
+      // (when present) take precedence via the classifier.
+    },
+  );
+}
+
+const TERRAFORM_TRANSIENT_RE =
+  /(5\d\d\b|service\s+temporarily|temporarily\s+unavailable|connection\s+(reset|refused)|timed?\s*out|too\s+many\s+requests|\b429\b|rate\s+limit|throttl|no\s+such\s+host|EAI_AGAIN|dial\s+tcp)/i;
+
+function transientifyTerraformError(err: unknown): unknown {
+  if (err instanceof TerraformCliError) {
+    const haystack = (err.message + ' ' + (err.logTail ?? '')).toLowerCase();
+    if (TERRAFORM_TRANSIENT_RE.test(haystack)) {
+      return new EngineError({
+        category: 'transient_provider',
+        code: 'terraform_transient',
+        message: 'Terraform CLI transient failure: ' + err.message,
+        userMessage:
+          'The cloud provider had a transient blip during terraform — retrying.',
+        cause: err,
+        retriable: true,
+      });
+    }
+  }
+  return err;
 }
 
 async function run(

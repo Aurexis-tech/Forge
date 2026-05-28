@@ -35,6 +35,7 @@ import {
   InfraExtractionError,
 } from '@/lib/engine/infra/extract';
 import { persistInfraExtractionResult } from '@/lib/engine/infra/persistence';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -305,6 +306,14 @@ export async function POST(req: Request, { params }: RouteContext) {
       await markSpecFailed(supabase, spec.id, projectId, body.error);
       return NextResponse.json(body, { status });
     }
+    await auditEngineError({
+      supabase,
+      projectId,
+      action: 'spec.extract_failed',
+      err,
+      actor: 'engine.spec',
+      extra: { spec_id: spec.id },
+    });
     const message = describeError(err);
     await markSpecFailed(supabase, spec.id, projectId, message);
     return NextResponse.json({ error: message }, { status: 502 });

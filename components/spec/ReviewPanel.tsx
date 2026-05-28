@@ -5,14 +5,24 @@ import { useState, type FormEvent } from 'react';
 import { GlassPanel } from '@/components/GlassPanel';
 import { useForgeStore } from '@/lib/store';
 import { SpecView } from './SpecView';
+import { UncertaintyStrip } from './UncertaintyStrip';
+import type { SpecConfidence } from './confidence-display';
 import type { AgentSpec } from '@/lib/engine/spec/schema';
 
 interface Props {
   projectId: string;
   spec: AgentSpec;
+  /**
+   * Optional per-top-level-field confidence map. When present, the
+   * gate surfaces a "needs your attention" strip above the spec
+   * body + per-field badges inside SpecView. When absent
+   * (historical specs without the confidence_json column populated)
+   * the gate renders exactly as before — zero regression.
+   */
+  confidence?: SpecConfidence | null;
 }
 
-export function ReviewPanel({ projectId, spec }: Props) {
+export function ReviewPanel({ projectId, spec, confidence }: Props) {
   const router = useRouter();
   const setCoreState = useForgeStore((s) => s.setCoreState);
   const [confirming, setConfirming] = useState(false);
@@ -83,7 +93,9 @@ export function ReviewPanel({ projectId, spec }: Props) {
           </p>
         </div>
 
-        <SpecView spec={spec} />
+        <UncertaintyStrip mold="agent" confidence={confidence} />
+
+        <SpecView spec={spec} confidence={confidence} />
 
         {error ? (
           <p

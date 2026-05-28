@@ -17,6 +17,7 @@ import { assertAllowed, GovernanceError } from './governance/guard';
 import { recordCost } from './governance/ledger';
 import { projectedLlmCostUsd } from './governance/pricing';
 import { NeedsKeyError, resolveKey } from './keys';
+import { withRetry } from './retry';
 
 export const SPEC_MODEL: string =
   process.env.ANTHROPIC_MODEL?.trim() || 'claude-sonnet-4-6';
@@ -131,86 +132,115 @@ export async function complete(opts: CompleteOptions): Promise<LLMResult> {
   const anthropic = getClient(resolved.key);
 
   // --- governance: assertAllowed BEFORE we burn money -------------------
+  // assertAllowed + the SDK call run TOGETHER inside the retry loop —
+  // each attempt re-checks the kill switch + budget gate (so a flip
+  // mid-loop stops further retries) and re-issues the request. The
+  // classifier in errors.ts marks GovernanceError + NeedsKeyError +
+  // any 4xx (except 429) as non-retriable, so transient 5xx / 429 /
+  // network blips are the only things that loop.
   const promptChars =
     (opts.system ?? '').length +
     opts.messages.reduce((acc, m) => acc + m.content.length, 0);
-  try {
-    await assertAllowed({
-      user_id: governance.user_id,
-      project_id: governance.project_id ?? null,
-      projectedCostUsd: projectedLlmCostUsd({
-        model,
-        promptChars,
-        maxOutputTokens: maxTokens,
-      }),
-      keySource: resolved.source,
-    });
-  } catch (err) {
-    if (err instanceof GovernanceError) throw err;
-    throw err;
-  }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // The retry loop. The retry helper threads the attempt number +
+  // attemptRef ('', '.retry.1', '.retry.2', ...) through, which we
+  // append to the ledger ref so each successful billed call lands
+  // in cost_events under a distinguishable key.
+  const { resp, attemptRef } = await withRetry(
+    async (ctx) => {
+      // PER-ATTEMPT GATE — every retry re-checks governance.
+      await assertAllowed({
+        user_id: governance.user_id,
+        project_id: governance.project_id ?? null,
+        projectedCostUsd: projectedLlmCostUsd({
+          model,
+          promptChars,
+          maxOutputTokens: maxTokens,
+        }),
+        keySource: resolved.source,
+      });
 
-  try {
-    const resp = await anthropic.messages.create(
-      {
-        model,
-        max_tokens: maxTokens,
-        ...(opts.system ? { system: opts.system } : {}),
-        messages: opts.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-      },
-      { signal: controller.signal },
-    );
-
-    // Concat every text block (tool_use / thinking blocks contribute nothing
-    // here). Using narrowing rather than an SDK-specific type alias keeps
-    // this robust across @anthropic-ai/sdk minor version bumps.
-    const text = resp.content
-      .map((block) => (block.type === 'text' ? block.text : ''))
-      .join('');
-
-    const usage: LLMUsage = {
-      input_tokens: resp.usage.input_tokens,
-      output_tokens: resp.usage.output_tokens,
-    };
-
-    // --- governance: recordCost AFTER, with REAL usage ------------------
-    // Failures inside recordCost are logged but never thrown; the next
-    // guard call will block if the ledger is somehow broken. key_source
-    // attributes whose fuel this event drew on.
-    void recordCost({
-      user_id: governance.user_id,
-      project_id: governance.project_id ?? null,
-      kind: 'llm',
-      model: resp.model,
-      input_tokens: usage.input_tokens,
-      output_tokens: usage.output_tokens,
-      key_source: resolved.source,
-      ref: governance.ref ?? null,
-    });
-
-    return {
-      text,
-      usage,
-      model: resp.model,
-      stop_reason: resp.stop_reason ?? null,
-    };
-  } catch (err) {
-    if (controller.signal.aborted) {
-      throw new LLMError(`LLM request timed out after ${timeoutMs}ms`, err);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const innerResp = await anthropic.messages.create(
+          {
+            model,
+            max_tokens: maxTokens,
+            ...(opts.system ? { system: opts.system } : {}),
+            messages: opts.messages.map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
+          },
+          { signal: controller.signal },
+        );
+        return { resp: innerResp, attemptRef: ctx.attemptRef };
+      } catch (err) {
+        // Preserve the LLMError envelope for downstream callers that
+        // catch `LLMError` (the existing public contract). The retry
+        // helper's classifier reads `.status` / network shapes off the
+        // RAW thrown error, so we attach the original as `cause`
+        // before re-throwing — classifyError unwraps via `cause` when
+        // necessary; here we throw the raw to keep classification
+        // straightforward, then re-wrap as LLMError ONLY when the
+        // retry loop has given up.
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    {
+      baseRef: governance.ref,
+      // 3 attempts: pass-1 + 2 retries. The defaults from retry.ts.
+      maxAttempts: 3,
+    },
+  ).catch((err: unknown) => {
+    // The retry helper threw a CLASSIFIED EngineError. Preserve the
+    // LLMError public contract for callers that catch it explicitly.
+    if (err && typeof err === 'object' && 'message' in err) {
+      throw new LLMError(String((err as { message: unknown }).message), err);
     }
-    throw new LLMError(
-      err instanceof Error ? err.message : 'LLM request failed',
-      err,
-    );
-  } finally {
-    clearTimeout(timer);
-  }
+    throw new LLMError('LLM request failed', err);
+  });
+
+  // Concat every text block (tool_use / thinking blocks contribute nothing
+  // here). Using narrowing rather than an SDK-specific type alias keeps
+  // this robust across @anthropic-ai/sdk minor version bumps.
+  const text = resp.content
+    .map((block) => (block.type === 'text' ? block.text : ''))
+    .join('');
+
+  const usage: LLMUsage = {
+    input_tokens: resp.usage.input_tokens,
+    output_tokens: resp.usage.output_tokens,
+  };
+
+  // --- governance: recordCost AFTER, with REAL usage --------------------
+  // Failures inside recordCost are logged but never thrown; the next
+  // guard call will block if the ledger is somehow broken. key_source
+  // attributes whose fuel this event drew on. The attemptRef (e.g.
+  // '.retry.1') suffix is appended so retries are independently
+  // visible in cost_events under the same base ref.
+  void recordCost({
+    user_id: governance.user_id,
+    project_id: governance.project_id ?? null,
+    kind: 'llm',
+    model: resp.model,
+    input_tokens: usage.input_tokens,
+    output_tokens: usage.output_tokens,
+    key_source: resolved.source,
+    ref: (governance.ref ?? null) === null
+      ? null
+      : (governance.ref ?? '') + attemptRef,
+  });
+
+  return {
+    text,
+    usage,
+    model: resp.model,
+    stop_reason: resp.stop_reason ?? null,
+  };
 }
 
 export function sumUsage(...parts: LLMUsage[]): LLMUsage {

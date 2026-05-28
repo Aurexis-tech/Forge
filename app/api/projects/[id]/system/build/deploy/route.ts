@@ -49,6 +49,7 @@ import {
   markSystemDeploymentFailed,
   markSystemDeploymentReady,
 } from '@/lib/engine/system/integrations/persistence';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 import type { BuildPlan } from '@/lib/engine/planner/schema';
 
@@ -219,6 +220,18 @@ export async function POST(req: Request, { params }: RouteContext) {
     await markSystemBuildDeployFailed(supabase, build.id);
     await markSystemDeploymentFailed(supabase, depRow.id);
     await logSystemDeployFailed(supabase, build, message, logTail);
+    await auditEngineError({
+      supabase,
+      projectId,
+      action: 'system.deploy_failed',
+      err,
+      actor: 'integration.vercel',
+      extra: {
+        build_id: build.id,
+        error: message,
+        log_tail: logTail ? logTail.slice(-2000) : null,
+      },
+    });
 
     return NextResponse.json(
       { error: message, log_tail: logTail },

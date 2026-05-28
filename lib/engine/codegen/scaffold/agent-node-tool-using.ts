@@ -5,15 +5,25 @@
 // files by copying — the LLM never touches them. The LLM-generated agent
 // logic imports from this scaffold (tool library + runtime harness).
 //
+// SOURCE-OF-TRUTH CHANGE (tool-contract migration): the per-tool source
+// files (src/lib/tools/<name>.ts), the tool barrel (index.ts), and the
+// compact SCAFFOLD_TOOL_INTERFACE are now DERIVED from the engine tool
+// contract (lib/engine/tools/builtin). The boilerplate files
+// (package.json, tsconfig, README, types.ts, runtime.ts) remain fixed
+// here. Adding/removing a builtin tool flows through automatically while
+// the shipped output for the existing 8 tools stays byte-identical.
+//
 // IMPORTANT: This module is data only. It never executes the scaffold
 // contents — that's the next layer's job (sandbox).
+
+import { PLANNER_TOOLS } from '../../tools/builtin';
 
 export interface ScaffoldFile {
   readonly path: string;
   readonly content: string;
 }
 
-// ----- file contents -------------------------------------------------------
+// ----- fixed boilerplate file contents -------------------------------------
 
 const PACKAGE_JSON = `{
   "name": "forge-agent",
@@ -108,373 +118,6 @@ export function isMockMode(ctx: ToolContext): boolean {
 }
 `;
 
-const TOOLS_INDEX_TS = `export type { Tool, ToolContext } from './types.js';
-export { requireEnv, isMockMode } from './types.js';
-export { web_search } from './web_search.js';
-export { http_request } from './http_request.js';
-export { llm_completion } from './llm_completion.js';
-export { file_read } from './file_read.js';
-export { file_write } from './file_write.js';
-export { schedule } from './schedule.js';
-export { email_read } from './email_read.js';
-export { email_send } from './email_send.js';
-`;
-
-const TOOL_WEB_SEARCH_TS = `import type { Tool } from './types.js';
-import { isMockMode } from './types.js';
-
-export interface WebSearchInput {
-  query: string;
-  limit?: number;
-}
-export interface WebSearchResult {
-  title: string;
-  url: string;
-  snippet: string;
-}
-export interface WebSearchOutput {
-  results: WebSearchResult[];
-}
-
-// Lightweight HTTP-based web search. Configure WEB_SEARCH_URL to point at a
-// JSON-returning search endpoint that accepts a \`q\` query parameter and
-// returns { results: WebSearchResult[] }. With no endpoint configured the
-// tool resolves to an empty result list rather than failing — generated
-// agents should handle that case.
-export const web_search: Tool<WebSearchInput, WebSearchOutput> = {
-  id: 'web_search',
-  description: 'Search the public web. Configure WEB_SEARCH_URL.',
-  async call({ query, limit }, ctx) {
-    if (isMockMode(ctx)) {
-      ctx.log('web_search.mock', { query, limit });
-      return {
-        results: [
-          {
-            title: 'Mock result for: ' + query,
-            url: 'https://example.com/mock',
-            snippet: 'Mocked snippet — no real network call was made.',
-          },
-        ],
-      };
-    }
-    const endpoint = ctx.env.WEB_SEARCH_URL;
-    ctx.log('web_search', { query, limit });
-    if (!endpoint) {
-      return { results: [] };
-    }
-    const url = new URL(endpoint);
-    url.searchParams.set('q', query);
-    if (limit != null) url.searchParams.set('limit', String(limit));
-    const res = await fetch(url, { headers: { accept: 'application/json' } });
-    if (!res.ok) {
-      throw new Error('web_search HTTP ' + res.status);
-    }
-    const data = (await res.json()) as WebSearchOutput;
-    return data;
-  },
-};
-`;
-
-const TOOL_HTTP_REQUEST_TS = `import type { Tool } from './types.js';
-import { isMockMode } from './types.js';
-
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-
-export interface HttpRequestInput {
-  url: string;
-  method?: HttpMethod;
-  headers?: Record<string, string>;
-  body?: string | Record<string, unknown>;
-}
-export interface HttpRequestOutput {
-  status: number;
-  ok: boolean;
-  headers: Record<string, string>;
-  body: string;
-}
-
-export const http_request: Tool<HttpRequestInput, HttpRequestOutput> = {
-  id: 'http_request',
-  description: 'Make an arbitrary HTTP request and return the response.',
-  async call(input, ctx) {
-    if (isMockMode(ctx)) {
-      ctx.log('http_request.mock', { url: input.url, method: input.method });
-      return {
-        status: 200,
-        ok: true,
-        headers: { 'content-type': 'application/json' },
-        body: '{"mocked": true}',
-      };
-    }
-    const method: HttpMethod = input.method ?? 'GET';
-    const headers: Record<string, string> = { ...(input.headers ?? {}) };
-    let body: BodyInit | undefined;
-    if (input.body != null) {
-      if (typeof input.body === 'string') {
-        body = input.body;
-      } else {
-        body = JSON.stringify(input.body);
-        if (!headers['content-type'] && !headers['Content-Type']) {
-          headers['content-type'] = 'application/json';
-        }
-      }
-    }
-    ctx.log('http_request', { method, url: input.url });
-    const res = await fetch(input.url, { method, headers, body });
-    const text = await res.text();
-    const resHeaders: Record<string, string> = {};
-    res.headers.forEach((v, k) => {
-      resHeaders[k] = v;
-    });
-    return { status: res.status, ok: res.ok, headers: resHeaders, body: text };
-  },
-};
-`;
-
-const TOOL_LLM_COMPLETION_TS = `import Anthropic from '@anthropic-ai/sdk';
-import type { Tool } from './types.js';
-import { isMockMode, requireEnv } from './types.js';
-
-export interface LlmCompletionInput {
-  user: string;
-  system?: string;
-  model?: string;
-  maxTokens?: number;
-}
-export interface LlmCompletionOutput {
-  text: string;
-  input_tokens: number;
-  output_tokens: number;
-  model: string;
-}
-
-let client: Anthropic | null = null;
-function getClient(apiKey: string): Anthropic {
-  if (!client) client = new Anthropic({ apiKey });
-  return client;
-}
-
-export const llm_completion: Tool<LlmCompletionInput, LlmCompletionOutput> = {
-  id: 'llm_completion',
-  description: 'Run a single Anthropic LLM completion.',
-  async call(input, ctx) {
-    if (isMockMode(ctx)) {
-      ctx.log('llm_completion.mock', { prompt_chars: input.user.length });
-      return {
-        text: 'Mock LLM response (sandbox smoke test — no real API call).',
-        input_tokens: 0,
-        output_tokens: 0,
-        model: 'mock',
-      };
-    }
-    const apiKey = requireEnv(ctx, 'ANTHROPIC_API_KEY');
-    const c = getClient(apiKey);
-    const model = input.model ?? ctx.env.AGENT_LLM_MODEL ?? 'claude-sonnet-4-6';
-    const max_tokens = input.maxTokens ?? 2048;
-    ctx.log('llm_completion', { model, max_tokens });
-    const resp = await c.messages.create({
-      model,
-      max_tokens,
-      ...(input.system ? { system: input.system } : {}),
-      messages: [{ role: 'user', content: input.user }],
-    });
-    const text = resp.content
-      .map((b) => (b.type === 'text' ? b.text : ''))
-      .join('');
-    return {
-      text,
-      input_tokens: resp.usage.input_tokens,
-      output_tokens: resp.usage.output_tokens,
-      model: resp.model,
-    };
-  },
-};
-`;
-
-const TOOL_FILE_READ_TS = `import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import type { Tool } from './types.js';
-import { isMockMode } from './types.js';
-
-export interface FileReadInput {
-  path: string;
-}
-export interface FileReadOutput {
-  path: string;
-  content: string;
-  bytes: number;
-}
-
-function workspaceRoot(env: NodeJS.ProcessEnv): string {
-  return resolve(env.AGENT_WORKSPACE ?? process.cwd());
-}
-
-export const file_read: Tool<FileReadInput, FileReadOutput> = {
-  id: 'file_read',
-  description: 'Read a UTF-8 text file from the agent workspace.',
-  async call({ path }, ctx) {
-    if (isMockMode(ctx)) {
-      ctx.log('file_read.mock', { path });
-      return { path, content: 'mock file contents', bytes: 19 };
-    }
-    const root = workspaceRoot(ctx.env);
-    const full = resolve(root, path);
-    if (!full.startsWith(root)) {
-      throw new Error('[forge-agent] file_read path escapes workspace');
-    }
-    ctx.log('file_read', { path });
-    const content = await readFile(full, 'utf8');
-    return { path, content, bytes: Buffer.byteLength(content, 'utf8') };
-  },
-};
-`;
-
-const TOOL_FILE_WRITE_TS = `import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import type { Tool } from './types.js';
-import { isMockMode } from './types.js';
-
-export interface FileWriteInput {
-  path: string;
-  content: string;
-}
-export interface FileWriteOutput {
-  path: string;
-  bytes: number;
-}
-
-function workspaceRoot(env: NodeJS.ProcessEnv): string {
-  return resolve(env.AGENT_WORKSPACE ?? process.cwd());
-}
-
-export const file_write: Tool<FileWriteInput, FileWriteOutput> = {
-  id: 'file_write',
-  description: 'Write a UTF-8 text file to the agent workspace.',
-  async call({ path, content }, ctx) {
-    if (isMockMode(ctx)) {
-      ctx.log('file_write.mock', { path, bytes: content.length });
-      return { path, bytes: content.length };
-    }
-    const root = workspaceRoot(ctx.env);
-    const full = resolve(root, path);
-    if (!full.startsWith(root)) {
-      throw new Error('[forge-agent] file_write path escapes workspace');
-    }
-    ctx.log('file_write', { path, bytes: content.length });
-    await mkdir(dirname(full), { recursive: true });
-    await writeFile(full, content, 'utf8');
-    return { path, bytes: Buffer.byteLength(content, 'utf8') };
-  },
-};
-`;
-
-const TOOL_SCHEDULE_TS = `import type { Tool } from './types.js';
-import { isMockMode } from './types.js';
-
-// The schedule tool declares an intended cron expression. The hosting
-// environment is responsible for actually installing the schedule (Vercel
-// Cron, Cloudflare Cron Triggers, etc.). Calling this tool at runtime is
-// effectively a no-op that returns the declaration for logging.
-
-export interface ScheduleInput {
-  cron: string;
-}
-export interface ScheduleOutput {
-  cron: string;
-  declared_at: string;
-}
-
-export const schedule: Tool<ScheduleInput, ScheduleOutput> = {
-  id: 'schedule',
-  description: 'Declare the cron schedule the hosting environment should install.',
-  async call({ cron }, ctx) {
-    if (!cron || typeof cron !== 'string') {
-      throw new Error('[forge-agent] schedule.cron must be a non-empty string');
-    }
-    if (isMockMode(ctx)) {
-      ctx.log('schedule.mock', { cron });
-      return { cron, declared_at: new Date(0).toISOString() };
-    }
-    ctx.log('schedule', { cron });
-    return { cron, declared_at: new Date().toISOString() };
-  },
-};
-`;
-
-const TOOL_EMAIL_READ_TS = `import type { Tool } from './types.js';
-import { isMockMode, requireEnv } from './types.js';
-
-// STUB — needs_key. Reads GMAIL_OAUTH_TOKEN and fails clearly if unset.
-// Replace the body with a real Gmail API fetch when wiring up the
-// integration.
-
-export interface EmailReadInput {
-  query?: string;
-  limit?: number;
-}
-export interface EmailMessage {
-  id: string;
-  from: string;
-  subject: string;
-  body: string;
-  received_at: string;
-}
-export interface EmailReadOutput {
-  messages: EmailMessage[];
-}
-
-export const email_read: Tool<EmailReadInput, EmailReadOutput> = {
-  id: 'email_read',
-  description: 'Read recent emails from a connected Gmail mailbox.',
-  async call(_input, ctx) {
-    if (isMockMode(ctx)) {
-      ctx.log('email_read.mock', {});
-      return { messages: [] };
-    }
-    requireEnv(ctx, 'GMAIL_OAUTH_TOKEN');
-    throw new Error(
-      '[forge-agent] email_read is not yet wired up in this scaffold. ' +
-        'Implement Gmail API fetch using GMAIL_OAUTH_TOKEN here.',
-    );
-  },
-};
-`;
-
-const TOOL_EMAIL_SEND_TS = `import type { Tool } from './types.js';
-import { isMockMode, requireEnv } from './types.js';
-
-// STUB — needs_key. Reads RESEND_API_KEY and fails clearly if unset.
-// Replace the body with a real Resend (or other) send-email call when
-// wiring up the integration.
-
-export interface EmailSendInput {
-  to: string | string[];
-  subject: string;
-  body: string;
-  from?: string;
-}
-export interface EmailSendOutput {
-  message_id: string;
-  sent_at: string;
-}
-
-export const email_send: Tool<EmailSendInput, EmailSendOutput> = {
-  id: 'email_send',
-  description: 'Send an email via Resend.',
-  async call(input, ctx) {
-    if (isMockMode(ctx)) {
-      ctx.log('email_send.mock', { to: input.to, subject: input.subject });
-      return { message_id: 'mock-' + Date.now(), sent_at: new Date(0).toISOString() };
-    }
-    requireEnv(ctx, 'RESEND_API_KEY');
-    throw new Error(
-      '[forge-agent] email_send is not yet wired up in this scaffold. ' +
-        'Implement Resend send-email using RESEND_API_KEY here.',
-    );
-  },
-};
-`;
-
 const RUNTIME_TS = `import type { ToolContext } from './tools/types.js';
 
 export type Trigger = 'chat' | 'api' | 'schedule' | 'webhook';
@@ -562,7 +205,21 @@ export async function runChatStdin<I, O>(
 }
 `;
 
+// ----- derived tool barrel (index.ts) --------------------------------------
+// Header (type + helper re-exports) is fixed; the per-tool export lines are
+// derived from the contract tools in canonical order.
+
+const TOOLS_INDEX_HEADER = `export type { Tool, ToolContext } from './types.js';
+export { requireEnv, isMockMode } from './types.js';
+`;
+
+const TOOLS_INDEX_TS =
+  TOOLS_INDEX_HEADER +
+  PLANNER_TOOLS.map((t) => "export { " + t.name + " } from './" + t.name + ".js';\n").join('');
+
 // ----- export --------------------------------------------------------------
+// SCAFFOLD_FILES = fixed boilerplate + one file per contract tool (its
+// scaffoldSource) at src/lib/tools/<name>.ts, in canonical order.
 
 export const SCAFFOLD_FILES: readonly ScaffoldFile[] = [
   { path: 'package.json', content: PACKAGE_JSON },
@@ -570,21 +227,19 @@ export const SCAFFOLD_FILES: readonly ScaffoldFile[] = [
   { path: 'README.md', content: README_MD },
   { path: 'src/lib/tools/types.ts', content: TOOLS_TYPES_TS },
   { path: 'src/lib/tools/index.ts', content: TOOLS_INDEX_TS },
-  { path: 'src/lib/tools/web_search.ts', content: TOOL_WEB_SEARCH_TS },
-  { path: 'src/lib/tools/http_request.ts', content: TOOL_HTTP_REQUEST_TS },
-  { path: 'src/lib/tools/llm_completion.ts', content: TOOL_LLM_COMPLETION_TS },
-  { path: 'src/lib/tools/file_read.ts', content: TOOL_FILE_READ_TS },
-  { path: 'src/lib/tools/file_write.ts', content: TOOL_FILE_WRITE_TS },
-  { path: 'src/lib/tools/schedule.ts', content: TOOL_SCHEDULE_TS },
-  { path: 'src/lib/tools/email_read.ts', content: TOOL_EMAIL_READ_TS },
-  { path: 'src/lib/tools/email_send.ts', content: TOOL_EMAIL_SEND_TS },
+  ...PLANNER_TOOLS.map((t) => ({
+    path: 'src/lib/tools/' + t.name + '.ts',
+    content: t.scaffoldSource,
+  })),
   { path: 'src/lib/runtime.ts', content: RUNTIME_TS },
 ];
 
 // Summary the LLM consumes when generating agent files. Distilled from the
 // full scaffold so the prompt stays compact while still pinning down the
-// interface the model must use.
-export const SCAFFOLD_TOOL_INTERFACE = `// src/lib/tools/types.ts
+// interface the model must use. Header + footer are fixed; the per-tool
+// signature lines are derived from the contract (carried verbatim).
+
+const SCAFFOLD_INTERFACE_HEADER = `// src/lib/tools/types.ts
 export interface ToolContext {
   readonly env: NodeJS.ProcessEnv;
   readonly log: (message: string, meta?: Record<string, unknown>) => void;
@@ -598,16 +253,9 @@ export function requireEnv(ctx: ToolContext, key: string): string;
 export function isMockMode(ctx: ToolContext): boolean; // returns ctx.env.FORGE_MOCK_TOOLS === '1' — tools self-mock for sandbox smoke tests
 
 // src/lib/tools/index.ts — every exported tool
-export const web_search:     Tool<{ query: string; limit?: number }, { results: { title: string; url: string; snippet: string }[] }>;
-export const http_request:   Tool<{ url: string; method?: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE'; headers?: Record<string,string>; body?: string|Record<string, unknown> }, { status: number; ok: boolean; headers: Record<string,string>; body: string }>;
-export const llm_completion: Tool<{ user: string; system?: string; model?: string; maxTokens?: number }, { text: string; input_tokens: number; output_tokens: number; model: string }>;
-export const file_read:      Tool<{ path: string }, { path: string; content: string; bytes: number }>;
-export const file_write:     Tool<{ path: string; content: string }, { path: string; bytes: number }>;
-export const schedule:       Tool<{ cron: string }, { cron: string; declared_at: string }>;
-export const email_read:     Tool<{ query?: string; limit?: number }, { messages: { id: string; from: string; subject: string; body: string; received_at: string }[] }>;  // needs_key: GMAIL_OAUTH_TOKEN
-export const email_send:     Tool<{ to: string|string[]; subject: string; body: string; from?: string }, { message_id: string; sent_at: string }>;                       // needs_key: RESEND_API_KEY
+`;
 
-// src/lib/runtime.ts
+const SCAFFOLD_INTERFACE_FOOTER = `// src/lib/runtime.ts
 export type Trigger = 'chat' | 'api' | 'schedule' | 'webhook';
 export interface AgentHandler<I, O> { (input: I, ctx: ToolContext): Promise<O>; }
 export interface AgentDefinition<I, O> { trigger: Trigger; handler: AgentHandler<I, O>; }
@@ -618,3 +266,9 @@ export function asApiHandler<I, O>(agent: AgentDefinition<I, O>): (req: Request)
 export function asWebhookHandler<I, O>(agent: AgentDefinition<I, O>, options?: { verify?: (req: Request) => Promise<boolean> }): (req: Request) => Promise<Response>;
 export function runChatStdin<I, O>(agent: AgentDefinition<I, O>, parse: (raw: string) => I): Promise<O>;
 `;
+
+export const SCAFFOLD_TOOL_INTERFACE =
+  SCAFFOLD_INTERFACE_HEADER +
+  PLANNER_TOOLS.map((t) => t.scaffoldInterfaceSignature + '\n').join('') +
+  '\n' +
+  SCAFFOLD_INTERFACE_FOOTER;

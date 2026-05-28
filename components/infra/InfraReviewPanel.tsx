@@ -11,14 +11,18 @@ import { useState, type FormEvent } from 'react';
 import { GlassPanel } from '@/components/GlassPanel';
 import { useForgeStore } from '@/lib/store';
 import { InfraSpecView } from './InfraSpecView';
+import { UncertaintyStrip } from '@/components/spec/UncertaintyStrip';
+import type { SpecConfidence } from '@/components/spec/confidence-display';
 import type { InfraSpec } from '@/lib/engine/infra/spec';
 
 interface Props {
   projectId: string;
   spec: InfraSpec;
+  /** Optional per-field confidence map. Absence = today's UI exactly. */
+  confidence?: SpecConfidence | null;
 }
 
-export function InfraReviewPanel({ projectId, spec }: Props) {
+export function InfraReviewPanel({ projectId, spec, confidence }: Props) {
   const router = useRouter();
   const setCoreState = useForgeStore((s) => s.setCoreState);
   const [confirming, setConfirming] = useState(false);
@@ -125,7 +129,9 @@ export function InfraReviewPanel({ projectId, spec }: Props) {
           </p>
         </div>
 
-        <InfraSpecView spec={spec} />
+        <UncertaintyStrip mold="infrastructure" confidence={confidence} />
+
+        <InfraSpecView spec={spec} confidence={confidence} />
 
         {error ? (
           <p

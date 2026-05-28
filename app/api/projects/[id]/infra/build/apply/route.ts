@@ -54,6 +54,7 @@ import {
 import { selectCloudProvider } from '@/lib/engine/infra/cloud/select';
 import { recordCost } from '@/lib/engine/governance/ledger';
 import { projectRouteGuard } from '@/lib/route-guard';
+import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 import type { InfraPlanDiff } from '@/lib/engine/infra/cloud/provider';
 
@@ -164,6 +165,14 @@ export async function POST(_req: Request, { params }: RouteContext) {
       resources_added: 0,
     });
     await markInfraBuildApplyFailed(supabase, build.id);
+    await auditEngineError({
+      supabase,
+      projectId,
+      action: 'infra.apply_failed',
+      err,
+      actor: 'engine.infra.apply',
+      extra: { build_id: build.id, error: message },
+    });
     return NextResponse.json({ error: message }, { status: 502 });
   } finally {
     watcher.stop();

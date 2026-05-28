@@ -20,12 +20,17 @@ import {
   type CodegenSummary,
   type GeneratedFile,
 } from '@/lib/engine/codegen/generate';
+import type { HandoffContract } from '@/lib/engine/codegen/prompts';
 import { LLMError, sumUsage, type GovernanceScope, type LLMUsage } from '@/lib/engine/llm';
 import { resolveScaffold } from '@/lib/engine/codegen/scaffold';
 import {
   staticCheckFile,
   type StaticCheckResult,
 } from '@/lib/engine/codegen/staticcheck';
+import {
+  dedupeSelectedToolNames,
+  mergePackageJsonDependencies,
+} from '@/lib/engine/tools';
 import { TOOL_REGISTRY } from '@/lib/engine/planner/registry';
 import {
   AgentSpecSchema,
@@ -108,9 +113,28 @@ export async function generateSystemCode(args: {
   // Scaffold files are checked here for completeness; the LLM never
   // touches them.
   const scaffold = resolveScaffold('agent-node-tool-using');
+
+  // Tools this system build actually uses = union of every node's
+  // suggested tools. Drives the per-build package.json dependency
+  // merge so a system ships only the deps its nodes need. A version
+  // conflict throws a typed EngineError before any LLM spend.
+  const selectedToolNames = dedupeSelectedToolNames(
+    plan.nodes.flatMap((n) => n.suggested_tools.map((t) => t.registry_id)),
+  );
+  const basePackageJson =
+    scaffold.files.find((f) => f.path === 'package.json')?.content ?? null;
+  const mergedPackageJson =
+    basePackageJson === null
+      ? null
+      : mergePackageJsonDependencies(basePackageJson, selectedToolNames);
+
   const scaffoldWithChecks: GeneratedFile[] = [];
   for (const f of scaffold.files) {
-    const sc = await staticCheckFile(f.path, f.content);
+    const content =
+      f.path === 'package.json' && mergedPackageJson !== null
+        ? mergedPackageJson
+        : f.content;
+    const sc = await staticCheckFile(f.path, content);
     if (!sc.ok) {
       warnings.push(
         "Scaffold file '" + f.path + "' failed static check — this is a Forge bug.",
@@ -118,9 +142,9 @@ export async function generateSystemCode(args: {
     }
     scaffoldWithChecks.push({
       path: f.path,
-      content: f.content,
+      content,
       source: 'scaffold',
-      bytes: byteLength(f.content),
+      bytes: byteLength(content),
       staticCheck: sc,
     });
   }
@@ -310,6 +334,10 @@ export async function generateOneSystemNodeModule(
   const adapted = adaptNodeForAgentGenerator(args.node, args.spec);
   const targetPath = moduleFilePath(args.node.id);
   const purpose = moduleFilePurpose(args.node);
+  // Build the explicit handoff contract from the plan so the per-file
+  // prompt carries the neighbour info as a first-class section, not
+  // buried in the synthesised AgentSpec's constraints.
+  const handoffContract = deriveHandoffContract(args.node, args.plan);
 
   let result;
   try {
@@ -320,6 +348,7 @@ export async function generateOneSystemNodeModule(
       filePath: targetPath,
       filePurpose: purpose,
       allFiles: allFilesForPrompt,
+      handoffContract,
       governance: {
         ...args.governance,
         ref: (args.governance.ref ?? 'system.codegen') + '.module.' + args.node.id,
@@ -595,6 +624,43 @@ function adaptNodeForAgentGenerator(
   }
 
   return { spec: specParse.data, plan: planParse.data };
+}
+
+// Pull the neighbour info off the OrchestrationPlan for THIS node and
+// shape it into the per-call HandoffContract the prompt assembler
+// consumes. Pure function — no LLM, no IO; safe to call inside the
+// existing module-generation loop and from the self-heal path.
+function deriveHandoffContract(
+  node: OrchestrationNode,
+  plan: OrchestrationPlan,
+): HandoffContract {
+  // node.inputs[] already carries (fromNodeId | null, output label).
+  // The plan-level edges[] carry payload labels, which are richer
+  // than the raw output names — surface them when we have them.
+  const inboundEdges = plan.edges.filter((e) => e.to === node.id);
+  const upstream: HandoffContract['upstream'] = node.inputs.map((h) => {
+    if (h.from === null) {
+      return { fromNodeId: null, payload: h.output };
+    }
+    const edge = inboundEdges.find((e) => e.from === h.from);
+    return {
+      fromNodeId: h.from,
+      payload: edge ? edge.payload : h.output,
+    };
+  });
+
+  const outboundEdges = plan.edges.filter((e) => e.from === node.id);
+  const downstream: HandoffContract['downstream'] = outboundEdges.map((e) => ({
+    toNodeId: e.to,
+    payload: e.payload,
+  }));
+
+  return {
+    selfNodeId: node.id,
+    upstream,
+    downstream,
+    declaredOutputs: node.outputs,
+  };
 }
 
 function moduleFilePath(nodeId: string): string {

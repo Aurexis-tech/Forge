@@ -51,6 +51,11 @@ import {
   buildRouteUserMessage,
 } from './prompts';
 import { tableName } from './migration';
+import {
+  buildRefinementContextMessage,
+  critiqueAndRefine,
+  type CritiqueAuditHooks,
+} from '@/lib/engine/codegen/critique';
 
 // ---------------------------------------------------------------------------
 // The closed slot-family map. Every SLOT_KINDS value lives in exactly
@@ -234,6 +239,9 @@ async function fillRouteSlot(input: ResolveSlotInput): Promise<SlotResolution> {
         '.' +
         target,
     },
+    filePurpose:
+      slotKind + ' for the ' + target + ' entity (table ' + tableName(target) + ')',
+    specSummary: spec.goal,
   });
 
   return {
@@ -294,6 +302,8 @@ async function fillPageSlot(input: ResolveSlotInput): Promise<SlotResolution> {
       ...governance,
       ref: (governance.ref ?? 'software.codegen') + '.page.' + target,
     },
+    filePurpose: 'page component for ' + page.name + ' — ' + page.purpose,
+    specSummary: spec.goal,
   });
 
   return {
@@ -317,6 +327,16 @@ interface RunWithRepairArgs {
   userMessage: string;
   filePath: string;
   governance: GovernanceScope;
+  /**
+   * Plain-English one-liner the critique-refine gate uses to anchor
+   * the critic. Required when the gate is enabled; safe to omit
+   * (the helper still works — just with a less grounded prompt).
+   */
+  filePurpose?: string;
+  /** Optional spec summary; same purpose as above. */
+  specSummary?: string;
+  /** Optional audit hooks for the critique-refine gate. */
+  critiqueAudit?: CritiqueAuditHooks;
 }
 
 interface RunWithRepairResult {
@@ -353,11 +373,17 @@ async function runWithRepair(
   const content1 = sanitise(first.text);
   const check1 = await staticCheckFile(args.filePath, content1);
   if (check1.ok) {
+    // Static-check passed on pass-1 — apply the critique-refine
+    // gate (no-op when CRITIQUE_GATE_ENABLED is false).
+    const gated = await applySlotCritiqueGate({
+      args,
+      content: content1,
+    });
     return {
       file: {
         path: args.filePath,
-        content: content1,
-        bytes: byteLength(content1),
+        content: gated.content,
+        bytes: byteLength(gated.content),
         staticCheck: check1,
       },
       attempts: 1,
@@ -394,17 +420,76 @@ async function runWithRepair(
   }
   const content2 = sanitise(repair.text);
   const check2 = await staticCheckFile(args.filePath, content2);
+  // Apply critique gate only when the repaired candidate compiles.
+  // If the repair still failed static-check, surface as-is — the
+  // critic doesn't grade un-compilable code.
+  let finalContent = content2;
+  if (check2.ok) {
+    const gated = await applySlotCritiqueGate({
+      args,
+      content: content2,
+    });
+    finalContent = gated.content;
+  }
   return {
     file: {
       path: args.filePath,
-      content: content2,
-      bytes: byteLength(content2),
+      content: finalContent,
+      bytes: byteLength(finalContent),
       staticCheck: check2,
     },
     attempts: 2,
     model: repair.model,
     usage: sumUsage(first.usage, repair.usage),
   };
+}
+
+// ---------------------------------------------------------------------------
+// CRITIQUE GATE — bridges per-slot runWithRepair into the
+// engine-owned critique-refine helper. Pure passthrough when the
+// env flag is off.
+// ---------------------------------------------------------------------------
+
+interface ApplySlotCritiqueGateArgs {
+  args: RunWithRepairArgs;
+  /** Candidate code that has already passed static-check. */
+  content: string;
+}
+
+async function applySlotCritiqueGate(
+  input: ApplySlotCritiqueGateArgs,
+): Promise<{ content: string }> {
+  const { args, content } = input;
+  const result = await critiqueAndRefine({
+    code: content,
+    filePath: args.filePath,
+    filePurpose: args.filePurpose ?? args.filePath,
+    specSummary: args.specSummary,
+    governance: args.governance,
+    audit: args.critiqueAudit,
+    regenerate: async ({ previousCode, critique, governance }) => {
+      // Re-call the per-slot generator using the SAME system prompt
+      // (route or page) + the SAME user message + the previous code
+      // + the critic's notes as the next turn. Reuses every existing
+      // prompt context — only the critique is new.
+      const refine = await complete({
+        model: CODEGEN_MODEL,
+        system: args.systemPrompt,
+        messages: [
+          { role: 'user', content: args.userMessage },
+          { role: 'assistant', content: previousCode },
+          {
+            role: 'user',
+            content: buildRefinementContextMessage(critique, previousCode),
+          },
+        ],
+        maxTokens: 4000,
+        governance,
+      });
+      return sanitise(refine.text);
+    },
+  });
+  return { content: result.code };
 }
 
 // ---------------------------------------------------------------------------

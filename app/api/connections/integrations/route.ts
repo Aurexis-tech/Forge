@@ -14,7 +14,16 @@ import type { Connection, ConnectionProvider } from '@/lib/types';
 
 export const runtime = 'nodejs';
 
-const IntegrationProviderEnum = z.enum(['github', 'vercel']);
+const IntegrationProviderEnum = z.enum([
+  'github',
+  'vercel',
+  // Phase 3-5a + Phase 4-5a additions. Same row shape; same encryption
+  // posture; same status payload. The GitHub + Vercel keys on the
+  // response are UNTOUCHED — these are purely additive so existing
+  // callers (ConnectionsForm) read the same fields they did before.
+  'supabase',
+  'cloud',
+]);
 type IntegrationProvider = z.infer<typeof IntegrationProviderEnum>;
 
 interface ProviderStatus {
@@ -27,6 +36,8 @@ interface ProviderStatus {
 interface StatusResponse {
   github: ProviderStatus;
   vercel: ProviderStatus;
+  supabase: ProviderStatus;
+  cloud: ProviderStatus;
 }
 
 async function authed() {
@@ -49,7 +60,7 @@ export async function GET() {
     .from('connections')
     .select('provider, account_login, scopes, created_at')
     .eq('user_id', r.user.id)
-    .in('provider', ['github', 'vercel']);
+    .in('provider', ['github', 'vercel', 'supabase', 'cloud']);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -60,6 +71,8 @@ export async function GET() {
   const body: StatusResponse = {
     github: shape(byProvider.get('github')),
     vercel: shape(byProvider.get('vercel')),
+    supabase: shape(byProvider.get('supabase')),
+    cloud: shape(byProvider.get('cloud')),
   };
   return NextResponse.json(body);
 }
@@ -76,7 +89,7 @@ export async function DELETE(req: Request) {
   const providerResult = IntegrationProviderEnum.safeParse(providerParam);
   if (!providerResult.success) {
     return NextResponse.json(
-      { error: 'provider must be github or vercel' },
+      { error: 'provider must be one of github / vercel / supabase / cloud' },
       { status: 400 },
     );
   }

@@ -13,6 +13,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireUser, UnauthorizedError } from '@/lib/auth';
 import { upsertConnection } from '@/lib/engine/integrations/connections';
+import { withRetry } from '@/lib/engine/retry';
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -57,13 +58,18 @@ export async function POST(req: Request) {
   // before we persist anything, and gives us a username for display.
   let login = 'unknown';
   try {
-    const res = await fetch('https://api.vercel.com/v2/user', {
-      headers: {
-        accept: 'application/json',
-        authorization: 'Bearer ' + token,
-        'user-agent': 'aurexis-forge',
-      },
-    });
+    // Retry transient Vercel blips (5xx/429/network).
+    const res = await withRetry(
+      () =>
+        fetch('https://api.vercel.com/v2/user', {
+          headers: {
+            accept: 'application/json',
+            authorization: 'Bearer ' + token,
+            'user-agent': 'aurexis-forge',
+          },
+        }),
+      { maxAttempts: 3, baseDelayMs: 500 },
+    );
     if (!res.ok) {
       // Translate common failure shapes to a clean message — never echo the
       // token back.

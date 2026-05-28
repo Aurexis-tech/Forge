@@ -27,6 +27,10 @@ import {
   buildSoftwareExtractionUserMessage,
   buildSoftwareRepairUserMessage,
 } from './prompts';
+import {
+  computeSoftwareConfidence,
+  type SpecConfidence,
+} from '../spec/confidence';
 
 export class SoftwareExtractionError extends Error {
   readonly cause?: unknown;
@@ -51,6 +55,8 @@ export interface ExtractSoftwareSpecOutput {
   usage: LLMUsage;
   model: string;
   attempts: number;
+  /** Optional per-field confidence map; see lib/engine/spec/confidence.ts. */
+  confidence?: SpecConfidence;
 }
 
 export async function extractSoftwareSpec(
@@ -85,6 +91,7 @@ export async function extractSoftwareSpec(
       usage: first.usage,
       model: first.model,
       attempts: 1,
+      confidence: computeSoftwareConfidence(parsed1.data.spec, input.rawPrompt),
     };
   }
 
@@ -119,6 +126,7 @@ export async function extractSoftwareSpec(
       usage: totalUsage,
       model: repair.model,
       attempts: 2,
+      confidence: computeSoftwareConfidence(parsed2.data.spec, input.rawPrompt),
     };
   }
 

@@ -16,6 +16,7 @@ import type {
   SandboxFile,
   SandboxProvider,
 } from '../provider';
+import { withRetry } from '../../retry';
 
 // The e2b SDK is imported dynamically so the heavy dep isn't pulled into
 // bundles that don't actually run sandboxes (e.g. an unrelated route).
@@ -78,11 +79,19 @@ export class E2BProvider implements SandboxProvider {
       );
     }
 
-    this.sandbox = await SandboxCls.create({
-      apiKey,
-      timeoutMs: opts.lifetimeMs ?? 5 * 60_000,
-      metadata: opts.metadata,
-    });
+    // Wrap the SDK call in withRetry: E2B occasionally returns 5xx
+    // / network blips during sandbox boot. The classifier in
+    // errors.ts marks HTTP 5xx/429 + network errors as transient;
+    // permanent failures (auth, quota) bail out immediately.
+    this.sandbox = await withRetry(
+      () =>
+        SandboxCls.create({
+          apiKey,
+          timeoutMs: opts.lifetimeMs ?? 5 * 60_000,
+          metadata: opts.metadata,
+        }),
+      { maxAttempts: 3, baseDelayMs: 1000 },
+    );
 
     // Ensure the workspace exists. Best-effort; failure is surfaced when
     // the first writeFiles call runs.
@@ -115,12 +124,20 @@ export class E2BProvider implements SandboxProvider {
     const sbx = this.requireSandbox();
     const start = Date.now();
     try {
-      const result = await sbx.commands.run(command, {
-        cwd: opts.cwd ?? WORKSPACE,
-        envs: opts.env,
-        timeoutMs: opts.timeoutMs,
-        stdin: opts.stdin,
-      });
+      // Retry on transient E2B network blips. The classifier marks
+      // 5xx/429 + network errors retriable; a non-zero exit code
+      // returns inside `result` and is NOT thrown, so it bypasses
+      // the retry loop (exec semantics preserved).
+      const result = await withRetry(
+        () =>
+          sbx.commands.run(command, {
+            cwd: opts.cwd ?? WORKSPACE,
+            envs: opts.env,
+            timeoutMs: opts.timeoutMs,
+            stdin: opts.stdin,
+          }),
+        { maxAttempts: 3, baseDelayMs: 500 },
+      );
       return {
         stdout: result.stdout ?? '',
         stderr: result.stderr ?? '',
