@@ -51,6 +51,7 @@ import {
   buildRouteUserMessage,
 } from './prompts';
 import { tableName } from './migration';
+import { crudResourcePages } from './crud-resource';
 import {
   buildRefinementContextMessage,
   critiqueAndRefine,
@@ -65,6 +66,7 @@ import {
 const ROUTE_SLOTS = new Set<SlotKind>([
   'list_route',
   'create_route',
+  'get_route',
   'update_route',
   'delete_route',
 ]);
@@ -213,6 +215,7 @@ async function fillRouteSlot(input: ResolveSlotInput): Promise<SlotResolution> {
   const slotKind = task.slot.kind as
     | 'list_route'
     | 'create_route'
+    | 'get_route'
     | 'update_route'
     | 'delete_route';
   const filePath = routeSlotPath(slotKind, target);
@@ -263,7 +266,14 @@ async function fillPageSlot(input: ResolveSlotInput): Promise<SlotResolution> {
       "page slot '" + task.id + "' has no page target",
     );
   }
-  const page = spec.pages.find((p) => p.id === target);
+  // Resolve the page descriptor: a declared spec page, OR a synthesized
+  // CRUD-resource page (list + detail view). CRUD-resource pages aren't in
+  // spec.pages — they're derived deterministically from the resource, so
+  // both the planner graph and this dispatch read them from the same
+  // crudResourcePages() source.
+  const page =
+    spec.pages.find((p) => p.id === target) ??
+    crudResourcePages(spec).find((p) => p.id === target);
   if (!page) {
     throw new SoftwareSlotError(
       "page slot '" + task.id + "' references unknown page '" + target + "'",
@@ -500,18 +510,23 @@ function routeSlotPath(
   slotKind:
     | 'list_route'
     | 'create_route'
+    | 'get_route'
     | 'update_route'
     | 'delete_route',
   entityName: string,
 ): string {
   const table = tableName(entityName);
   // Per-slot file. The assembler emits a shell `route.ts` that
-  // re-exports the methods so Next.js picks them up.
+  // re-exports the methods so Next.js picks them up. Collection methods
+  // (list/create) live at /api/<table>; item methods (get/update/delete)
+  // live at /api/<table>/[id].
   switch (slotKind) {
     case 'list_route':
       return 'app/api/' + table + '/_list.ts';
     case 'create_route':
       return 'app/api/' + table + '/_create.ts';
+    case 'get_route':
+      return 'app/api/' + table + '/[id]/_get.ts';
     case 'update_route':
       return 'app/api/' + table + '/[id]/_update.ts';
     case 'delete_route':
@@ -559,11 +574,19 @@ export function buildShellRoute(args: {
   lines.push("// Aurexis Forge — route shell (template-emitted).");
   lines.push('//');
   lines.push("// Next.js App Router only treats route.ts as a route; the per-slot");
-  lines.push("// _list.ts / _create.ts / _update.ts / _delete.ts files next to this");
-  lines.push("// shell carry the actual method bodies. This shell re-exports them.");
+  lines.push("// _list.ts / _create.ts / _get.ts / _update.ts / _delete.ts files next");
+  lines.push("// to this shell carry the actual method bodies. This shell re-exports");
+  lines.push("// them.");
   lines.push('');
+  // GET means LIST on the collection route (/api/<table>) but GET-BY-ID on
+  // the item route (/api/<table>/[id]); re-export from the right sibling.
+  const isItemRoute = args.path.includes('/[id]/');
   if (args.methods.includes('GET')) {
-    lines.push("export { GET } from './_list';");
+    lines.push(
+      isItemRoute
+        ? "export { GET } from './_get';"
+        : "export { GET } from './_list';",
+    );
   }
   if (args.methods.includes('POST')) {
     lines.push("export { POST } from './_create';");

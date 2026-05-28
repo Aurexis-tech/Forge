@@ -159,7 +159,12 @@ export interface RouteUserMessageArgs {
   entityName: string;
   tableName: string;
   fields: ReadonlyArray<{ name: string; type: string }>;
-  slotKind: 'list_route' | 'create_route' | 'update_route' | 'delete_route';
+  slotKind:
+    | 'list_route'
+    | 'create_route'
+    | 'get_route'
+    | 'update_route'
+    | 'delete_route';
   filePath: string;
 }
 
@@ -218,20 +223,20 @@ function routeLayerSection(args: RouteUserMessageArgs): string {
 }
 
 function routeSiblingContractSection(args: RouteUserMessageArgs): string {
-  // For routes, the relevant siblings are: (a) sibling method
-  // handlers on the same path (e.g. POST + GET on /api/expense), and
-  // (b) the migration table this route reads/writes. We name them so
-  // the LLM matches shapes (POST returns the inserted row; GET
-  // returns a list).
-  const siblings = [
-    SLOT_METHOD.list_route + ' /api/' + args.tableName,
-    SLOT_METHOD.create_route + ' /api/' + args.tableName,
-    SLOT_METHOD.update_route + ' /api/' + args.tableName + '/[id]',
-    SLOT_METHOD.delete_route + ' /api/' + args.tableName + '/[id]',
+  // For routes, the relevant siblings are the OTHER method handlers on
+  // the same table (collection methods at /api/<table>; item methods at
+  // /api/<table>/[id]). Naming them lets the LLM match shapes (POST
+  // returns the inserted row; GET-by-id returns one row; list returns an
+  // array). Built from a typed map so adding get_route stays correct.
+  const ALL: Array<{ kind: RouteUserMessageArgs['slotKind']; label: string }> = [
+    { kind: 'list_route', label: 'GET /api/' + args.tableName + ' (list)' },
+    { kind: 'create_route', label: 'POST /api/' + args.tableName + ' (create)' },
+    { kind: 'get_route', label: 'GET /api/' + args.tableName + '/[id] (get-by-id)' },
+    { kind: 'update_route', label: 'PATCH /api/' + args.tableName + '/[id] (update)' },
+    { kind: 'delete_route', label: 'DELETE /api/' + args.tableName + '/[id] (delete)' },
   ];
-  const me = SLOT_METHOD[args.slotKind];
-  const otherSiblings = siblings.filter(
-    (s) => !s.startsWith(me + ' /api/' + args.tableName + (args.slotKind === 'list_route' || args.slotKind === 'create_route' ? '' : '/[id]')),
+  const otherSiblings = ALL.filter((s) => s.kind !== args.slotKind).map(
+    (s) => s.label,
   );
   return [
     'SIBLING CONTRACT — related routes on the same table:',
@@ -330,6 +335,7 @@ function routeFinalInstruction(args: RouteUserMessageArgs): string {
 const SLOT_METHOD: Record<RouteUserMessageArgs['slotKind'], string> = {
   list_route: 'GET',
   create_route: 'POST',
+  get_route: 'GET',
   update_route: 'PATCH',
   delete_route: 'DELETE',
 };
@@ -350,6 +356,12 @@ const SLOT_PURPOSE: Record<
     ' — parse the JSON body, validate shape, insert a row into ' +
     entity +
     ' with owner_id set to currentUserId().',
+  get_route: (entity, table) =>
+    'GET /api/' +
+    table +
+    '/[id] — fetch a single ' +
+    entity +
+    " row by id. RLS scopes the read to the user's own rows; return 404 when the row is absent or not owned.",
   update_route: (entity, table) =>
     'PATCH /api/' +
     table +
@@ -379,6 +391,11 @@ const SLOT_SEMANTIC_DETAIL: Record<
     '    - INSERT into `' + table + "` with `owner_id: userId`. NEVER read owner_id from the request body.\n" +
     '    - Return the inserted row via `.select(...).single()` with status 201.\n' +
     '    - Map insert errors to 500 with the error message in `{ error: ... }`.',
+  get_route: (_entity, table) =>
+    '    - Read the id from `context.params.id`; reject with 400 if missing.\n' +
+    '    - SELECT * from `' + table + "` WHERE id = <id> (no manual ownership where-clause; RLS scopes it to the user's own rows).\n" +
+    '    - Use `.maybeSingle()`. Return the row with status 200, or `{ error: ... }` with status 404 when it is null (absent OR not owned — RLS filtered it).\n' +
+    '    - Map query errors to 500 with the error message in `{ error: ... }`.',
   update_route: (_entity, table) =>
     '    - Read the id from `context.params.id`; reject if missing.\n' +
     '    - Parse the body; validate that the supplied fields are a subset of the entity columns above.\n' +

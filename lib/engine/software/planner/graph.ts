@@ -34,6 +34,10 @@ import {
   type LayerId,
   type SlotKind,
 } from './template';
+import {
+  crudResourcePageDescriptor,
+  expandCrudResource,
+} from '../codegen/crud-resource';
 
 // Same shape as system/planner/graph.ts so the route/UI layer can
 // treat both graphs uniformly when it needs to.
@@ -83,6 +87,16 @@ function entitySlug(name: string): string {
 
 export function deriveSoftwareGraph(spec: SoftwareSpec): SoftwareDerivedGraph {
   const tasks: SoftwareDerivedTask[] = [];
+
+  // CRUD-resource opt-in: entities listed in spec.crud_resources expand
+  // via the deterministic COMPOSITE (complete owner-scoped CRUD) instead
+  // of the conditional per-entity derivation. Filtered to real entities;
+  // the spec validator already rejects unknown names + non-isolated auth.
+  const crudSet = new Set(
+    (spec.crud_resources ?? []).filter((n) =>
+      spec.entities.some((e) => e.name === n),
+    ),
+  );
 
   // --- 1. Schema layer ---------------------------------------------------
   // One entity_migration per entity. Plus an rls_policy declaration when
@@ -147,6 +161,46 @@ export function deriveSoftwareGraph(spec: SoftwareSpec): SoftwareDerivedGraph {
     const slug = entitySlug(entity.name);
     const migrationDep = migrationIdByEntity.get(entity.name);
     if (!migrationDep) continue; // unreachable — every entity got one above
+
+    // CRUD-resource composite: complete owner-scoped CRUD — all 5 routes
+    // (create / list / get / update / delete), deterministically. The
+    // owner-scoping is structural (migration owner_id + RLS, route family
+    // owner-pin); the composite only decides the topology.
+    if (crudSet.has(entity.name)) {
+      const expansion = expandCrudResource(
+        { name: entity.name, fields: entity.fields },
+        { perUserIsolation: spec.auth.per_user_isolation },
+      );
+      const crudRoutes: string[] = [];
+      for (const r of expansion.routes) {
+        const stem = r.kind.replace('_route', ''); // create/list/get/update/delete
+        const isItem =
+          r.kind === 'get_route' ||
+          r.kind === 'update_route' ||
+          r.kind === 'delete_route';
+        const routeId = 'api_' + stem + '_' + slug;
+        tasks.push({
+          id: routeId,
+          layer: 'api',
+          description:
+            r.method +
+            ' /api/' +
+            slug +
+            (isItem ? '/[id]' : '') +
+            ' — ' +
+            stem +
+            ' ' +
+            entity.name +
+            ' (owner-scoped CRUD-resource).',
+          depends_on: [migrationDep],
+          slot: { kind: r.kind, target: entity.name },
+          files: ['app/api/' + slug + (isItem ? '/[id]' : '') + '/route.ts'],
+        });
+        crudRoutes.push(routeId);
+      }
+      routeIdsByEntity.set(entity.name, crudRoutes);
+      continue;
+    }
 
     const entityRoutes: string[] = [];
 
@@ -246,6 +300,25 @@ export function deriveSoftwareGraph(spec: SoftwareSpec): SoftwareDerivedGraph {
       depends_on: deps,
       slot: { kind: 'page_component', target: page.id },
       files: ['app/(app)/' + page.id.replace(/_/g, '-') + '/page.tsx'],
+    });
+  }
+
+  // --- 3b. CRUD-resource pages ------------------------------------------
+  // Each CRUD resource gets ONE synthesized server-component page (list +
+  // detail view), depending on that resource's routes. The page id is the
+  // entity slug; the spec validator guarantees it doesn't collide with a
+  // declared page. Iterating spec.entities (filtered to crudSet) keeps the
+  // order deterministic.
+  for (const entity of spec.entities) {
+    if (!crudSet.has(entity.name)) continue;
+    const desc = crudResourcePageDescriptor(entity.name);
+    tasks.push({
+      id: 'page_' + desc.id,
+      layer: 'ui',
+      description: desc.purpose,
+      depends_on: routeIdsByEntity.get(entity.name) ?? [],
+      slot: { kind: 'page_component', target: desc.id },
+      files: ['app/(app)/' + desc.id.replace(/_/g, '-') + '/page.tsx'],
     });
   }
 

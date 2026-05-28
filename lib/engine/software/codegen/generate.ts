@@ -408,7 +408,7 @@ function findTaskForPath(
   }
   // Route slot paths: app/api/<table>/_list.ts (etc).
   const routeMatch = filePath.match(
-    /^app\/api\/([^/]+)(?:\/\[id\])?\/_(list|create|update|delete)\.ts$/,
+    /^app\/api\/([^/]+)(?:\/\[id\])?\/_(list|create|get|update|delete)\.ts$/,
   );
   if (routeMatch) {
     const table = routeMatch[1]!;
@@ -450,6 +450,8 @@ function routeMethodFor(
       return 'GET';
     case 'create_route':
       return 'POST';
+    case 'get_route':
+      return 'GET';
     case 'update_route':
       return 'PATCH';
     case 'delete_route':
@@ -470,6 +472,7 @@ function routeShellPathFor(task: SoftwareTask): string {
     case 'list_route':
     case 'create_route':
       return 'app/api/' + table + '/route.ts';
+    case 'get_route':
     case 'update_route':
     case 'delete_route':
       return 'app/api/' + table + '/[id]/route.ts';

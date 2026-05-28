@@ -40,9 +40,11 @@ export const SLOT_KINDS = [
   'rls_policy',
 
   // api layer — standard CRUD; the planner emits the subset the flows
-  // imply, not all four for every entity.
+  // imply, not all of them for every entity. A CRUD-resource composite
+  // emits the full owner-scoped set (create/list/get/update/delete).
   'list_route',
   'create_route',
+  'get_route',
   'update_route',
   'delete_route',
 
@@ -67,6 +69,7 @@ export const SLOT_LAYER: Record<SlotKind, LayerId> = {
   rls_policy:                'schema',
   list_route:                'api',
   create_route:              'api',
+  get_route:                 'api',
   update_route:              'api',
   delete_route:              'api',
   page_component:            'ui',

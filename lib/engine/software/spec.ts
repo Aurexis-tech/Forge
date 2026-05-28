@@ -64,6 +64,17 @@ const FieldSchema = z.object({
   type: z.enum(FIELD_TYPES),
 });
 
+// PascalCase entity name -> lower_snake_case table/page slug. Mirrors
+// migration.tableName() / crud-resource.crudResourcePageId(); inlined here
+// to keep the spec module dependency-free (spec.ts is the leaf the codegen
+// modules import, so it must not import them back).
+function entitySlug(name: string): string {
+  return name
+    .replace(/([A-Z])/g, '_$1')
+    .toLowerCase()
+    .replace(/^_/, '');
+}
+
 const PageSchema = z.object({
   id: PageIdSchema,
   name: z.string().trim().min(1).max(120),
@@ -108,6 +119,13 @@ export const SoftwareSpecSchema = z
       .array(z.string().trim().min(1).max(80))
       .max(20)
       .optional(),
+    // OPTIONAL: entity names to expand via the CRUD-resource COMPOSITE
+    // slot — complete owner-scoped CRUD (owner-scoped table + 5 routes
+    // [create/list/get/update/delete] + a list/detail page) generated
+    // DETERMINISTICALLY from the vetted atomic slots. Absent → no
+    // CRUD-resource (existing per-entity derivation, byte-identical).
+    // Each name must be a declared entity (validated below).
+    crud_resources: z.array(EntityNameSchema).max(20).optional(),
   })
   .superRefine((data, ctx) => {
     // Unique page ids.
@@ -150,6 +168,45 @@ export const SoftwareSpecSchema = z
         }
       });
     });
+
+    // crud_resources (opt-in CRUD-resource composite): each must be a
+    // real entity; CRUD-resources are OWNER-SCOPED, so they require auth
+    // + per-user isolation (the structural owner_id + RLS that the
+    // composite relies on); and each resource's synthesized list-page id
+    // must not collide with a declared page id.
+    const crud = data.crud_resources ?? [];
+    if (crud.length > 0) {
+      if (!data.auth.requires_auth || !data.auth.per_user_isolation) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['crud_resources'],
+          message:
+            'crud_resources are owner-scoped and require auth.requires_auth + auth.per_user_isolation',
+        });
+      }
+      crud.forEach((name, i) => {
+        if (!entityNames.has(name)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['crud_resources', i],
+            message: "crud_resources references unknown entity '" + name + "'",
+          });
+        }
+        const synthesizedPageId = entitySlug(name);
+        if (pageIds.has(synthesizedPageId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['crud_resources', i],
+            message:
+              "crud_resources entity '" +
+              name +
+              "' generates a list-page id '" +
+              synthesizedPageId +
+              "' that collides with a declared page id",
+          });
+        }
+      });
+    }
   });
 
 export type SoftwareSpec = z.infer<typeof SoftwareSpecSchema>;
