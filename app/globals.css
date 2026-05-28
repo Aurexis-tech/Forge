@@ -8,18 +8,57 @@
 
 :root {
   color-scheme: dark;
+
+  /* === THE HEAT SPECTRUM ============================================
+     Amber is not one accent — it is a temperature scale, coolest ember
+     to brightest molten spark. Used with conviction at moments of
+     irreversible action (forging, gates, going live) and to express the
+     stage pipeline's COOLING. Restrained or absent everywhere else.
+     See /docs/design-language.md. */
+  --heat-coal: #7a3b12;   /* cooled / spent — a completed-and-settled warm  */
+  --heat-ember: #c2611f;  /* glowing ember — recent warmth, dimming          */
+  --heat-glow: #ff9a4d;   /* the anchor (= forge-amber) — the working heat   */
+  --heat-molten: #ffba73; /* molten — the just-acted, hottest live stage     */
+  --heat-spark: #ffe6c7;  /* white-hot spark — the brief flash of forging    */
+
+  /* === COOL PALETTE (where heat settles + the calm everywhere else) === */
+  --cool-cyan: #4fd4f0;   /* accent / active state / settled "live"          */
+  --cool-deep: #2a6f8a;   /* the coldest settle — fully cooled pipeline tail */
+
+  /* === NEUTRALS ===================================================== */
+  --ink: #e7ecf3;         /* primary text                                    */
+  --dim: #8a93a6;         /* secondary text                                  */
+  --faint: #5b6475;       /* tertiary / pending                              */
+  --line: rgba(255, 255, 255, 0.08); /* hairline borders                     */
+  --bg: #05060a;          /* obsidian void                                   */
 }
 
 html,
 body {
-  background: #05060a;
-  color: #e7ecf3;
+  background: var(--bg);
+  color: var(--ink);
   min-height: 100%;
 }
 
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Spectral body · Fraunces display (headings) · IBM Plex Mono labels.
+     Loaded via next/font in app/layout.tsx (--font-body / --font-display
+     / --font-mono); these stacks are the graceful fallback. */
+  font-family: var(--font-body), 'Spectral', Georgia, Cambria, serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Brand display hierarchy — headings everywhere (landing + app) wear the
+   serif display face. Falls back to a serif stack if --font-display isn't
+   loaded. Sizes/weights stay component-controlled (Tailwind utilities);
+   this only sets the FACE + a touch of optical tightening. Mono labels +
+   body copy are untouched. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display), 'Spectral', Georgia, Cambria,
+    'Times New Roman', serif;
+  letter-spacing: -0.015em;
 }
 
 /* Subtle scanline / grain overlay so the dark backdrop never feels flat. */
@@ -114,6 +153,18 @@ body::before {
 .forge-breathe {
   animation: forge-breathe 6200ms ease-in-out infinite;
   will-change: transform, opacity;
+}
+
+/* Ambient backdrop glow — a slow breathe for the shared app-shell
+   atmosphere (components/AmbientBackdrop). Opacity-only so it composites
+   cheaply; the global prefers-reduced-motion rule cancels it. */
+@keyframes forge-ambient-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 0.9;  transform: scale(1.04); }
+}
+.forge-ambient-breathe {
+  animation: forge-ambient-breathe 7800ms ease-in-out infinite;
+  will-change: opacity, transform;
 }
 
 /* CSS ember — rises from below the core, sways horizontally, fades

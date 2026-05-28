@@ -6,7 +6,39 @@
 // the chrome.
 
 import type { Metadata, Viewport } from 'next';
+import { Fraunces, Spectral, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
+
+// THE BRAND TYPE HIERARCHY (forge design language):
+//   display = Fraunces      — headings, the moment-of-arrival serif
+//   body    = Spectral      — prose, a calm reading serif
+//   mono    = IBM Plex Mono — eyebrows / labels / pipeline / code
+// Brand fonts only (no Inter/Roboto/Arial). Exposed as CSS variables;
+// globals.css + tailwind point body/heading/mono at them so every page
+// (landing + app) inherits the hierarchy without per-component edits.
+const display = Fraunces({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  style: ['normal'],
+  variable: '--font-display',
+  display: 'swap',
+});
+
+const body = Spectral({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600'],
+  style: ['normal', 'italic'],
+  variable: '--font-body',
+  display: 'swap',
+});
+
+const mono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  style: ['normal'],
+  variable: '--font-mono',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Aurexis Forge — describe what you want, the Forge builds it',
@@ -26,8 +58,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen overflow-x-hidden bg-forge-void text-forge-text">
+    <html
+      lang="en"
+      className={`${display.variable} ${body.variable} ${mono.variable}`}
+    >
+      <body className="min-h-screen overflow-x-hidden bg-forge-void font-body text-forge-text">
         {children}
       </body>
     </html>

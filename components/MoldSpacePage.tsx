@@ -1,8 +1,8 @@
-// HOME / OVERVIEW. Lists every forge newest-first across all molds —
-// INCLUDING brand-new projects whose type the engine is still detecting
-// (they wear the "detecting…" badge). This is the safety net: a fresh
-// forge is always visible here while its mold is determined, then it also
-// appears in its mold space once classified.
+// A single mold space — the archive scoped to ONE mold. Header = mold
+// name (display serif) + one-line plain description; then that mold's
+// projects only (filtered by the resolved ProjectMold), newest-first;
+// with a per-mold empty state. Shared by all four mold routes so the four
+// pages stay thin. Same atmosphere + rhythm + motion as Home.
 
 import Link from 'next/link';
 import { GlassPanel } from '@/components/GlassPanel';
@@ -10,9 +10,9 @@ import { SectionHeader } from '@/components/forge/SectionHeader';
 import { ProjectCard } from '@/components/ProjectCard';
 import { Reveal } from '@/components/Reveal';
 import { requireUser } from '@/lib/auth';
+import { MOLD_META } from '@/lib/molds';
 import { loadProjectCards } from '@/lib/project-cards';
-
-export const dynamic = 'force-dynamic';
+import type { ProjectKind } from '@/lib/types';
 
 function NewForgeAction() {
   return (
@@ -25,29 +25,25 @@ function NewForgeAction() {
   );
 }
 
-export default async function HomePage() {
+export async function MoldSpacePage({ mold }: { mold: ProjectKind }) {
+  const meta = MOLD_META[mold];
   const user = await requireUser();
-  const cards = await loadProjectCards(user.id);
+  const cards = await loadProjectCards(user.id, { mold });
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-12 py-16">
       <SectionHeader
         level={1}
-        eyebrow="overview"
-        title="All projects"
-        subcopy="Every forge you’ve started, newest first — across all four molds, including ones still being detected."
+        eyebrow="mold"
+        title={meta.title}
+        subcopy={meta.description}
         action={<NewForgeAction />}
       />
 
       {cards.length === 0 ? (
         <GlassPanel>
           <p className="text-sm leading-relaxed text-forge-dim">
-            Nothing forged yet. Head to{' '}
-            <Link href="/forge" className="text-forge-amber hover:underline">
-              New Forge
-            </Link>{' '}
-            and describe what you want to build — an agent, a system, a full
-            app, or infrastructure. The Forge detects which.
+            {meta.emptyLine}
           </p>
         </GlassPanel>
       ) : (

@@ -19,11 +19,44 @@ const config: Config = {
           'cyan-soft': '#7be4f5',
           text: '#e7ecf3',
           dim: '#8a93a6',
+          faint: '#5b6475',
+        },
+        // The heat spectrum — coolest ember → brightest molten spark.
+        // Reserved for meaning (forging, gates, live, pipeline cooling);
+        // never decoration. Backed by the CSS variables in globals.css.
+        heat: {
+          coal: 'var(--heat-coal)',
+          ember: 'var(--heat-ember)',
+          glow: 'var(--heat-glow)',
+          molten: 'var(--heat-molten)',
+          spark: 'var(--heat-spark)',
+        },
+        cool: {
+          cyan: 'var(--cool-cyan)',
+          deep: 'var(--cool-deep)',
         },
       },
       fontFamily: {
-        sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        // Brand fonts only (loaded via next/font in app/layout.tsx). No
+        // Inter/Roboto/Arial. Display = Fraunces (headings), body =
+        // Spectral (prose), mono = IBM Plex Mono (labels/eyebrows).
+        sans: ['var(--font-body)', 'Spectral', 'Georgia', 'serif'],
+        body: ['var(--font-body)', 'Spectral', 'Georgia', 'Cambria', 'serif'],
+        mono: [
+          'var(--font-mono)',
+          'ui-monospace',
+          'SFMono-Regular',
+          'Menlo',
+          'monospace',
+        ],
+        display: [
+          'var(--font-display)',
+          'Spectral',
+          'Georgia',
+          'Cambria',
+          'Times New Roman',
+          'serif',
+        ],
       },
       boxShadow: {
         glass:

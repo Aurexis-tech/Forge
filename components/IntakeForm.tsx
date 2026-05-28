@@ -1,27 +1,21 @@
 'use client';
 
+// The intake — the SHOWCASE for the forge design language. The page is
+// calm (refined restraint): hairline surfaces, Spectral prose, mono
+// labels, the lattice + embers breathing behind it. Heat is spent at ONE
+// place — the FORGE IT action (ForgeButton) — plus a faint heat-glow that
+// only appears while the describe box is focused (you're about to act).
+// The StagePipeline below reads as the cooling spine: INTENT is molten
+// (you're here), everything ahead is dim until you forge. Flow unchanged.
+
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { GlassPanel } from './GlassPanel';
+import { EmberCard } from '@/components/forge/EmberCard';
+import { ForgeButton } from '@/components/forge/ForgeButton';
+import { SectionHeader } from '@/components/forge/SectionHeader';
+import { StagePipeline, CANONICAL_STAGES } from '@/components/forge/StagePipeline';
 import { useForgeStore } from '@/lib/store';
-
-const EXAMPLES = [
-  {
-    title: 'Morning research brief',
-    prompt:
-      'A research assistant that every morning at 8am scans new arXiv papers in computer vision and emails me a 5-bullet brief of the most interesting ones.',
-  },
-  {
-    title: 'Slack stand-up summariser',
-    prompt:
-      'An agent I can paste my team’s daily standup messages into; it returns a one-paragraph summary plus any blockers and follow-up actions.',
-  },
-  {
-    title: 'GitHub triage helper',
-    prompt:
-      'A webhook that fires when a new issue is opened on my repo; it reads the issue, suggests labels and a likely owner, and posts a comment.',
-  },
-];
+import { INTAKE_COPY, INTAKE_EXAMPLES } from '@/lib/intake-content';
 
 export function IntakeForm() {
   const router = useRouter();
@@ -35,7 +29,7 @@ export function IntakeForm() {
     setError(null);
     const trimmed = prompt.trim();
     if (!trimmed) {
-      setError('Describe the agent you want first.');
+      setError(INTAKE_COPY.emptyError);
       return;
     }
     setSubmitting(true);
@@ -62,31 +56,26 @@ export function IntakeForm() {
 
   return (
     <div className="w-full max-w-2xl">
-      <GlassPanel>
-        <form onSubmit={onSubmit} className="flex flex-col gap-6">
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
-              welcome · stage 01
-            </p>
-            <h1 className="mt-2 text-2xl font-medium text-forge-text sm:text-3xl">
-              Describe the AI agent you want
-            </h1>
-            <p className="mt-2 text-sm text-forge-dim">
-              Plain language. Be specific about what it does and who it&apos;s
-              for — the Forge turns it into a structured spec, plan, code,
-              tested sandbox, repo, and (when you approve) a live URL.
-            </p>
-          </div>
+      <EmberCard tone="none" className="p-8">
+        <form onSubmit={onSubmit} className="flex flex-col gap-7">
+          <SectionHeader
+            level={1}
+            eyebrow={INTAKE_COPY.eyebrow}
+            title={INTAKE_COPY.heading}
+            subcopy={INTAKE_COPY.subcopy}
+          />
 
+          {/* Refined input — hairline by default; a faint inner heat-glow
+              only on FOCUS (the page stays calm until you reach to act). */}
           <textarea
-            aria-label="Agent description"
+            aria-label={INTAKE_COPY.ariaLabel}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onFocus={() => setCoreState('active')}
             onBlur={() => setCoreState('idle')}
             rows={6}
-            placeholder="e.g. A research assistant that scans new arXiv papers in computer vision every morning and emails me a 5-bullet brief."
-            className="w-full resize-y rounded-xl border border-white/10 bg-black/40 px-4 py-3 font-mono text-sm leading-relaxed text-forge-text placeholder:text-forge-dim/70 focus:border-forge-amber/60 focus:outline-none focus:ring-2 focus:ring-forge-amber/30"
+            placeholder={INTAKE_COPY.placeholder}
+            className="w-full resize-y rounded-xl border border-[color:var(--line)] bg-black/40 px-4 py-3 font-body text-base leading-relaxed text-forge-text transition placeholder:text-forge-dim/70 focus:border-heat-glow/60 focus:outline-none focus:shadow-[inset_0_0_44px_-14px_rgba(255,154,77,0.5)] focus:ring-2 focus:ring-heat-glow/20"
             disabled={submitting}
           />
 
@@ -96,42 +85,40 @@ export function IntakeForm() {
             </p>
           ) : null}
 
-          <div className="flex items-center justify-between gap-4">
-            <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim">
-              intent → spec → plan → code → sandbox → repo → deploy → live
-            </span>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="group relative inline-flex items-center gap-2 rounded-xl border border-forge-amber/60 bg-forge-amber/15 px-6 py-3 font-mono text-xs uppercase tracking-[0.3em] text-forge-amber shadow-amber transition hover:bg-forge-amber/25 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span>{submitting ? 'Forging…' : 'Forge it'}</span>
-              <span
-                aria-hidden
-                className="inline-block h-1.5 w-1.5 rounded-full bg-forge-amber shadow-amber transition group-hover:scale-150"
-              />
-            </button>
+          <div className="flex items-center justify-end">
+            <ForgeButton type="submit" busy={submitting}>
+              {submitting ? 'Forging…' : 'Forge it'}
+            </ForgeButton>
+          </div>
+
+          {/* The cooling spine — at intake you're at INTENT (molten); the
+              rest of the pipeline waits, dim, until you forge. */}
+          <div className="border-t border-[color:var(--line)] pt-6">
+            <StagePipeline stages={CANONICAL_STAGES} activeIndex={0} />
           </div>
         </form>
-      </GlassPanel>
+      </EmberCard>
 
-      <div className="mt-6 flex flex-col gap-3">
+      {/* Starter chips — quiet by default, a restrained heat tint on hover. */}
+      <div className="mt-8 flex flex-col gap-3">
         <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-dim">
           need a starting point? try one of these
         </p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {EXAMPLES.map((ex) => (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {INTAKE_EXAMPLES.map((ex) => (
             <button
-              key={ex.title}
+              key={ex.mold}
               type="button"
               onClick={() => setPrompt(ex.prompt)}
               disabled={submitting}
-              className="flex flex-col gap-1 rounded-xl border border-white/10 bg-black/30 p-3 text-left transition hover:border-forge-cyan/40 hover:bg-black/40 disabled:opacity-60"
+              className="group flex flex-col gap-1.5 rounded-xl border border-[color:var(--line)] bg-black/30 p-3 text-left transition hover:border-heat-glow/30 hover:bg-black/40 hover:shadow-[0_0_30px_-10px_rgba(255,154,77,0.35)] disabled:opacity-60"
             >
-              <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-forge-cyan">
+              <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-forge-cyan transition group-hover:text-heat-glow">
                 {ex.title}
               </span>
-              <span className="text-xs text-forge-text/80">{ex.prompt}</span>
+              <span className="text-sm leading-relaxed text-forge-text/80">
+                {ex.prompt}
+              </span>
             </button>
           ))}
         </div>

@@ -4,7 +4,9 @@
 // "/" and the auth flows at /sign-in stay outside it.
 
 import Link from 'next/link';
+import { ForgeBackdrop } from '@/components/ForgeBackdrop';
 import { ForgeScene } from '@/components/ForgeScene';
+import { AppNav } from '@/components/AppNav';
 
 export default function AppLayout({
   children,
@@ -13,12 +15,17 @@ export default function AppLayout({
 }) {
   return (
     <>
-      {/* Persistent 3D world. Sits behind every authed route. */}
+      {/* Shared atmosphere — CSS lattice + breathing glow + rising embers +
+          vignette behind every authed route, so every page carries the
+          forge's world even when the 3D scene is in fallback. */}
+      <ForgeBackdrop />
+
+      {/* Persistent 3D world. Sits above the ambient layer, below content. */}
       <ForgeScene />
 
       {/* Foreground DOM layer — always crisp, always accessible. */}
       <div className="relative z-10 flex min-h-screen flex-col">
-        <header className="flex items-center justify-between px-8 py-6">
+        <header className="flex flex-wrap items-center justify-between gap-4 px-8 py-6">
           <Link
             href="/forge"
             className="group flex items-center gap-3 font-mono text-sm uppercase tracking-[0.4em] text-forge-text/90 hover:text-forge-amber"
@@ -26,27 +33,10 @@ export default function AppLayout({
             <span className="inline-block h-2 w-2 rounded-full bg-forge-amber shadow-amber transition group-hover:shadow-[0_0_24px_rgba(255,154,77,0.7)]" />
             Aurexis&nbsp;Forge
           </Link>
-          <nav className="flex items-center gap-6 font-mono text-xs uppercase tracking-[0.3em] text-forge-dim">
-            <Link href="/forge" className="hover:text-forge-text">
-              Intake
-            </Link>
-            <Link href="/projects" className="hover:text-forge-text">
-              Projects
-            </Link>
-            <Link href="/settings/keys" className="hover:text-forge-cyan">
-              Keys
-            </Link>
-            <Link href="/governance" className="hover:text-forge-amber">
-              Governance
-            </Link>
-          </nav>
+          <AppNav />
         </header>
 
         <main className="flex flex-1 flex-col px-6 pb-12">{children}</main>
-
-        <footer className="px-8 pb-6 font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim/60">
-          v0.1 · foundation
-        </footer>
       </div>
     </>
   );
