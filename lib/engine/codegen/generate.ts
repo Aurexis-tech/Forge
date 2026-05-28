@@ -8,13 +8,13 @@
 // that runs the code happens in the next layer (sandbox).
 
 import {
-  CODEGEN_MODEL,
   LLMError,
   complete,
   sumUsage,
   type GovernanceScope,
   type LLMUsage,
 } from '../llm';
+import { modelForTask } from '../model-policy';
 import type { AgentSpec } from '../spec/schema';
 import type { BuildPlan } from '../planner/schema';
 import {
@@ -333,7 +333,7 @@ export async function generateOneAgentFile(
 
   // --- Pass 1 ---
   const first = await complete({
-    model: CODEGEN_MODEL,
+    model: modelForTask('codegen'),
     system: systemPrompt,
     cacheSystem: true,
     messages: [{ role: 'user', content: userMessage }],
@@ -363,7 +363,7 @@ export async function generateOneAgentFile(
 
   // --- Repair retry ---
   const repair = await complete({
-    model: CODEGEN_MODEL,
+    model: modelForTask('repair'),
     system: systemPrompt,
     cacheSystem: true,
     messages: [
@@ -439,7 +439,7 @@ async function applyCritiqueGate(
       // the next turn. Reuses the existing prompt context — only
       // the critique is new.
       const refine = await complete({
-        model: CODEGEN_MODEL,
+        model: modelForTask('refine'),
         system: systemPrompt,
         cacheSystem: true,
         messages: [

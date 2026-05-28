@@ -36,6 +36,7 @@ import {
   LLMError,
   type GovernanceScope,
 } from '../llm';
+import { modelForTask } from '../model-policy';
 import { staticCheckFile } from './staticcheck';
 import {
   QUALITY_BAR,
@@ -47,11 +48,6 @@ import {
 // ===========================================================================
 // CONFIG — engine-owned constants. Env-readable.
 // ===========================================================================
-
-// Haiku-tier model id. Same default as the eval-judge tier so they
-// share cost characteristics. Override per env if needed; tests can
-// stub `complete` directly.
-const DEFAULT_CRITIQUE_MODEL = 'claude-haiku-4-5';
 
 /**
  * Whether the critique-refine gate runs at all. Default 'false' —
@@ -77,9 +73,14 @@ export function getCritiqueThreshold(): number {
   return Math.max(1, Math.min(5, parsed));
 }
 
-/** Model id used by the critique pass. */
+/**
+ * Model id used by the critique pass. Routes through the central model
+ * policy (lib/engine/model-policy.ts → task 'critique'), which resolves
+ * CRITIQUE_GATE_MODEL || the cheap (Haiku) tier — unchanged behaviour,
+ * now centralized + documented alongside every other task.
+ */
 export function getCritiqueModel(): string {
-  return process.env.CRITIQUE_GATE_MODEL?.trim() || DEFAULT_CRITIQUE_MODEL;
+  return modelForTask('critique');
 }
 
 // ===========================================================================

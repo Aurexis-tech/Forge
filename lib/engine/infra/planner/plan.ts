@@ -19,12 +19,12 @@
 import { z } from 'zod';
 import {
   LLMError,
-  PLANNER_MODEL,
   complete,
   sumUsage,
   type GovernanceScope,
   type LLMUsage,
 } from '@/lib/engine/llm';
+import { modelForTask } from '@/lib/engine/model-policy';
 import type { InfraSpec } from '@/lib/engine/infra/spec';
 import {
   InfraGraphError,
@@ -103,7 +103,7 @@ export async function planInfra(
 
   // --- 3. Light LLM detail pass -----------------------------------------
   const first = await complete({
-    model: PLANNER_MODEL,
+    model: modelForTask('plan'),
     system: INFRA_PLANNER_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
     maxTokens: 3000,
@@ -124,7 +124,7 @@ export async function planInfra(
   let repair;
   try {
     repair = await complete({
-      model: PLANNER_MODEL,
+      model: modelForTask('plan'),
       system: INFRA_PLANNER_SYSTEM_PROMPT,
       messages: [
         { role: 'user', content: userMessage },

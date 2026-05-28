@@ -18,12 +18,12 @@
 import { z } from 'zod';
 import {
   LLMError,
-  PLANNER_MODEL,
   complete,
   sumUsage,
   type GovernanceScope,
   type LLMUsage,
 } from '@/lib/engine/llm';
+import { modelForTask } from '@/lib/engine/model-policy';
 import {
   COORDINATION_PATTERNS,
   type SystemSpec,
@@ -128,7 +128,7 @@ export async function planSystem(
 
   // --- 4. Light LLM detail pass ------------------------------------------
   const first = await complete({
-    model: PLANNER_MODEL,
+    model: modelForTask('plan'),
     system: SYSTEM_PLANNER_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
     maxTokens: 3000,
@@ -149,7 +149,7 @@ export async function planSystem(
   let repair;
   try {
     repair = await complete({
-      model: PLANNER_MODEL,
+      model: modelForTask('plan'),
       system: SYSTEM_PLANNER_SYSTEM_PROMPT,
       messages: [
         { role: 'user', content: userMessage },

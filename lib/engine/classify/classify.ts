@@ -3,10 +3,11 @@
 // a small SOFTWARE app (Phase 3), or a piece of INFRASTRUCTURE (Phase
 // 4).
 //
-// Runs on the cheap model (claude-haiku-4-5) so the classification cost
-// is negligible relative to the extraction call that follows. Every
-// classification goes through lib/engine/llm.complete() so it inherits
-// the governance guard + ledger + BYOK key resolution automatically.
+// Runs on the cheap tier (model-policy.ts task 'classify') so the
+// classification cost is negligible relative to the extraction call that
+// follows. Every classification goes through lib/engine/llm.complete() so
+// it inherits the governance guard + ledger + BYOK key resolution
+// automatically.
 //
 // The classifier NEVER falls back silently to an arbitrary kind. If the
 // model is genuinely uncertain it returns kind='agent' with low
@@ -16,7 +17,7 @@
 
 import { z } from 'zod';
 import { complete, type GovernanceScope, type LLMUsage } from '../llm';
-import { CHEAP_LLM_MODEL } from '../governance/pricing';
+import { modelForTask } from '../model-policy';
 
 export const CLASSIFIED_KINDS = ['agent', 'system', 'software', 'infrastructure'] as const;
 export type ClassifiedKind = (typeof CLASSIFIED_KINDS)[number];
@@ -76,7 +77,7 @@ export async function classifyIntake(args: {
   const res = await complete({
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: USER_TEMPLATE(args.rawPrompt) }],
-    model: CHEAP_LLM_MODEL,
+    model: modelForTask('classify'),
     maxTokens: 200,
     governance: {
       ...args.governance,

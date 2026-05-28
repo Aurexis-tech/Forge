@@ -18,6 +18,7 @@ import {
   type GovernanceScope,
   type LLMUsage,
 } from '../llm';
+import { modelForTask } from '../model-policy';
 import {
   InfraExtractionResultSchema,
   type InfraExtractionResult,
@@ -79,6 +80,7 @@ export async function extractInfraSpec(
 
   // --- Pass 1 ---
   const first = await complete({
+    model: modelForTask('extract'),
     system: INFRA_SPEC_SYSTEM_PROMPT,
     // Stable, deterministic system prefix above the cache minimum —
     // cache it (5-min ephemeral) so repair / re-extraction read it back
@@ -103,6 +105,7 @@ export async function extractInfraSpec(
   let repair;
   try {
     repair = await complete({
+      model: modelForTask('extract'),
       system: INFRA_SPEC_SYSTEM_PROMPT,
       cacheSystem: true,
       messages: [

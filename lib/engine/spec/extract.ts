@@ -18,6 +18,7 @@ import {
   type GovernanceScope,
   type LLMUsage,
 } from '../llm';
+import { modelForTask } from '../model-policy';
 import {
   ExtractionResultSchema,
   type ExtractionResult,
@@ -85,6 +86,7 @@ export async function extractSpec(
 
   // --- Pass 1 ---
   const first = await complete({
+    model: modelForTask('extract'),
     system: SPEC_SYSTEM_PROMPT,
     // The system prompt (role + SPEC_QUALITY_BAR + schema) is a stable,
     // deterministic prefix above the Sonnet cache minimum — cache it so
@@ -110,6 +112,7 @@ export async function extractSpec(
   let repair;
   try {
     repair = await complete({
+      model: modelForTask('extract'),
       system: SPEC_SYSTEM_PROMPT,
       cacheSystem: true,
       messages: [

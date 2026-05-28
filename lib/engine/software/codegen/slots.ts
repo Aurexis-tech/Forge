@@ -27,12 +27,12 @@
 
 import {
   LLMError,
-  CODEGEN_MODEL,
   complete,
   sumUsage,
   type GovernanceScope,
   type LLMUsage,
 } from '@/lib/engine/llm';
+import { modelForTask } from '@/lib/engine/model-policy';
 import {
   staticCheckFile,
   type StaticCheckResult,
@@ -366,7 +366,7 @@ async function runWithRepair(
   let first;
   try {
     first = await complete({
-      model: CODEGEN_MODEL,
+      model: modelForTask('codegen'),
       system: args.systemPrompt,
       cacheSystem: true,
       messages: [{ role: 'user', content: args.userMessage }],
@@ -411,7 +411,7 @@ async function runWithRepair(
   let repair;
   try {
     repair = await complete({
-      model: CODEGEN_MODEL,
+      model: modelForTask('repair'),
       system: args.systemPrompt,
       cacheSystem: true,
       messages: [
@@ -489,7 +489,7 @@ async function applySlotCritiqueGate(
       // + the critic's notes as the next turn. Reuses every existing
       // prompt context — only the critique is new.
       const refine = await complete({
-        model: CODEGEN_MODEL,
+        model: modelForTask('refine'),
         system: args.systemPrompt,
         cacheSystem: true,
         messages: [

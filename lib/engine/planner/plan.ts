@@ -13,12 +13,12 @@
 
 import {
   LLMError,
-  PLANNER_MODEL,
   complete,
   sumUsage,
   type GovernanceScope,
   type LLMUsage,
 } from '../llm';
+import { modelForTask } from '../model-policy';
 import type { AgentSpec } from '../spec/schema';
 import {
   BuildPlanSchema,
@@ -74,7 +74,7 @@ export async function plan(input: PlanInput): Promise<PlanOutput> {
 
   // --- Pass 1 ---
   const first = await complete({
-    model: PLANNER_MODEL,
+    model: modelForTask('plan'),
     system: PLANNER_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
     maxTokens: 4000,
@@ -95,7 +95,7 @@ export async function plan(input: PlanInput): Promise<PlanOutput> {
   let repair;
   try {
     repair = await complete({
-      model: PLANNER_MODEL,
+      model: modelForTask('plan'),
       system: PLANNER_SYSTEM_PROMPT,
       messages: [
         { role: 'user', content: userMessage },

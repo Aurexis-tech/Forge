@@ -17,21 +17,13 @@ import { assertAllowed, GovernanceError } from './governance/guard';
 import { recordCost } from './governance/ledger';
 import { projectedLlmCostUsd } from './governance/pricing';
 import { NeedsKeyError, resolveKey } from './keys';
+import { modelForTask } from './model-policy';
 import { withRetry } from './retry';
 
-export const SPEC_MODEL: string =
-  process.env.ANTHROPIC_MODEL?.trim() || 'claude-sonnet-4-6';
-
-// Planning benefits from a stronger reasoner; fall back to the main model if
-// the dedicated override isn't set. Kept here so every engine module reads
-// model identifiers from one place.
-export const PLANNER_MODEL: string =
-  process.env.ANTHROPIC_PLANNER_MODEL?.trim() || SPEC_MODEL;
-
-// Codegen benefits from a strong coding model; falls back to the planner
-// model, which in turn falls back to the spec model.
-export const CODEGEN_MODEL: string =
-  process.env.ANTHROPIC_CODEGEN_MODEL?.trim() || PLANNER_MODEL;
+// Model selection lives in ONE place — lib/engine/model-policy.ts. Callers
+// pass an explicit `model` resolved via `modelForTask(<task>)`; this default
+// only applies to model-less harness/test calls (resolves to the extraction
+// tier = Sonnet, preserving the prior `?? SPEC_MODEL` behaviour).
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_TOKENS = 2500;
@@ -130,7 +122,7 @@ export interface CompleteOptions {
 }
 
 export async function complete(opts: CompleteOptions): Promise<LLMResult> {
-  const model = opts.model ?? SPEC_MODEL;
+  const model = opts.model ?? modelForTask('extract');
   const maxTokens = opts.maxTokens ?? DEFAULT_MAX_TOKENS;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const governance = opts.governance ?? { user_id: null, project_id: null };
