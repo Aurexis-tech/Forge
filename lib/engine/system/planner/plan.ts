@@ -30,12 +30,13 @@ import {
 } from '../spec';
 import {
   assertWithinStepBudget,
-  deriveGraph,
   SystemGraphError,
   SystemPlanBudgetError,
   type DerivedEdge,
   type DerivedGraph,
 } from './graph';
+import { expandCoordination } from '../coordination';
+import { EngineError } from '@/lib/engine/errors';
 import {
   OrchestrationPlanSchema,
   TOOL_STATUSES,
@@ -80,11 +81,21 @@ export async function planSystem(
   input: PlanSystemInput,
 ): Promise<PlanSystemOutput> {
   // --- 1 + 2. Derive + validate the graph (deterministic, no LLM) ---------
+  // Dispatch through the coordination-pattern catalog. For a 'standard'
+  // spec (or one with no coordination_pattern) this delegates to
+  // deriveGraph — byte-identical. competing_experts expands a
+  // fan-out-to-judge DAG and throws bad_input on a constraint violation.
   let graph: DerivedGraph;
   try {
-    graph = deriveGraph(input.spec);
+    graph = expandCoordination(input.spec);
   } catch (err) {
     if (err instanceof SystemGraphError) {
+      throw new SystemPlanError(err.message, { cause: err });
+    }
+    // Pattern constraint violations (competing_experts expert/judge
+    // counts) surface as bad_input EngineErrors — wrap them so the route
+    // sees a clean SystemPlanError like any other graph rejection.
+    if (err instanceof EngineError) {
       throw new SystemPlanError(err.message, { cause: err });
     }
     throw err;

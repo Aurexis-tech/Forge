@@ -14,8 +14,23 @@
 import { z } from 'zod';
 import { TRIGGERS } from '@/lib/engine/spec/schema';
 
+// EDGE-wiring pattern: how the user's declared sub_agents are wired into
+// handoff edges. Lives on `coordination.pattern`. Unchanged.
 export const COORDINATION_PATTERNS = ['pipeline', 'fan_out_in', 'dag'] as const;
 export type CoordinationPattern = (typeof COORDINATION_PATTERNS)[number];
+
+// TOPOLOGY pattern: a CLOSED, vetted catalog of coordination shapes that
+// PRODUCE the orchestration graph (and may synthesise node roles like a
+// judge). Distinct from `coordination.pattern` above (which only wires
+// existing sub_agents). 'standard' = today's behaviour exactly. The
+// catalog of behaviours lives in lib/engine/system/coordination/.
+//
+// The id list is defined HERE (a leaf module) so SystemSpecSchema can
+// validate the field without importing the catalog (which imports this
+// module's SystemSpec type — keeping the dependency one-directional).
+export const PATTERN_IDS = ['standard', 'competing_experts'] as const;
+export type PatternId = (typeof PATTERN_IDS)[number];
+export const DEFAULT_PATTERN_ID: PatternId = 'standard';
 
 // Bound the runtime cost surface. max_steps is the maximum number of
 // LLM turns the system can take across all sub-agents in a single
@@ -72,6 +87,10 @@ export const SystemSpecSchema = z
     goal: z.string().trim().min(1).max(800),
     sub_agents: z.array(SubAgentSchema).min(2).max(12),
     coordination: CoordinationSchema,
+    // OPTIONAL topology pattern. Absent → 'standard' (today's behaviour,
+    // byte-identical). 'competing_experts' fans the experts out to a judge.
+    // Backward-compatible: existing specs omit it and resolve to standard.
+    coordination_pattern: z.enum(PATTERN_IDS).optional(),
     // Reuse the Phase 1 trigger vocabulary so the planner / scheduler can
     // route a system the same way it routes a single agent later.
     triggers: z.array(z.enum(TRIGGERS)).min(1).max(4),

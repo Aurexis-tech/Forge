@@ -32,6 +32,7 @@ import {
   mergePackageJsonDependencies,
 } from '@/lib/engine/tools';
 import { TOOL_REGISTRY } from '@/lib/engine/planner/registry';
+import { isJudgeRole } from '../coordination/roles';
 import {
   AgentSpecSchema,
   type AgentSpec,
@@ -672,7 +673,19 @@ function moduleFilePurpose(node: OrchestrationNode): string {
     node.outputs.length === 0
       ? '(no outputs)'
       : 'outputs: { ' + node.outputs.join(', ') + ' }';
+  // JUDGE node-role (competing_experts): a judge consumes the candidate
+  // outputs from its upstream experts and selects OR synthesises the
+  // single best result. Prepend a judge-specific framing so the per-node
+  // generator produces evaluation logic, not another expert. Additive:
+  // only judge-role nodes see this; every other node's purpose is
+  // byte-identical to before.
+  const judgePrefix = isJudgeRole(node.role)
+    ? 'JUDGE node: independently evaluate the candidate outputs handed in ' +
+      'by the upstream expert nodes and select OR synthesise the single best ' +
+      'result. Do not re-do the experts’ work. '
+    : '';
   return (
+    judgePrefix +
     "Module for node '" +
     node.id +
     "' (role: " +

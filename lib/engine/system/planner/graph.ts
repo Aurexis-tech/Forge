@@ -54,7 +54,23 @@ export class SystemGraphError extends Error {
 export function deriveGraph(spec: SystemSpec): DerivedGraph {
   const nodeIds = spec.sub_agents.map((a) => a.id);
   const edges = deriveEdges(spec);
+  return assembleGraph(nodeIds, edges);
+}
 
+// ---------------------------------------------------------------------------
+// Pure graph assembly from a node-id list + a derived edge list. Extracted
+// from deriveGraph so coordination-pattern expanders (e.g. competing_experts)
+// reuse the SAME validation + topo-sort + upstream-map construction —
+// there is exactly ONE place that builds a DerivedGraph. deriveGraph
+// remains byte-identical (it just hands its edges here).
+//
+// Runs the REUSED Phase 1 task-graph validator (Kahn topological sort +
+// cycle + dup detection). Throws SystemGraphError on a malformed graph.
+// ---------------------------------------------------------------------------
+export function assembleGraph(
+  nodeIds: string[],
+  edges: DerivedEdge[],
+): DerivedGraph {
   // Build PlanTask-shaped records so we can re-use the Phase 1 task-graph
   // validator (Kahn topological sort + cycle + dup detection). This is the
   // explicit "reuse the cycle check" requirement from the brief.
