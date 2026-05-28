@@ -8,8 +8,10 @@
 //     when N >= 1 — making retry spend observable in the ledger.
 //
 // Stubbed: the Anthropic SDK module (via vi.mock) so the SDK call
-// throws scripted errors then succeeds. resolveKey + assertAllowed
-// + recordCost are EXERCISED unchanged from the engine.
+// throws scripted errors then succeeds. resolveKey is mocked (it would
+// otherwise construct a real Supabase client for BYOK lookup — see the
+// mock note below). assertAllowed + recordCost are EXERCISED unchanged
+// from the engine (assertAllowed via spy, recordCost via mock).
 
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -35,6 +37,25 @@ vi.mock('@anthropic-ai/sdk', () => {
 vi.mock('@/lib/engine/governance/ledger', () => ({
   recordCost: recordCostMock,
 }));
+
+// HERMETICITY: complete() resolves the BYOK key BEFORE the SDK call,
+// and resolveKey() defaults its `supabase` arg to getServerSupabase()
+// — which constructs a REAL Supabase client (whose realtime layer
+// throws on Node 20). This test only exercises the retry + governance
+// + ledger-ref behaviour, none of which needs a real client, so we
+// mock the key seam. (The global guard in tests/setup.ts now fails any
+// test that lets a real client be constructed.)
+vi.mock('@/lib/engine/keys', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/engine/keys')>();
+  return {
+    ...actual,
+    resolveKey: vi.fn(async () => ({
+      key: 'test-anthropic-key',
+      source: 'platform' as const,
+      key_last4: 'tkey',
+    })),
+  };
+});
 
 // The guard runs real — it's a pure function over its inputs and
 // shorts out cleanly when supabase is the in-memory test mock.

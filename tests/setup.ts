@@ -10,6 +10,42 @@
 
 import { vi } from 'vitest';
 
+// HERMETICITY GUARD — fail fast when a test lets PRODUCTION code
+// construct a REAL Supabase client.
+//
+// The leak this prevents: code like resolveKey() / route handlers
+// default to getServerSupabase(), which calls
+// `createClient(@supabase/supabase-js)`. A real client's realtime
+// layer calls getWebSocketConstructor(), which throws on Node 20
+// (CI) but SUCCEEDS on Node 24 (local) — so a non-hermetic test
+// passes locally and only fails in CI. By mocking createClient to
+// throw on EVERY Node version, the class fails on the dev's machine
+// instead.
+//
+// `getServerSupabase` constructs lazily (inside the function, never
+// at import), so this guard only fires when unmocked prod code
+// actually calls it at runtime. Hermetic tests mock `@/lib/supabase`
+// (getServerSupabase) or `@/lib/engine/keys` (resolveKey) and never
+// reach here. Tests that genuinely need a Supabase shape pass an
+// in-memory mock client explicitly.
+//
+// vi.mock in a setupFiles module is applied to every test file.
+vi.mock('@supabase/supabase-js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@supabase/supabase-js')>();
+  return {
+    ...actual,
+    createClient: () => {
+      throw new Error(
+        '[tests] hermetic test constructed a REAL Supabase client. ' +
+          'Mock getServerSupabase via vi.mock("@/lib/supabase"), or mock ' +
+          'resolveKey via vi.mock("@/lib/engine/keys"), or pass an ' +
+          'in-memory client explicitly — never let production code build a ' +
+          'real client in a test.',
+      );
+    },
+  };
+});
+
 // Anthropic + E2B keys must not be the developer's real ones.
 process.env.ANTHROPIC_API_KEY = 'test-key-anthropic-disabled';
 process.env.E2B_API_KEY = 'test-key-e2b-disabled';
