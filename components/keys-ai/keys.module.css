@@ -1,0 +1,24 @@
+/* Keys AI — scoped animation module. ONE infinite loop: a slow aurora
+   "breathing rim" applied only to verified provider cards (so a connected
+   key is visibly alive without inventing call counts). Keyframes live HERE,
+   never in globals.css — the "≤4 infinite animations" enforcer keeps
+   reflecting only the forge backdrop's loops. The global prefers-
+   reduced-motion rule freezes this to a calm static glow. */
+
+.verifiedRim {
+  animation: keysVerifiedRim 4s var(--ease) infinite;
+}
+
+@keyframes keysVerifiedRim {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(95, 230, 255, 0.22),
+      0 0 22px -10px rgba(95, 230, 255, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(95, 230, 255, 0.48),
+      0 0 36px -6px rgba(95, 230, 255, 0.58);
+  }
+}

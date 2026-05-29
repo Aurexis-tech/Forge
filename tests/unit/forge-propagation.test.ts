@@ -178,21 +178,20 @@ describe('project detail adopts the forge language', () => {
 // ===========================================================================
 // 5. Keys — SectionHeader + EmberCard per key + HeatBadge status
 // ===========================================================================
-describe('keys page is restrained forge', () => {
-  const page = read('app/(app)/settings/keys/page.tsx');
+describe('the forge KeysForm component is preserved (orphaned by the migration)', () => {
+  // /settings/keys has MIGRATED to the AI-futuristic system — see
+  // tests/unit/keys-ai.test.ts for the new structural assertions. The
+  // forge KeysForm component file is left in place (it'll be deleted at
+  // cleanup); these checks confirm it wasn't touched.
   const form = read('components/keys/KeysForm.tsx');
 
-  it('the page header is a SectionHeader', () => {
-    expect(page).toMatch(/<SectionHeader/);
-  });
-
-  it('each key card is an EmberCard whose tone follows verification (keyStatusTone)', () => {
+  it('the forge form still uses EmberCard + keyStatusTone (unchanged)', () => {
     expect(form).toMatch(/<EmberCard/);
     expect(form).toMatch(/keyStatusTone/);
     expect(form).not.toMatch(/GlassPanel/);
   });
 
-  it('the connected pill is a HeatBadge (warm when verified)', () => {
+  it('the forge ConnectedPill is still a HeatBadge', () => {
     expect(form).toMatch(/<HeatBadge/);
     expect(form).toMatch(/keyStatusTone\(true\)\.badge/);
   });

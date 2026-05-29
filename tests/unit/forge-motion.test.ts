@@ -184,11 +184,10 @@ describe('components consult the central tokens, not magic numbers', () => {
   });
 
   it('un-migrated forge page-load reveals stagger off the revealStep token', () => {
-    // /projects migrated to the AI-futuristic system — its reveal lives in
-    // components/projects-ai/ProjectsAi.tsx, not the forge Reveal token.
+    // Migrated to the AI-futuristic system (no longer use the forge Reveal):
+    //   /projects, /settings/keys.
     for (const p of [
       'components/MoldSpacePage.tsx',
-      'app/(app)/settings/keys/page.tsx',
       'app/(app)/governance/page.tsx',
       'app/(app)/projects/[id]/page.tsx',
     ]) {
