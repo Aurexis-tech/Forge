@@ -1,53 +1,102 @@
-// Public landing at "/". Middleware redirects authenticated users away,
-// so by the time this renders the visitor is guaranteed to be logged
-// out. NO API or engine calls fire — the hero is a scripted demo.
+// Public landing at "/". MIGRATED to the AI-futuristic design language:
+// AurexisAmbient backdrop (mounted HERE, scoped to this route — the (app)
+// pages keep ForgeBackdrop untouched), the new AiNav, LiquidGlass surfaces,
+// lq.* tokens, Inter (--font-ui) + JetBrains Mono (--font-code). NO API or
+// engine calls fire — the demo is a scripted, self-running cycle.
 
 import Link from 'next/link';
-import { LandingHero } from '@/components/landing/LandingHero';
-import {
-  CtaBand,
-  FourThings,
-  HowItWorks,
-  LandingFooter,
-  OneExample,
-  TrustLine,
-} from '@/components/landing/Sections';
+import { AiNav } from '@/components/lq/AiNav';
+import { AurexisAmbient } from '@/components/lq/AurexisAmbient';
+import { LiquidGlass } from '@/components/lq/LiquidGlass';
+import { LiveDemo } from '@/components/landing-ai/LiveDemo';
+import { MoldShowcase } from '@/components/landing-ai/MoldShowcase';
 
 export const metadata = {
-  title: 'Aurexis Forge — describe it, the Forge builds it',
+  title: 'Aurexis Forge — describe it, it builds itself',
   description:
-    'A workshop that turns plain-language ideas into live agents. Bring your own key; nothing ships until you approve.',
+    'From a sentence to a running thing — agents, systems, full apps, infrastructure. Every irreversible step still waits on your yes.',
 };
 
 export default function LandingPage() {
   return (
-    <div className="relative isolate min-h-screen bg-forge-void">
-      {/* Minimal public top-bar — just the wordmark + a sign-in shortcut.
-          No in-app nav, no ForgeScene canvas behind it; the hero has its
-          own canvas. */}
-      <header className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-6 py-5 sm:px-10">
-        <Link
-          href="/"
-          className="group flex items-center gap-3 font-mono text-sm uppercase tracking-[0.4em] text-forge-text/90 hover:text-forge-amber"
-        >
-          <span className="inline-block h-2 w-2 rounded-full bg-forge-amber shadow-amber transition group-hover:shadow-[0_0_24px_rgba(255,154,77,0.7)]" />
-          Aurexis&nbsp;Forge
-        </Link>
-        <Link
-          href="/sign-in"
-          className="rounded-full border border-white/15 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.4em] text-forge-dim transition hover:border-forge-amber/50 hover:text-forge-amber"
-        >
-          sign in
-        </Link>
-      </header>
+    <>
+      {/* Scoped backdrop: AurexisAmbient lives on the Landing route only.
+          The (app) routes keep ForgeBackdrop (untouched). */}
+      <AurexisAmbient />
 
-      <LandingHero />
-      <HowItWorks />
-      <FourThings />
-      <TrustLine />
-      <OneExample />
-      <CtaBand />
-      <LandingFooter />
-    </div>
+      <div className="relative z-10 flex min-h-screen flex-col font-ui text-lq-ink">
+        <AiNav />
+
+        {/* HERO + LIVE DEMO — side-by-side on desktop, stacked on narrow. */}
+        <section className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-12 px-6 py-16 sm:px-10 lg:grid-cols-2 lg:gap-10 lg:py-24">
+          {/* Hero (left). */}
+          <div className="flex flex-col">
+            <div className="flex items-center gap-3">
+              <span className="font-code text-[11px] uppercase tracking-[0.35em] text-lq-aurora">
+                AI · Autonomous · Zero-code
+              </span>
+              <span
+                aria-hidden
+                className="h-px w-12 bg-gradient-to-r from-lq-aurora to-transparent"
+              />
+            </div>
+
+            <h1 className="mt-6 font-ui text-5xl font-extrabold leading-[0.95] tracking-[-0.03em] text-lq-ink sm:text-7xl xl:text-[88px]">
+              Builds itself.
+              <br />
+              <span className="text-lq-ink-faint">Asks before it ships.</span>
+            </h1>
+
+            <p className="mt-7 max-w-xl text-lg leading-relaxed text-lq-ink-dim">
+              From a sentence to a running thing — agents, systems, full apps,
+              infrastructure. Every irreversible step still waits on your yes.
+            </p>
+
+            <div className="mt-9 flex flex-wrap items-center gap-4">
+              <LiquidGlass
+                as="a"
+                href="/forge"
+                variant="aurora"
+                className="inline-flex items-center rounded-[14px] px-6 py-4 text-[15px] font-semibold"
+              >
+                Start a forge →
+              </LiquidGlass>
+              <LiquidGlass
+                as="a"
+                href="#molds"
+                variant="default"
+                className="inline-flex items-center rounded-[14px] px-6 py-4 text-[15px] font-medium text-lq-ink"
+              >
+                See examples
+              </LiquidGlass>
+              <span className="font-code text-[12px] uppercase tracking-[0.2em] text-lq-ink-faint">
+                $5 first run · BYOK
+              </span>
+            </div>
+          </div>
+
+          {/* Live demo (right). */}
+          <div className="w-full">
+            <LiveDemo />
+          </div>
+        </section>
+
+        {/* Mold showcase. */}
+        <MoldShowcase />
+
+        {/* Quiet footer. */}
+        <footer className="mx-auto w-full max-w-7xl px-6 py-10 sm:px-10">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-lq-line pt-6 font-code text-[11px] uppercase tracking-[0.3em] text-lq-ink-faint">
+            <span>Aurexis Forge</span>
+            <div className="flex items-center gap-6">
+              <Link href="/sign-in" className="transition-colors hover:text-lq-ink">
+                Sign in
+              </Link>
+              <span>Built in the open</span>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </>
   );
 }
