@@ -272,8 +272,9 @@ describe('projectVm', () => {
 // 3. The (app) migrated-route allowlist — /projects added, EXACT match
 // ===========================================================================
 describe('MIGRATED_ROUTES now covers /projects (exact match)', () => {
-  it('lists /forge and /projects', () => {
-    expect([...MIGRATED_ROUTES].sort()).toEqual(['/forge', '/projects']);
+  it('lists /forge and /projects (further migrations may add more)', () => {
+    expect(MIGRATED_ROUTES).toContain('/forge');
+    expect(MIGRATED_ROUTES).toContain('/projects');
   });
 
   it('matches /projects EXACTLY and never a child (the detail page stays un-migrated)', () => {

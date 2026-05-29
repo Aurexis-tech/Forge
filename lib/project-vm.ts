@@ -174,6 +174,34 @@ function dotFor(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Pure aggregate over a project list — used by /projects' count summary AND
+// the mold-space aggregate bar. NEVER emits fabricated fields (runs / uptime
+// / cost) — only what derives directly from the project + journey today.
+// ---------------------------------------------------------------------------
+
+export interface MoldAggregate {
+  readonly total: number;
+  readonly live: number;
+  readonly forging: number;
+  readonly gate: number;
+}
+
+export function aggregateMoldStats(
+  cards: ReadonlyArray<ProjectCardData>,
+): MoldAggregate {
+  let live = 0;
+  let forging = 0;
+  let gate = 0;
+  for (const c of cards) {
+    const s = deriveStatus(c);
+    if (s === 'live') live++;
+    else if (s === 'forging') forging++;
+    else if (s === 'gate') gate++;
+  }
+  return { total: cards.length, live, forging, gate };
+}
+
 export function projectVm(
   card: ProjectCardData,
   opts?: { nowMs?: number },

@@ -1,7 +1,9 @@
-import { MoldSpacePage } from '@/components/MoldSpacePage';
+// /systems — MIGRATED to AI-futuristic via the parameterized MoldSpaceAi.
+
+import { MoldSpaceAi } from '@/components/projects-ai/MoldSpaceAi';
 
 export const dynamic = 'force-dynamic';
 
 export default function SystemsPage() {
-  return <MoldSpacePage mold="system" />;
+  return <MoldSpaceAi mold="system" />;
 }

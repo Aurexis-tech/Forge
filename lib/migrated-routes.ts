@@ -7,7 +7,14 @@
 /** Routes (under the (app) group) that have moved to the AI-futuristic
  *  design language — they get AurexisAmbient + AiNav. Everything else
  *  keeps ForgeBackdrop + the forge AppNav. */
-export const MIGRATED_ROUTES: readonly string[] = ['/forge', '/projects'];
+export const MIGRATED_ROUTES: readonly string[] = [
+  '/forge',
+  '/projects',
+  '/agents',
+  '/systems',
+  '/software',
+  '/infrastructure',
+];
 
 /**
  * True when `pathname` is a migrated route. EXACT match only: each page
