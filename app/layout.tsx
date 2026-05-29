@@ -6,7 +6,13 @@
 // the chrome.
 
 import type { Metadata, Viewport } from 'next';
-import { Fraunces, Spectral, IBM_Plex_Mono } from 'next/font/google';
+import {
+  Fraunces,
+  Spectral,
+  IBM_Plex_Mono,
+  Inter,
+  JetBrains_Mono,
+} from 'next/font/google';
 import './globals.css';
 
 // THE BRAND TYPE HIERARCHY (forge design language):
@@ -40,6 +46,28 @@ const mono = IBM_Plex_Mono({
   display: 'swap',
 });
 
+// THE AI-FUTURISTIC TYPE HIERARCHY (DORMANT — added alongside the forge
+// fonts above). Inter = the new UI/display+body face, JetBrains Mono =
+// the new code/label face. Exposed as --font-ui / --font-code and wired
+// onto <html> so they're AVAILABLE, but nothing references them yet (the
+// body + forge primitives stay on Fraunces/Spectral/IBM Plex Mono until
+// pages migrate). Loaded now so the migration prompts have them ready.
+const ui = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  style: ['normal'],
+  variable: '--font-ui',
+  display: 'swap',
+});
+
+const code = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  style: ['normal'],
+  variable: '--font-code',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'Aurexis Forge — describe what you want, the Forge builds it',
   description:
@@ -60,7 +88,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${display.variable} ${body.variable} ${mono.variable}`}
+      className={`${display.variable} ${body.variable} ${mono.variable} ${ui.variable} ${code.variable}`}
     >
       <body className="min-h-screen overflow-x-hidden bg-forge-void font-body text-forge-text">
         {children}

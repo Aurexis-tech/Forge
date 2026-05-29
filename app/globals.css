@@ -46,6 +46,37 @@
   --ease-cool: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-warm: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-forge: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* === AI-FUTURISTIC DESIGN LANGUAGE — DORMANT ======================
+     Added ALONGSIDE the forge system (above). Nothing mounts or
+     references these yet; pages migrate one at a time in later prompts,
+     then the forge tokens are deleted in a final cleanup pass. Until
+     then the app looks EXACTLY as before. Surfaced in Tailwind under the
+     `lq.*` colour namespace (so the default amber/rose/violet scales and
+     the forge colours stay intact) + `font-ui`/`font-code`.
+
+     Collisions with the forge ink set, resolved without overwriting:
+       - --ink  (forge #e7ecf3) ≠ new #f0f2f8 → new value lives in
+         --ink-base; the forge --ink is left untouched. [cleanup: rename
+         --ink-base → --ink once the forge system is removed]
+       - --line (forge rgba(255,255,255,.08)) == new target → reused
+         as-is (identical value, no --line-base needed). */
+  --void: #08090d;
+  --elev-1: #0e1018;
+  --elev-2: #14171f;
+  --ink-base: #f0f2f8;      /* the new "ink" (forge --ink stays #e7ecf3) */
+  --ink-dim: #9aa0b0;
+  --ink-faint: #5a5f6e;
+  --ink-ghost: #353841;
+  --aurora: #5fe6ff;
+  --violet: #a78bfa;
+  --amber: #fbbf24;
+  --mint: #6ee7b7;
+  --rose: #fb7185;
+  /* --line reused from the forge set above (identical value). */
+  --grid: rgba(255, 255, 255, 0.012);
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 html,

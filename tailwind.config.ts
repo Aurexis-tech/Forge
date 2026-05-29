@@ -35,6 +35,28 @@ const config: Config = {
           cyan: 'var(--cool-cyan)',
           deep: 'var(--cool-deep)',
         },
+        // AI-FUTURISTIC palette — DORMANT, namespaced under `lq.*` so it
+        // never clobbers Tailwind's default amber/rose/violet/emerald
+        // scales (in active use) or the forge colours. Backed by the
+        // --void / --aurora / … vars in globals.css. Usage: bg-lq-void,
+        // text-lq-aurora, border-lq-line, etc. Nothing references these
+        // yet; pages adopt them during migration.
+        lq: {
+          void: 'var(--void)',
+          'elev-1': 'var(--elev-1)',
+          'elev-2': 'var(--elev-2)',
+          ink: 'var(--ink-base)',
+          'ink-dim': 'var(--ink-dim)',
+          'ink-faint': 'var(--ink-faint)',
+          'ink-ghost': 'var(--ink-ghost)',
+          aurora: 'var(--aurora)',
+          violet: 'var(--violet)',
+          amber: 'var(--amber)',
+          mint: 'var(--mint)',
+          rose: 'var(--rose)',
+          line: 'var(--line)',
+          grid: 'var(--grid)',
+        },
       },
       fontFamily: {
         // Brand fonts only (loaded via next/font in app/layout.tsx). No
@@ -57,6 +79,11 @@ const config: Config = {
           'Times New Roman',
           'serif',
         ],
+        // AI-FUTURISTIC faces — DORMANT. ui = Inter (the new display+body),
+        // code = JetBrains Mono. Backed by --font-ui / --font-code. Nothing
+        // uses font-ui / font-code yet.
+        ui: ['var(--font-ui)', 'Inter', 'system-ui', 'sans-serif'],
+        code: ['var(--font-code)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       boxShadow: {
         glass:

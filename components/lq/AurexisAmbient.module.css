@@ -1,0 +1,114 @@
+/* AurexisAmbient — the AI-futuristic global backdrop. DORMANT: built +
+   tested in isolation, NOT mounted (ForgeBackdrop stays the live backdrop
+   until the Landing prompt flips them together).
+
+   Its two infinite loops (aurora + violet breathe) live HERE, in a scoped
+   CSS module — deliberately NOT in app/globals.css — so the globals.css
+   "≤4 infinite animations" enforcer keeps reflecting only the mounted
+   forge backdrop's loops. These two count against the live budget only
+   once this component is actually mounted. @keyframes are module-local
+   (css-modules hashes the name + rewrites the reference in this file). */
+
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--void);
+}
+
+/* Faint 12-column lattice. */
+.grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      var(--grid) 0,
+      var(--grid) 1px,
+      transparent 1px,
+      transparent calc(100% / 12)
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      var(--grid) 0,
+      var(--grid) 1px,
+      transparent 1px,
+      transparent 96px
+    );
+  -webkit-mask-image: radial-gradient(
+    ellipse 90% 70% at 50% 32%,
+    #000 0%,
+    transparent 80%
+  );
+  mask-image: radial-gradient(
+    ellipse 90% 70% at 50% 32%,
+    #000 0%,
+    transparent 80%
+  );
+}
+
+/* Large aurora-cyan glow, breathing slowly. */
+.aurora {
+  position: absolute;
+  inset: 0;
+  opacity: 0.16;
+  background: radial-gradient(
+    60% 48% at 50% -6%,
+    var(--aurora),
+    transparent 60%
+  );
+  animation: auroraBreathe 7s var(--ease) infinite;
+  will-change: opacity, transform;
+}
+
+/* Cooler violet glow from the lower-right, breathing on a longer period. */
+.violet {
+  position: absolute;
+  inset: 0;
+  opacity: 0.1;
+  background: radial-gradient(
+    52% 46% at 88% 108%,
+    var(--violet),
+    transparent 62%
+  );
+  animation: violetBreathe 9s var(--ease) infinite;
+  will-change: opacity, transform;
+}
+
+/* Soft vignette sinking the corners into the void. */
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    120% 120% at 50% 40%,
+    transparent 55%,
+    rgba(3, 4, 8, 0.72) 100%
+  );
+}
+
+@keyframes auroraBreathe {
+  0%,
+  100% {
+    opacity: 0.16;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.24;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes violetBreathe {
+  0%,
+  100% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.16;
+  }
+}
+
+/* The global prefers-reduced-motion rule in globals.css already freezes
+   these (animation-duration → ~0). */

@@ -1,0 +1,219 @@
+/* LiquidGlass — the AI-futuristic material. DORMANT (no page mounts it).
+   Scoped CSS module so the class names + pseudo-elements live with the
+   component and never touch globals.css / the forge system. The cursor-
+   tracking specular reads --mx/--my, which useSpecular writes on the
+   element (custom props inherit into ::after). */
+
+.glass {
+  position: relative;
+  background: rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  overflow: hidden;
+  color: var(--ink-base);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 8px 24px rgba(0, 0, 0, 0.3);
+  transition:
+    background 0.35s var(--ease),
+    border-color 0.35s var(--ease),
+    transform 0.35s var(--ease),
+    box-shadow 0.35s var(--ease);
+}
+
+/* Wet top-edge highlight. */
+.glass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent
+  );
+  pointer-events: none;
+}
+
+/* Cursor-tracking specular. Centred (50%/50%) until useSpecular moves it. */
+.glass::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.35s var(--ease);
+  background: radial-gradient(
+    240px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.14),
+    transparent 55%
+  );
+  pointer-events: none;
+}
+
+.glass:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.26);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.26),
+    0 14px 36px rgba(0, 0, 0, 0.38);
+}
+
+.glass:hover::after {
+  opacity: 1;
+}
+
+.glass:active {
+  transform: translateY(0);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* --- aurora (primary) ------------------------------------------------- */
+.aurora {
+  background: linear-gradient(
+    180deg,
+    rgba(95, 230, 255, 0.22),
+    rgba(95, 230, 255, 0.1)
+  );
+  border-color: rgba(95, 230, 255, 0.45);
+  color: #031318;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    0 0 32px rgba(95, 230, 255, 0.28);
+}
+.aurora::before {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.65) 50%,
+    transparent
+  );
+}
+.aurora::after {
+  background: radial-gradient(
+    240px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.3),
+    transparent 55%
+  );
+}
+.aurora:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(95, 230, 255, 0.3),
+    rgba(95, 230, 255, 0.16)
+  );
+  border-color: rgba(95, 230, 255, 0.6);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.26),
+    0 14px 36px rgba(0, 0, 0, 0.38),
+    0 0 44px rgba(95, 230, 255, 0.4);
+}
+.aurora:active {
+  transform: translateY(0);
+}
+
+/* --- rose (destructive) ----------------------------------------------- */
+.rose {
+  background: linear-gradient(
+    180deg,
+    rgba(251, 113, 133, 0.2),
+    rgba(251, 113, 133, 0.09)
+  );
+  border-color: rgba(251, 113, 133, 0.45);
+  color: var(--rose);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    0 0 32px rgba(251, 113, 133, 0.24);
+}
+.rose::before {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.6) 50%,
+    transparent
+  );
+}
+.rose::after {
+  background: radial-gradient(
+    240px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(251, 113, 133, 0.26),
+    transparent 55%
+  );
+}
+.rose:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(251, 113, 133, 0.28),
+    rgba(251, 113, 133, 0.14)
+  );
+  border-color: rgba(251, 113, 133, 0.6);
+  transform: translateY(-1px);
+}
+.rose:active {
+  transform: translateY(0);
+}
+
+/* --- disabled --------------------------------------------------------- */
+.disabled {
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.06);
+  color: var(--ink-faint);
+  cursor: not-allowed;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.disabled::before,
+.disabled::after {
+  display: none;
+}
+/* No hover lift / specular for disabled. */
+.disabled:hover {
+  transform: none;
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+/* --- button sizing (LiquidGlassButton) -------------------------------- */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 24px;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+.button.disabled {
+  cursor: not-allowed;
+}
+
+/* Reduced-motion: keep the pointer-driven specular (not a loop), but drop
+   the transform lift — the discipline only forbids the animated lift. */
+@media (prefers-reduced-motion: reduce) {
+  .glass:hover,
+  .glass:active,
+  .aurora:hover,
+  .aurora:active,
+  .rose:hover,
+  .rose:active {
+    transform: none;
+  }
+}
