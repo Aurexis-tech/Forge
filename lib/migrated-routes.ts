@@ -7,13 +7,15 @@
 /** Routes (under the (app) group) that have moved to the AI-futuristic
  *  design language — they get AurexisAmbient + AiNav. Everything else
  *  keeps ForgeBackdrop + the forge AppNav. */
-export const MIGRATED_ROUTES: readonly string[] = ['/forge'];
+export const MIGRATED_ROUTES: readonly string[] = ['/forge', '/projects'];
 
-/** True when `pathname` is a migrated route (exact match or a nested
- *  child, e.g. /forge/anything). Null-safe for usePathname(). */
+/**
+ * True when `pathname` is a migrated route. EXACT match only: each page
+ * opts in deliberately, so /projects can be migrated without dragging
+ * /projects/[id] (the un-migrated detail page) into the aurora shell.
+ * Null-safe for usePathname().
+ */
 export function isMigratedRoute(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
-  return MIGRATED_ROUTES.some(
-    (r) => pathname === r || pathname.startsWith(r + '/'),
-  );
+  return MIGRATED_ROUTES.includes(pathname);
 }

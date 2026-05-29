@@ -100,22 +100,21 @@ describe('SectionHeader primitive', () => {
 // ===========================================================================
 // Pages compose the shared foundation (not per-page duplication)
 // ===========================================================================
-describe('app pages adopt the shared foundation', () => {
-  const home = read('app/(app)/projects/page.tsx');
+describe('un-migrated pages still wear the shared forge foundation', () => {
+  // Home (/projects) has MIGRATED to the AI-futuristic system and no longer
+  // uses SectionHeader / Reveal / max-w-5xl. The mold spaces are still
+  // forge-styled, so the foundation assertions still apply to them.
   const moldSpace = read('components/MoldSpacePage.tsx');
 
-  it('Home + mold spaces use SectionHeader (brand typography)', () => {
-    expect(home).toMatch(/SectionHeader/);
+  it('mold spaces use SectionHeader (brand typography)', () => {
     expect(moldSpace).toMatch(/SectionHeader/);
   });
 
-  it('Home + mold spaces use Reveal (reveal-on-scroll motion)', () => {
-    expect(home).toMatch(/Reveal/);
+  it('mold spaces use Reveal (reveal-on-scroll motion)', () => {
     expect(moldSpace).toMatch(/Reveal/);
   });
 
-  it('constrain their column rhythm (max-width), not an ocean of black', () => {
-    expect(home).toMatch(/max-w-5xl/);
+  it('mold spaces constrain their column rhythm (max-width)', () => {
     expect(moldSpace).toMatch(/max-w-5xl/);
   });
 });
@@ -132,10 +131,12 @@ describe('hover + focus affordances', () => {
     expect(card).toMatch(/group-hover:shadow-amber/);
   });
 
-  it('the New Forge action uses amber (a human-decision accent) with a glow hover', () => {
-    const home = read('app/(app)/projects/page.tsx');
-    expect(home).toMatch(/text-forge-amber/);
-    expect(home).toMatch(/hover:shadow-amber/);
+  it('the New Forge action on un-migrated mold spaces uses amber + glow hover', () => {
+    // /projects has migrated to the AI-futuristic system; the mold spaces
+    // still wear the forge New Forge button.
+    const moldSpace = read('components/MoldSpacePage.tsx');
+    expect(moldSpace).toMatch(/text-forge-amber/);
+    expect(moldSpace).toMatch(/hover:shadow-amber/);
   });
 
   it('Reveal is reduced-motion safe (content shown without motion)', () => {

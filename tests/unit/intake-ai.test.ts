@@ -63,13 +63,13 @@ describe('detectMoldHint', () => {
 // 2. The (app) migrated-route allowlist (pure)
 // ===========================================================================
 describe('isMigratedRoute', () => {
-  it('starts with /forge only', () => {
-    expect([...MIGRATED_ROUTES]).toEqual(['/forge']);
+  it('contains /forge (the route this migration moved in)', () => {
+    expect([...MIGRATED_ROUTES]).toContain('/forge');
   });
-  it('matches /forge (+ nested) and nothing un-migrated', () => {
+  it('matches migrated routes EXACTLY — children stay un-migrated', () => {
     expect(isMigratedRoute('/forge')).toBe(true);
-    expect(isMigratedRoute('/forge/anything')).toBe(true);
-    expect(isMigratedRoute('/projects')).toBe(false);
+    // Exact match: /forge/anything is NOT migrated (each child opts in).
+    expect(isMigratedRoute('/forge/anything')).toBe(false);
     expect(isMigratedRoute('/governance')).toBe(false);
     expect(isMigratedRoute('/')).toBe(false);
     expect(isMigratedRoute(null)).toBe(false);

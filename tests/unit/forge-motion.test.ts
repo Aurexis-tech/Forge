@@ -183,9 +183,10 @@ describe('components consult the central tokens, not magic numbers', () => {
     expect(s).not.toMatch(/setTimeout\([^,]+,\s*1500\)/); // not a raw 1500
   });
 
-  it('the page-load reveals stagger off the revealStep token', () => {
+  it('un-migrated forge page-load reveals stagger off the revealStep token', () => {
+    // /projects migrated to the AI-futuristic system — its reveal lives in
+    // components/projects-ai/ProjectsAi.tsx, not the forge Reveal token.
     for (const p of [
-      'app/(app)/projects/page.tsx',
       'components/MoldSpacePage.tsx',
       'app/(app)/settings/keys/page.tsx',
       'app/(app)/governance/page.tsx',

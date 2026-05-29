@@ -109,19 +109,14 @@ describe('keyStatusTone — heat is earned by a verified, in-use key', () => {
 // ===========================================================================
 // 2. Home + the four mold spaces compose the foundation
 // ===========================================================================
-describe('Home + mold spaces wear the forge surface', () => {
-  const home = read('app/(app)/projects/page.tsx');
+describe('un-migrated mold spaces still wear the forge surface', () => {
+  // Home (/projects) has MIGRATED to the AI-futuristic system — see
+  // tests/unit/projects-ai.test.ts for the new structural assertions. The
+  // four mold spaces are still forge-styled, so the propagation assertions
+  // still apply to them.
   const moldSpace = read('components/MoldSpacePage.tsx');
 
-  it('Home composes SectionHeader + ProjectCard + EmberCard (empty state) + Reveal', () => {
-    expect(home).toMatch(/SectionHeader/);
-    expect(home).toMatch(/<ProjectCard/);
-    expect(home).toMatch(/<EmberCard/); // empty state is no longer flat glass
-    expect(home).toMatch(/Reveal/);
-    expect(home).not.toMatch(/GlassPanel/);
-  });
-
-  it('a mold space composes the same, scoped to its mold', () => {
+  it('a mold space composes SectionHeader + ProjectCard + EmberCard + Reveal', () => {
     expect(moldSpace).toMatch(/SectionHeader/);
     expect(moldSpace).toMatch(/<ProjectCard/);
     expect(moldSpace).toMatch(/<EmberCard/);

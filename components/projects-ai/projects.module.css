@@ -1,0 +1,21 @@
+/* Projects AI — scoped animation module. ONE infinite loop (the aurora
+   pulse dot, reused for live/forging/gate active stage dots). Keyframe
+   stays out of globals.css so the "≤4 infinite animations" enforcer keeps
+   reflecting only the forge backdrop's loops. The global prefers-
+   reduced-motion rule freezes it. */
+
+.pulseDot {
+  animation: projectsPulse 1.8s var(--ease) infinite;
+}
+
+@keyframes projectsPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+}
