@@ -19,9 +19,15 @@ describe('shared ForgeBackdrop', () => {
   const layout = read('app/(app)/layout.tsx');
   const backdrop = read('components/ForgeBackdrop.tsx');
 
-  it('is mounted once in the (app) shell — so every app page inherits it', () => {
-    expect(layout).toMatch(/import\s*\{\s*ForgeBackdrop\s*\}/);
-    expect(layout).toMatch(/<ForgeBackdrop\s*\/>/);
+  it('is served to un-migrated (app) routes via the AppBackdrop switch', () => {
+    // The (app) layout now mounts the AppBackdrop switch (not ForgeBackdrop
+    // directly); AppBackdrop renders ForgeBackdrop + ForgeScene for every
+    // un-migrated route, AurexisAmbient for migrated ones.
+    expect(layout).toMatch(/<AppBackdrop\s*\/>/);
+    const appBackdrop = read('components/lq/AppBackdrop.tsx');
+    expect(appBackdrop).toMatch(/<ForgeBackdrop\s*\/>/);
+    expect(appBackdrop).toMatch(/<ForgeScene\s*\/>/);
+    expect(appBackdrop).toMatch(/isMigratedRoute/);
   });
 
   it('renders the lattice + breathing glow + embers + vignette in brand tokens', () => {

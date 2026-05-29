@@ -1,0 +1,40 @@
+/* Intake AI — scoped animation module. Keyframes live HERE, never in
+   app/globals.css, so the globals.css "≤4 infinite animations" enforcer
+   stays at exactly 4. ONE infinite loop (the aurora status/Intent pulse,
+   reused for the live mold-hint "detecting" cue and the lit Intent dot).
+   The forge-moment surge is a bounded single play (forwards), not a loop.
+   The global prefers-reduced-motion rule freezes both. */
+
+.pulseDot {
+  animation: intakePulse 1.8s var(--ease) infinite;
+}
+
+@keyframes intakePulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+}
+
+/* The forge moment — a brief aurora surge bloom over the acted-on card.
+   Single play, settles to nothing; pointer-events handled inline. */
+.surge {
+  animation: intakeSurge var(--motion-forge-moment, 1500ms) var(--ease-out) forwards;
+}
+
+@keyframes intakeSurge {
+  0% {
+    opacity: 0;
+  }
+  16% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

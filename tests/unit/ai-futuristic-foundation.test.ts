@@ -267,21 +267,20 @@ describe('AurexisAmbient backdrop (dormant)', () => {
 // ===========================================================================
 // 7. GUARD — nothing flipped: ForgeBackdrop is still the mounted backdrop
 // ===========================================================================
-describe('the live app shell is UNCHANGED (forge still mounted, aurexis dormant)', () => {
-  const layout = read('app/(app)/layout.tsx');
+describe('un-migrated (app) routes still get the forge backdrop (via the switch)', () => {
+  // The foundation is no longer dormant: the Intake migration mounts the
+  // AppBackdrop switch in the (app) layout. The forge backdrop is still
+  // served to every un-migrated route through that switch; AurexisAmbient
+  // only renders on the migrated branch.
+  const appBackdrop = read('components/lq/AppBackdrop.tsx');
 
-  it('still mounts ForgeBackdrop', () => {
-    expect(layout).toMatch(/import\s*\{\s*ForgeBackdrop\s*\}/);
-    expect(layout).toMatch(/<ForgeBackdrop\s*\/>/);
+  it('AppBackdrop renders ForgeBackdrop + ForgeScene for un-migrated routes', () => {
+    expect(appBackdrop).toMatch(/<ForgeBackdrop\s*\/>/);
+    expect(appBackdrop).toMatch(/<ForgeScene\s*\/>/);
+    expect(appBackdrop).toMatch(/isMigratedRoute/);
   });
 
-  it('does NOT mount AurexisAmbient anywhere yet (dormant)', () => {
-    expect(layout).not.toMatch(/AurexisAmbient/);
-  });
-
-  it('no app/page source imports the dormant lq primitives yet', () => {
-    // The (app) layout is the one place a backdrop/primitive would mount.
-    expect(layout).not.toMatch(/LiquidGlass/);
-    expect(layout).not.toMatch(/from '@\/components\/lq/);
+  it('and AurexisAmbient only on the migrated branch', () => {
+    expect(appBackdrop).toMatch(/<AurexisAmbient\s*\/>/);
   });
 });

@@ -181,10 +181,12 @@ describe('scoped backdrop migration', () => {
     expect(read('app/page.tsx')).toMatch(/<AurexisAmbient\s*\/>/);
   });
 
-  it('the (app) shell STILL mounts ForgeBackdrop and never AurexisAmbient', () => {
+  it('the (app) shell serves the forge backdrop via the AppBackdrop switch', () => {
+    // The (app) layout routes its backdrop through AppBackdrop now (the
+    // Intake migration). Un-migrated routes still get ForgeBackdrop.
     const layout = read('app/(app)/layout.tsx');
-    expect(layout).toMatch(/<ForgeBackdrop\s*\/>/);
-    expect(layout).not.toMatch(/AurexisAmbient/);
+    expect(layout).toMatch(/<AppBackdrop\s*\/>/);
+    expect(read('components/lq/AppBackdrop.tsx')).toMatch(/<ForgeBackdrop\s*\/>/);
   });
 });
 
