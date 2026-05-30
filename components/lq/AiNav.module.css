@@ -1,26 +1,61 @@
 /* AiNav — the AI-futuristic top nav. Scoped CSS module (NOT globals.css)
-   so its single ambient loop never counts against the globals.css
-   "≤4 infinite animations" enforcer. One infinite loop: the brand dot
-   pulse. The global prefers-reduced-motion rule freezes it. */
+   so any future ambient loops never count against the globals.css
+   "≤4 infinite animations" enforcer.
 
-.brandDot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 9999px;
-  background: var(--aurora);
-  box-shadow: 0 0 12px 2px rgba(95, 230, 255, 0.7);
-  animation: navPulse 2.4s var(--ease) infinite;
+   The brand lockup (spark mark + gradient wordmark) is STATIC — no
+   pulse, no animation. The previous .brandDot loop was retired with
+   the lockup change. globals.css stays untouched.
+
+   This module currently declares ZERO infinite loops. */
+
+/* ============================================================ */
+/* Brand lockup — spark mark + gradient wordmark                */
+/* ============================================================ */
+
+.brandLockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 13px;
 }
 
-@keyframes navPulse {
-  0%,
-  100% {
-    opacity: 0.7;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.25);
+/* SPARK MARK — the 4-point spark SVG. Glow lifts it off the void. */
+.brandSpark {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(167, 139, 250, 0.5));
+}
+
+/* WORDMARK — "Aurexis Forge" as real, selectable, copy-able text. The
+   gradient text fill is layered behind a robust fallback so the brand
+   name NEVER disappears: in browsers that don't support
+   `background-clip: text`, the wordmark renders as a solid aurora-toned
+   text color (the @supports rule below only sets `color: transparent`
+   when the clip is actually supported). */
+.brandWord {
+  /* Fallback: a real color so unsupported browsers still see the name. */
+  color: var(--aurora);
+  /* Background paint — visible only when bg-clip:text takes effect. */
+  background: linear-gradient(
+    102deg,
+    #5fe6ff 0%,
+    #9fd4ff 42%,
+    #a78bfa 100%
+  );
+  /* Type. */
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  white-space: nowrap;
+  /* Soft cyan halo. */
+  filter: drop-shadow(0 0 12px rgba(95, 230, 255, 0.22));
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .brandWord {
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 }

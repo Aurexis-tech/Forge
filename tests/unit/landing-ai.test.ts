@@ -130,19 +130,68 @@ describe('app/page.tsx — migrated Landing', () => {
 });
 
 // ===========================================================================
-// 4. AiNav — the reusable new nav
+// 4. AiNav — the reusable new nav (brand lockup + links + action)
 // ===========================================================================
 describe('components/lq/AiNav', () => {
   const nav = read('components/lq/AiNav.tsx');
+  const navCss = read('components/lq/AiNav.module.css');
 
-  it('renders the brand dot + center links to real routes + a LiquidGlass action', () => {
-    expect(nav).toMatch(/brandDot/);
+  it('renders the center links to real routes + a LiquidGlass action + font-ui', () => {
     expect(nav).toMatch(/LiquidGlass/);
     expect(nav).toMatch(/'\/forge'/);
     expect(nav).toMatch(/'\/projects'/);
     expect(nav).toMatch(/'\/settings\/keys'/);
     expect(nav).toMatch(/'\/governance'/);
     expect(nav).toMatch(/font-ui/);
+  });
+
+  it('preserves the brand link target (the public landing at /)', () => {
+    expect(nav).toMatch(/<Link[\s\S]*?href="\/"/);
+    expect(nav).toMatch(/aria-label="Aurexis Forge"/);
+  });
+
+  it('brand SPARK is an inline SVG, decorative (aria-hidden), with a gradient fill', () => {
+    expect(nav).toMatch(/<svg\b[\s\S]*?aria-hidden="true"[\s\S]*?viewBox="0 0 24 24"/);
+    // The 4-point spark path the brand uses.
+    expect(nav).toMatch(/M12 1\.4C12\.8 7\.3 16\.7 11\.2/);
+    // The gradient def with a stable id + the two stops the brief calls
+    // out (aurora → violet).
+    expect(nav).toMatch(/<linearGradient[^>]*id="aurexisSpark"/);
+    expect(nav).toMatch(/stopColor="#5fe6ff"/);
+    expect(nav).toMatch(/stopColor="#a78bfa"/);
+    expect(nav).toMatch(/fill="url\(#aurexisSpark\)"/);
+    // The mark uses the scoped class (CSS-module style) — not inline.
+    expect(nav).toMatch(/styles\.brandSpark/);
+  });
+
+  it('brand WORDMARK is REAL selectable text ("Aurexis Forge"), gradient-clipped', () => {
+    // The wordmark is a <span>, not an <img>, so the text is real and
+    // selectable / copyable / accessible to screen readers.
+    expect(nav).toMatch(/<span[^>]*styles\.brandWord[^>]*>Aurexis Forge<\/span>/);
+    // The clip + transparent color are applied via the CSS module
+    // (-webkit-background-clip:text + background-clip:text + color:transparent).
+    expect(navCss).toMatch(/-webkit-background-clip:\s*text/);
+    expect(navCss).toMatch(/background-clip:\s*text/);
+    expect(navCss).toMatch(/color:\s*transparent/);
+    // The wordmark's gradient + the soft glow are present.
+    expect(navCss).toMatch(/linear-gradient\([^)]*102deg[\s\S]*?#5fe6ff[\s\S]*?#a78bfa/);
+    expect(navCss).toMatch(/filter:\s*drop-shadow\([^)]*rgba\(95,\s*230,\s*255/);
+  });
+
+  it("the wordmark has a FALLBACK so the brand name never disappears", () => {
+    // The default `color` is a real solid token (aurora) OUTSIDE the
+    // @supports block, so unsupported browsers still see the name; the
+    // transparent clip is only applied inside the @supports rule.
+    expect(navCss).toMatch(/\.brandWord\s*\{[\s\S]*?color:\s*var\(--aurora\)/);
+    expect(navCss).toMatch(
+      /@supports\s*\(\(?-webkit-background-clip:\s*text\)?\s*or\s*\(?background-clip:\s*text\)?\)/,
+    );
+  });
+
+  it('the spark mark carries the soft violet glow the brief specifies', () => {
+    expect(navCss).toMatch(
+      /\.brandSpark\s*\{[\s\S]*?filter:\s*drop-shadow\([^)]*rgba\(167,\s*139,\s*250/,
+    );
   });
 });
 
@@ -205,8 +254,11 @@ describe('infinite-animation budget stays honest', () => {
     expect(countInfinite('components/landing-ai/landing.module.css')).toBe(2);
   });
 
-  it('the AiNav module has exactly ONE infinite loop (brand dot)', () => {
-    expect(countInfinite('components/lq/AiNav.module.css')).toBe(1);
+  it('the AiNav module has ZERO infinite loops (static gradient lockup)', () => {
+    // The previous .brandDot navPulse was retired when the brand mark
+    // became the static spark + gradient wordmark lockup. The brief
+    // specifically called for a non-animated brand.
+    expect(countInfinite('components/lq/AiNav.module.css')).toBe(0);
   });
 
   it('globals.css is unchanged — still ≤4 infinite loops', () => {

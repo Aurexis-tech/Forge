@@ -1,8 +1,15 @@
 // AiNav — the AI-futuristic top nav for migrated pages. Reusable: the
-// Landing migration is the first consumer; subsequent migrated pages mount
-// this instead of the forge AppNav. The forge AppNav stays untouched for
-// un-migrated routes. Pure presentation (links + a LiquidGlass "Open"
-// button); the brand dot pulse lives in AiNav.module.css.
+// Landing migration was the first consumer; every subsequently-migrated
+// page mounts this instead of the forge AppNav. The forge AppNav stays
+// untouched for un-migrated routes. Pure presentation (the brand lockup
+// + links + a LiquidGlass "Open" button); all the lockup styling lives
+// in AiNav.module.css.
+//
+// BRAND LOCKUP — the 4-point aurora→violet spark mark + the gradient
+// wordmark. The wordmark is REAL, selectable text (not an image) so it
+// copies cleanly and screen-readers announce the brand name; the SVG is
+// `aria-hidden` because it carries no semantic content beyond what the
+// text already says. The lockup is STATIC — no pulse.
 
 import Link from 'next/link';
 import { LiquidGlass } from '@/components/lq/LiquidGlass';
@@ -18,12 +25,33 @@ const LINKS: ReadonlyArray<{ label: string; href: string }> = [
 export function AiNav() {
   return (
     <nav className="relative z-20 flex items-center justify-between gap-6 px-6 py-5 font-ui sm:px-10">
-      {/* Brand mark — pulsing aurora dot + wordmark. */}
-      <Link href="/" className="group flex items-center gap-3">
-        <span aria-hidden className={styles.brandDot} />
-        <span className="text-sm font-semibold tracking-tight text-lq-ink">
-          Aurexis Forge
-        </span>
+      {/* Brand lockup — preserved /; static (no pulse). */}
+      <Link href="/" className={'group ' + styles.brandLockup} aria-label="Aurexis Forge">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+          className={styles.brandSpark}
+        >
+          <defs>
+            <linearGradient
+              id="aurexisSpark"
+              x1="2"
+              y1="2"
+              x2="22"
+              y2="22"
+              gradientUnits="userSpaceOnUse"
+            >
+              <stop offset="0" stopColor="#5fe6ff" />
+              <stop offset="1" stopColor="#a78bfa" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M12 1.4C12.8 7.3 16.7 11.2 22.6 12C16.7 12.8 12.8 16.7 12 22.6C11.2 16.7 7.3 12.8 1.4 12C7.3 11.2 11.2 7.3 12 1.4Z"
+            fill="url(#aurexisSpark)"
+          />
+        </svg>
+        <span className={'font-ui ' + styles.brandWord}>Aurexis Forge</span>
       </Link>
 
       {/* Center links. */}
