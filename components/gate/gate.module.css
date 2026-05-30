@@ -1,0 +1,23 @@
+/* Gate — scoped styles. ZERO infinite loops by design: a gate is the
+   "human holds the keys" moment, and the prompt brief is explicit — "no
+   anxious looping." Weight comes from the static rose accent on the
+   LiquidGlass shell (the rose variant) + a one-shot bounded mount fade.
+   globals.css stays at exactly 4 infinite loops (the forge ambient set);
+   this module declares NONE. */
+
+.mountFade {
+  animation: gateMountFade 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* One-shot only — `forwards`/`both` is the fill mode; the animation
+   plays once on mount and stops. NOT infinite. */
+@keyframes gateMountFade {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
