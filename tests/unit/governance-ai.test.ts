@@ -1,12 +1,18 @@
-// Hermetic tests for the Governance migration. The honesty constraints
-// (REAL spend, REAL cap, REAL events, NO looping fake values) are encoded
-// as assertions: spendZone reuses spendHeatTone's thresholds and remaps to
-// AI colors; the meter fill is a BOUNDED CSS transition, never an infinite
-// animation; the page binds to the real engine APIs (getSpendUsd,
-// getRecentCostEvents, listBudgets, activeKillSwitch, agent_runtimes,
-// audit_log) and not to fabricated arrays; the kill switch wires to the
-// REAL /api/governance/killswitch endpoint with the same POST/DELETE
-// shapes the forge KillSwitchPanel used.
+// Hermetic tests for the Governance migration. Recomposed to the design-
+// study layout (commit ddc47e3 → THIS commit): hero monthly meter +
+// secondary daily readout + compact kill-switch + active runtimes (left
+// column) + activity stream (right column). The honesty constraints
+// stay primary — REAL spend, REAL cap, REAL events, NO looping fake
+// values, every real wiring preserved:
+//   - spendZone REUSES spendHeatTone's thresholds and remaps to AI colors
+//   - the page binds to the real engine APIs (getSpendUsd monthly+daily,
+//     listBudgets, activeKillSwitch, agent_runtimes, getRecentCostEvents,
+//     audit_log) and never to fabricated arrays
+//   - the kill switch wires to /api/governance/killswitch POST/DELETE
+//     with the same shapes the forge KillSwitchPanel used
+//   - the budget form wires to /api/governance/budget PUT/DELETE
+//   - infinite-animation budget stays tight (1 loop in the module — the
+//     "Live" pill dot — and ≤4 in globals.css)
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -14,8 +20,11 @@ import { spendHeatTone } from '@/lib/forge-heat';
 import {
   auditActorTone,
   costEventTone,
+  formatHeroSpend,
+  heroMeterTicks,
   KILL_SWITCH_COPY,
   meterFill,
+  runtimeMoldColor,
   runtimeStatusVm,
   spendZone,
 } from '@/lib/governance-zones';
@@ -65,10 +74,7 @@ describe('spendZone — pure zone mapping', () => {
 
   it('REUSES spendHeatTone thresholds — every band matches the source', () => {
     // The remap rule: cool→mint, ember→aurora, glow→amber, molten→rose.
-    // This proves we did not fork the zone math. `spendHeatTone` returns the
-    // wider HeatTone union (the badge's full palette), but for spend it only
-    // ever produces these four; the Record is typed loosely so the index is
-    // valid for the wider union.
+    // This proves we did not fork the zone math.
     const expectedColor: Record<string, string> = {
       cool: 'mint',
       ember: 'aurora',
@@ -106,7 +112,39 @@ describe('meterFill — bounded [0, 1] fraction', () => {
 });
 
 // ===========================================================================
-// 2. Kill-switch copy — real action, real prompts
+// 2. formatHeroSpend + heroMeterTicks — pure hero helpers
+// ===========================================================================
+describe('formatHeroSpend — dollars + half-size cents split', () => {
+  it('splits a real spend into "$X" + ".YY" parts', () => {
+    expect(formatHeroSpend(28.4)).toEqual({ dollars: '$28', cents: '.40' });
+    expect(formatHeroSpend(0)).toEqual({ dollars: '$0', cents: '.00' });
+    expect(formatHeroSpend(1)).toEqual({ dollars: '$1', cents: '.00' });
+    expect(formatHeroSpend(99.99)).toEqual({ dollars: '$99', cents: '.99' });
+  });
+  it('rounds to two-decimal cents (no floating-point lies)', () => {
+    expect(formatHeroSpend(0.1 + 0.2)).toEqual({ dollars: '$0', cents: '.30' });
+  });
+  it('never produces a negative dollar number', () => {
+    expect(formatHeroSpend(-5)).toEqual({ dollars: '$0', cents: '.00' });
+  });
+});
+
+describe('heroMeterTicks — scaled to the real cap', () => {
+  it('cap=$100 → $0 / $25 / $50 / $75 / $100 cap', () => {
+    expect(heroMeterTicks(100)).toEqual(['$0', '$25', '$50', '$75', '$100 cap']);
+  });
+  it('cap=$400 → $0 / $100 / $200 / $300 / $400 cap', () => {
+    expect(heroMeterTicks(400)).toEqual(['$0', '$100', '$200', '$300', '$400 cap']);
+  });
+  it('no cap → generic sweep ending in "no cap" (honest)', () => {
+    const t = heroMeterTicks(null);
+    expect(t[0]).toBe('$0');
+    expect(t[t.length - 1]).toBe('no cap');
+  });
+});
+
+// ===========================================================================
+// 3. Kill-switch copy — real action, real prompts
 // ===========================================================================
 describe('KILL_SWITCH_COPY — claims match the real engine action', () => {
   it('the mechanism describes what the real action does (halts scheduler)', () => {
@@ -124,7 +162,7 @@ describe('KILL_SWITCH_COPY — claims match the real engine action', () => {
 });
 
 // ===========================================================================
-// 3. runtimeStatusVm + cost event / audit tones — pure mapping
+// 4. runtimeStatusVm + cost event / audit / mold tones — pure mapping
 // ===========================================================================
 describe('runtimeStatusVm — REAL RuntimeStatus statuses only', () => {
   it('maps active → aurora live, paused → ink-dim, errored → rose, stopped → ink-dim', () => {
@@ -136,6 +174,19 @@ describe('runtimeStatusVm — REAL RuntimeStatus statuses only', () => {
   it('falls back gracefully on an unknown status (never invents a live signal)', () => {
     expect(runtimeStatusVm('mystery').live).toBe(false);
     expect(runtimeStatusVm('mystery').color).toBe('ink-dim');
+  });
+});
+
+describe('runtimeMoldColor — agent/system/software/infra → AI palette', () => {
+  it('agent → aurora, system → violet, software → mint, infrastructure → amber', () => {
+    expect(runtimeMoldColor('agent')).toBe('aurora');
+    expect(runtimeMoldColor('system')).toBe('violet');
+    expect(runtimeMoldColor('software')).toBe('mint');
+    expect(runtimeMoldColor('infrastructure')).toBe('amber');
+  });
+  it('unknown kind → ink-dim (no invented color)', () => {
+    expect(runtimeMoldColor('mystery')).toBe('ink-dim');
+    expect(runtimeMoldColor(null)).toBe('ink-dim');
   });
 });
 
@@ -159,7 +210,7 @@ describe('auditActorTone — same actors the engine writes to audit_log', () => 
 });
 
 // ===========================================================================
-// 4. /governance is migrated; backdrop switch covers it exactly
+// 5. /governance is migrated; backdrop switch covers it exactly
 // ===========================================================================
 describe('/governance is in MIGRATED_ROUTES (exact match)', () => {
   it('contains /governance', () => {
@@ -170,13 +221,14 @@ describe('/governance is in MIGRATED_ROUTES (exact match)', () => {
 });
 
 // ===========================================================================
-// 5. The route page — binds to REAL engine sources, hands them to GovernanceAi
+// 6. The route page — binds to REAL engine sources, hands them to GovernanceAi
 // ===========================================================================
 describe('/governance page wiring', () => {
   const page = read('app/(app)/governance/page.tsx');
 
-  it('renders the new GovernanceAi component (not the forge primitives)', () => {
+  it('renders the GovernanceAi component', () => {
     expect(page).toMatch(/<GovernanceAi /);
+    // Forge primitives must NOT leak back in.
     expect(page).not.toMatch(/<SectionHeader/);
     expect(page).not.toMatch(/<EmberCard/);
     expect(page).not.toMatch(/<SpendMeter\b/);
@@ -193,7 +245,6 @@ describe('/governance page wiring', () => {
   it('binds spend to the REAL getSpendUsd (both periods)', () => {
     expect(page).toMatch(/getSpendUsd\(userId,\s*'daily'/);
     expect(page).toMatch(/getSpendUsd\(userId,\s*'monthly'/);
-    // Not a hard-coded constant.
     expect(page).not.toMatch(/const\s+spendUsd\s*=\s*\d/);
   });
 
@@ -224,48 +275,128 @@ describe('/governance page wiring', () => {
 });
 
 // ===========================================================================
-// 6. GovernanceAi — LiquidGlass + lq.* tokens, NO fabricated activity
+// 7. GovernanceAi — the design-study LAYOUT + honesty rules
 // ===========================================================================
 describe('GovernanceAi component', () => {
   const src = read('components/governance-ai/GovernanceAi.tsx');
 
-  it('uses the AI primitives + tokens + font-ui', () => {
+  it('uses LiquidGlass + lq.* tokens + font-ui on the h1', () => {
     expect(src).toMatch(/LiquidGlass/);
     expect(src).toMatch(/font-ui/);
     expect(src).toMatch(/<h1 className="font-ui/);
     expect(src).toMatch(/text-lq-ink/);
   });
 
+  it('renders the exact design-study header copy (eyebrow + h1 + sub)', () => {
+    expect(src).toContain('Governance · Ceiling + Kill Switch');
+    expect(src).toContain('Power, on a leash.');
+    expect(src).toMatch(/Every running project/);
+    expect(src).toMatch(/Watch it warm in real time/);
+    expect(src).toMatch(/Pull the lever/);
+  });
+
+  it('arranges a two-column grid (left 1.45fr / right 1fr)', () => {
+    expect(src).toMatch(/grid-cols-\[1\.45fr_1fr\]/);
+  });
+
+  it('the LEFT column mounts hero + daily + kill switch + runtimes', () => {
+    expect(src).toMatch(/<HeroSpendMeterAi/);
+    expect(src).toMatch(/<DailySpendReadout/);
+    expect(src).toMatch(/<KillSwitchAi/);
+    expect(src).toMatch(/<ActiveRuntimesList/);
+  });
+
+  it('the RIGHT column mounts the activity stream', () => {
+    expect(src).toMatch(/<ActivityStream/);
+  });
+
+  it('the hero meter is fed by the REAL monthly spend + monthly cap', () => {
+    expect(src).toMatch(/spendUsd=\{data\.monthly\.spendUsd\}/);
+    expect(src).toMatch(/budget=\{data\.monthly\.budget\}/);
+  });
+
   it('drives spend zones from the spendZone helper (NOT inline thresholds)', () => {
     expect(src).toMatch(/spendZone\(/);
     expect(src).toMatch(/meterFill\(/);
-    // The component must not re-implement the threshold math.
     expect(src).not.toMatch(/pct\s*>=\s*80/);
     expect(src).not.toMatch(/pct\s*>=\s*50/);
   });
 
-  it('emits NO fabricated activity (no sparklines, no fake call counts, no looping fake spend)', () => {
+  it('drives mold-badge colors from runtimeMoldColor (real kinds only)', () => {
+    expect(src).toMatch(/runtimeMoldColor/);
+  });
+
+  it('emits NO fabricated activity (no sparklines, no fake counts, no looping fake spend)', () => {
     expect(src).not.toMatch(/sparkline/i);
     expect(src).not.toMatch(/calls?\s+today/i);
     expect(src).not.toMatch(/tokens?\s+last\s+hour/i);
-    // The fill MUST be a CSS transition, not an animation loop.
     expect(src).not.toMatch(/animation:\s*spend/i);
+    // The kill switch sub-line MUST NOT lie with "never" when the loader
+    // doesn't surface historical engagements.
+    expect(src).not.toMatch(/last pulled.*never/i);
   });
 
-  it('mounts the real kill-switch + budget-form client islands', () => {
-    expect(src).toMatch(/<KillSwitchAi/);
-    expect(src).toMatch(/<BudgetFormAi/);
+  it('emits the empty-state copy for runtimes + activity (true today)', () => {
+    expect(src).toMatch(/No active runtimes yet/);
+    expect(src).toMatch(/No activity yet/);
   });
 
-  it('iterates real runtimes + real events + real audit (no hard-coded arrays)', () => {
-    expect(src).toMatch(/data\.activeRuntimes\.map/);
-    expect(src).toMatch(/data\.events\.slice/);
-    expect(src).toMatch(/data\.audit\.slice/);
+  it('runtimes list omits Pause / configure buttons (those actions do not exist)', () => {
+    expect(src).not.toMatch(/Pause/);
+    expect(src).not.toMatch(/configure\s*runtime/i);
+    // The gear / settings glyph would be the design-study's hint at a
+    // non-existent action — make sure it isn't there.
+    expect(src).not.toMatch(/⚙|svg[^>]*cog|svg[^>]*gear/i);
+  });
+
+  it('iterates real runtimes + real merged stream from real events + audit', () => {
+    expect(src).toMatch(/data\.activeRuntimes/);
+    expect(src).toMatch(/data\.events/);
+    expect(src).toMatch(/data\.audit/);
+    expect(src).toMatch(/buildStreamRows/);
   });
 });
 
 // ===========================================================================
-// 7. KillSwitchAi — preserves the REAL POST/DELETE wiring
+// 8. HeroSpendMeterAi — the centerpiece (real-only fields)
+// ===========================================================================
+describe('HeroSpendMeterAi component', () => {
+  const src = read('components/governance-ai/HeroSpendMeterAi.tsx');
+
+  it('uses LiquidGlass + font-ui on the big number', () => {
+    expect(src).toMatch(/LiquidGlass/);
+    expect(src).toMatch(/font-ui/);
+  });
+
+  it('drives the badge + glow + ticks + dollars/cents split from pure helpers', () => {
+    expect(src).toMatch(/spendZone\(/);
+    expect(src).toMatch(/meterFill\(/);
+    expect(src).toMatch(/formatHeroSpend\(/);
+    expect(src).toMatch(/heroMeterTicks\(/);
+  });
+
+  it('reads the REAL cap from budget.limit_usd — never a hard-coded number', () => {
+    expect(src).toMatch(/Number\(budget\.limit_usd\)/);
+    expect(src).not.toMatch(/const\s+limitUsd\s*=\s*\d/);
+  });
+
+  it('the meter fill is the SPECTRUM gradient + a one-shot WIDTH style — not an infinite loop', () => {
+    expect(src).toMatch(/meterFillSpectrum/);
+    expect(src).toMatch(/style=\{\{ width: fillPct \+ '%' \}\}/);
+    expect(src).not.toMatch(/animation:/);
+  });
+
+  it('renders the honest "no cap set — every dollar allowed through" copy when capless', () => {
+    expect(src).toContain('no cap set — every dollar allowed through');
+  });
+
+  it('mounts the BudgetFormAi for the monthly period (the edit-cap affordance)', () => {
+    expect(src).toMatch(/<BudgetFormAi[\s\S]*?period="monthly"/);
+  });
+});
+
+// ===========================================================================
+// 9. KillSwitchAi — preserves the REAL POST/DELETE wiring
 // ===========================================================================
 describe('KillSwitchAi client island', () => {
   const src = read('components/governance-ai/KillSwitchAi.tsx');
@@ -291,16 +422,18 @@ describe('KillSwitchAi client island', () => {
     expect(src).toMatch(/confirm\(KILL_SWITCH_COPY\.clearConfirm\)/);
   });
 
-  it('drives its copy from the single KILL_SWITCH_COPY constant', () => {
-    expect(src).toMatch(/KILL_SWITCH_COPY\.eyebrow/);
-    expect(src).toMatch(/KILL_SWITCH_COPY\.headline/);
-    expect(src).toMatch(/KILL_SWITCH_COPY\.engageCta/);
-    expect(src).toMatch(/KILL_SWITCH_COPY\.clearCta/);
+  it('renders the compact panel + the power glyph + the real engaged state', () => {
+    expect(src).toMatch(/Kill switch/);
+    expect(src).toMatch(/freezes every running project instantly/);
+    // The "last pulled" sub-line is the real engagedAt or the honest
+    // "currently standby" — never a fabricated "never".
+    expect(src).toMatch(/engagedAtIso/);
+    expect(src).not.toMatch(/last pulled.*never/i);
   });
 });
 
 // ===========================================================================
-// 8. BudgetFormAi — preserves the REAL PUT/DELETE wiring
+// 10. BudgetFormAi — preserves the REAL PUT/DELETE wiring
 // ===========================================================================
 describe('BudgetFormAi client island', () => {
   const src = read('components/governance-ai/BudgetFormAi.tsx');
@@ -322,10 +455,19 @@ describe('BudgetFormAi client island', () => {
     expect(src).toMatch(/method:\s*'DELETE'/);
     expect(src).toMatch(/JSON\.stringify\(\{\s*period\s*\}/);
   });
+
+  it('is a compact edit-cap toggle (idle button → inline form)', () => {
+    expect(src).toMatch(/setEditing\(true\)/);
+    expect(src).toMatch(/edit cap|set cap/);
+  });
+
+  it('reuses the existing CurrencyPicker (preserves multi-currency wiring)', () => {
+    expect(src).toMatch(/from '@\/components\/governance\/CurrencyPicker'/);
+  });
 });
 
 // ===========================================================================
-// 9. Infinite-animation budget — the meter is a BOUNDED transition
+// 11. Infinite-animation budget — the meter is a BOUNDED transition
 // ===========================================================================
 describe('infinite-animation budget', () => {
   const countInfinite = (path: string) =>
@@ -333,23 +475,26 @@ describe('infinite-animation budget', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .match(/animation[^;]*infinite/g) ?? []).length;
 
-  it('the governance module has ZERO infinite loops (the meter fill is a CSS transition)', () => {
-    expect(countInfinite('components/governance-ai/governance.module.css')).toBe(0);
+  it('the governance module has exactly ONE infinite loop (the live-pulse dot)', () => {
+    // The bar fill + zone glow are bounded transitions. The single loop
+    // is the gentle opacity breathe on the Live pill dot under Active
+    // runtimes — documented in the module header.
+    expect(countInfinite('components/governance-ai/governance.module.css')).toBe(1);
   });
 
   it('globals.css still ≤4 infinite loops (no governance keyframes leaked)', () => {
     expect(countInfinite('app/globals.css')).toBeLessThanOrEqual(4);
-    // The governance CSS module has no @keyframes at all (the meter fill is a
-    // CSS transition), so there is literally nothing that could leak — but we
-    // still confirm the prefixed local class names don't show up globally.
     const css = read('app/globals.css');
     expect(css).not.toMatch(/\.meterFill[A-Z]/);
     expect(css).not.toMatch(/\.zoneGlow[A-Z]/);
+    expect(css).not.toMatch(/governanceLivePulse/);
   });
 
-  it('the meter fill is a one-shot CSS transition, not an animation', () => {
+  it('the meter fill is a one-shot CSS transition, not an infinite animation', () => {
     const css = read('components/governance-ai/governance.module.css');
     expect(css).toMatch(/transition:\s*width/);
-    expect(css).not.toMatch(/@keyframes/);
+    // The fill class itself has no animation rule (the only @keyframes
+    // is the live-pulse dot — checked above).
+    expect(css).toMatch(/\.meterFill\s*\{[^}]*transition:\s*width/);
   });
 });

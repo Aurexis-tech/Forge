@@ -1,18 +1,36 @@
-/* Governance AI — scoped styles. The meter fill is a BOUNDED CSS transition
-   (one-shot 0 → real pct on mount; the bar then sits statically at the real
-   value). There are NO infinite loops in this module — the brief explicitly
-   forbids the design-study's "looping fake spend" demo. The kill-switch
-   armed indicator uses a single static color, not a pulse. globals.css
-   stays at exactly 4 infinite loops (the forge backdrop's ambient set). */
+/* Governance AI — scoped styles. Recomposed to the design-study layout
+   (commit ddc47e3 → this commit): a HERO spend meter with a wide spectrum
+   gradient fill + zone-tinted warm glow, a compact rose kill-switch panel,
+   the active-runtimes list, and the right-column activity stream.
+
+   Motion discipline:
+   - Meter fills are ONE-SHOT CSS transitions (0 → real pct on mount); the
+     bar then sits statically at the real value. NEVER an infinite loop
+     animating fake spend.
+   - The hero card's warm glow is a STATIC tinted box-shadow whose color
+     follows the real spend zone — NOT animated.
+   - The "Live" pill dot under Active runtimes carries the ONE infinite
+     loop in this module: a slow 2s opacity breathe. Documented.
+
+   globals.css stays at exactly 4 infinite loops (the forge backdrop's
+   ambient set). This module declares 1 infinite loop. */
+
+/* ============================================================ */
+/* Meter bar — shared track + zone-fill classes                 */
+/* ============================================================ */
 
 .meterTrack {
   position: relative;
-  height: 0.5rem;
+  height: 0.625rem; /* 10px per the design study */
   width: 100%;
   overflow: hidden;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.meterTrackSmall {
+  height: 0.375rem; /* the secondary daily readout is thinner */
 }
 
 .meterFill {
@@ -26,12 +44,129 @@
   transition: width 900ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Single-tone fills (the secondary daily readout uses these to keep its
+   small footprint honest about its zone). */
 .meterFillMint   { background: linear-gradient(90deg, rgba(110, 240, 200, 0.45), rgba(110, 240, 200, 0.85)); }
 .meterFillAurora { background: linear-gradient(90deg, rgba(95, 230, 255, 0.45), rgba(95, 230, 255, 0.9)); }
 .meterFillAmber  { background: linear-gradient(90deg, rgba(255, 191, 100, 0.55), rgba(255, 154, 77, 0.95)); }
 .meterFillRose   { background: linear-gradient(90deg, rgba(255, 130, 160, 0.6), rgba(244, 63, 94, 1)); }
 
-/* Ambient warm-glow ring on a card whose meter is in the warming/over zone.
-   Static box-shadow — NOT an infinite pulse. */
-.zoneGlowAmber { box-shadow: 0 0 38px -10px rgba(255, 154, 77, 0.45); }
-.zoneGlowRose  { box-shadow: 0 0 44px -8px rgba(244, 63, 94, 0.55); }
+/* The HERO fill carries the full spectrum gradient
+   mint → aurora (30%) → amber (70%) → rose (100%) — the bar grows to the
+   real pct so the user always sees the full color sweep clipped to where
+   their spend has reached. */
+.meterFillSpectrum {
+  background: linear-gradient(
+    90deg,
+    rgba(110, 240, 200, 0.85) 0%,
+    rgba(95, 230, 255, 0.85) 30%,
+    rgba(255, 191, 100, 0.95) 70%,
+    rgba(251, 113, 133, 1) 100%
+  );
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* The "no cap set" treatment — a neutral dashed track instead of a fill.
+   Honest: with no cap, the bar has nothing to fill toward. */
+.meterEmptyTrack {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ============================================================ */
+/* Hero card — zone-tinted warm glow behind the centerpiece     */
+/* ============================================================ */
+
+.heroCard {
+  position: relative;
+  /* A larger, softer container shadow on top of LiquidGlass's own. */
+  transition: box-shadow 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.heroGlowMint {
+  box-shadow:
+    0 0 60px -20px rgba(110, 240, 200, 0.35),
+    0 0 120px -30px rgba(110, 240, 200, 0.18);
+}
+
+.heroGlowAurora {
+  box-shadow:
+    0 0 60px -20px rgba(95, 230, 255, 0.4),
+    0 0 120px -30px rgba(95, 230, 255, 0.22);
+}
+
+.heroGlowAmber {
+  box-shadow:
+    0 0 70px -16px rgba(255, 154, 77, 0.5),
+    0 0 140px -24px rgba(255, 154, 77, 0.28);
+}
+
+.heroGlowRose {
+  box-shadow:
+    0 0 80px -12px rgba(244, 63, 94, 0.58),
+    0 0 160px -20px rgba(244, 63, 94, 0.34);
+}
+
+/* ============================================================ */
+/* Kill switch panel — compact, rose-tinted (static)            */
+/* ============================================================ */
+
+.killSwitchPanel {
+  background: rgba(251, 113, 133, 0.04);
+  border-color: rgba(251, 113, 133, 0.32);
+}
+
+.killSwitchPanelActive {
+  background: rgba(251, 113, 133, 0.1);
+  border-color: rgba(251, 113, 133, 0.6);
+  box-shadow: 0 0 44px -8px rgba(244, 63, 94, 0.55);
+}
+
+.killSwitchGlyph {
+  background: rgba(251, 113, 133, 0.12);
+  border: 1px solid rgba(251, 113, 133, 0.32);
+}
+
+/* ============================================================ */
+/* Live pulse dot — the one infinite loop in this module        */
+/* ============================================================ */
+
+/* A tiny aurora dot that gently breathes opacity. Used inside the "Live"
+   pill on each active runtime row so the list visibly carries the fact
+   that something is running, without inventing a tick count. */
+.livePulseDot {
+  animation: governanceLivePulse 2s var(--ease) infinite;
+}
+
+@keyframes governanceLivePulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+/* ============================================================ */
+/* Activity stream — subtle bottom fade per the design study    */
+/* ============================================================ */
+
+.activityFade {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 calc(100% - 64px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 calc(100% - 64px),
+    transparent 100%
+  );
+}

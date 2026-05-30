@@ -1,13 +1,11 @@
 'use client';
 
-// BudgetFormAi — the AI-futuristic budget cap entry. PRESERVES the wiring
-// of the forge BudgetForm byte-for-byte:
-//   PUT /api/governance/budget { period, amount, currency, hard_cap:true }
-//   DELETE /api/governance/budget { period }
-// The real action is multi-currency: user types in their preferred
-// currency, server converts to USD at save time and stores limit_usd. The
-// CurrencyPicker is reused (it's a small util that renders flag-icons SVGs
-// — independent of the design language).
+// BudgetFormAi — the compact, design-study "edit cap" affordance. A small
+// toggle button reveals the inline amount input + currency picker. PUT /
+// DELETE wiring against /api/governance/budget is preserved byte-for-
+// byte, multi-currency handling is preserved (the server converts to USD
+// at save time and stores `limit_usd`; `display_currency` + display
+// amount round-trip).
 
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, type FormEvent } from 'react';
@@ -19,11 +17,19 @@ import type { Budget, BudgetPeriod } from '@/lib/types';
 interface Props {
   period: BudgetPeriod;
   current: Budget | null;
-  /** Pre-converted display amount; matches the forge BudgetForm prop. */
+  /** Pre-converted display amount; matches the prior BudgetForm prop. */
   currentDisplayAmount: number | null;
+  /** Visual size — `hero` is the big monthly meter; `compact` is the
+   *  secondary daily readout under it. Wiring is identical. */
+  size?: 'hero' | 'compact';
 }
 
-export function BudgetFormAi({ period, current, currentDisplayAmount }: Props) {
+export function BudgetFormAi({
+  period,
+  current,
+  currentDisplayAmount,
+  size = 'hero',
+}: Props) {
   const router = useRouter();
   const initialCurrency = (current?.display_currency ?? 'USD').toUpperCase();
   const [currency, setCurrency] = useState<string>(initialCurrency);
@@ -34,6 +40,7 @@ export function BudgetFormAi({ period, current, currentDisplayAmount }: Props) {
   );
   const [busy, setBusy] = useState<'save' | 'clear' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<boolean>(false);
 
   const ccy = useMemo(() => getCurrency(currency), [currency]);
 
@@ -61,6 +68,7 @@ export function BudgetFormAi({ period, current, currentDisplayAmount }: Props) {
       if (!res.ok) {
         throw new Error(body.error ?? 'request failed (' + res.status + ')');
       }
+      setEditing(false);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed.');
@@ -83,6 +91,7 @@ export function BudgetFormAi({ period, current, currentDisplayAmount }: Props) {
         throw new Error(body.error ?? 'request failed (' + res.status + ')');
       }
       setLimit('');
+      setEditing(false);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Clear failed.');
@@ -91,10 +100,27 @@ export function BudgetFormAi({ period, current, currentDisplayAmount }: Props) {
     }
   }
 
+  // Idle: a single tidy "edit cap" / "set cap" button.
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className={
+          'inline-flex items-center gap-1 rounded-[10px] border border-lq-line px-2.5 py-1 font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint transition hover:border-lq-aurora/40 hover:text-lq-aurora ' +
+          (size === 'hero' ? '' : 'text-[9px]')
+        }
+        aria-label={current ? 'edit ' + period + ' cap' : 'set ' + period + ' cap'}
+      >
+        {current ? 'edit cap' : 'set cap'}
+      </button>
+    );
+  }
+
   return (
     <form
       onSubmit={onSave}
-      className="flex flex-col gap-2 border-t border-lq-line pt-4"
+      className="flex flex-col gap-2 rounded-[12px] border border-lq-line bg-lq-elev-1 p-3"
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint">
@@ -115,9 +141,10 @@ export function BudgetFormAi({ period, current, currentDisplayAmount }: Props) {
             value={limit}
             onChange={(e) => setLimit(e.target.value)}
             disabled={busy != null}
-            className="w-28 bg-transparent font-code text-sm text-lq-ink focus:outline-none"
+            className="w-24 bg-transparent font-code text-sm text-lq-ink focus:outline-none"
             placeholder="—"
             aria-label={period + ' cap in ' + ccy.code}
+            autoFocus
           />
         </div>
         <CurrencyPicker
@@ -132,20 +159,30 @@ export function BudgetFormAi({ period, current, currentDisplayAmount }: Props) {
           type="submit"
           disabled={busy != null}
           variant="aurora"
-          className="inline-flex items-center rounded-[12px] px-3 py-1 font-code text-[10px] uppercase tracking-[0.3em]"
+          className="inline-flex items-center rounded-[10px] px-3 py-1 font-code text-[10px] uppercase tracking-[0.3em]"
         >
           {busy === 'save' ? 'saving…' : 'save cap'}
         </LiquidGlass>
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(false);
+            setError(null);
+          }}
+          disabled={busy != null}
+          className="inline-flex items-center rounded-[10px] border border-lq-line px-3 py-1 font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-dim transition hover:text-lq-ink"
+        >
+          cancel
+        </button>
         {current ? (
-          <LiquidGlass
-            as="button"
+          <button
             type="button"
             onClick={onClear}
             disabled={busy != null}
-            className="inline-flex items-center rounded-[12px] px-3 py-1 font-code text-[10px] uppercase tracking-[0.3em]"
+            className="ml-auto inline-flex items-center rounded-[10px] border border-lq-line px-3 py-1 font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint transition hover:text-lq-rose"
           >
             {busy === 'clear' ? 'clearing…' : 'clear cap'}
-          </LiquidGlass>
+          </button>
         ) : null}
       </div>
       {error ? (

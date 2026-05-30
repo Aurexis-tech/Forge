@@ -206,3 +206,66 @@ export function auditActorTone(actor: string): SpendColor | 'ink-dim' {
   if (actor.startsWith('integration.')) return 'mint';
   return 'ink-dim';
 }
+
+// ---------------------------------------------------------------------------
+// Mold color — agent/system/software/infrastructure → AI palette. Used for
+// the active-runtimes list badge. Keyed on the REAL `AgentRuntime.kind`
+// (which is the project's kind at activation time).
+// ---------------------------------------------------------------------------
+
+export function runtimeMoldColor(
+  kind: string | null | undefined,
+): SpendColor | 'violet' | 'ink-dim' {
+  switch (kind) {
+    case 'agent':
+      return 'aurora';
+    case 'system':
+      return 'violet';
+    case 'software':
+      return 'mint';
+    case 'infrastructure':
+      return 'amber';
+    default:
+      return 'ink-dim';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Hero spend formatter — splits "$28.40" into { dollars: "$28", cents: ".40" }
+// so the dollars can render big and the cents render at half-size next to
+// them (the design-study treatment). Pure; tested in node.
+// ---------------------------------------------------------------------------
+
+export interface HeroSpendParts {
+  /** The "$<integer>" portion, e.g. "$28". */
+  readonly dollars: string;
+  /** The ".<cents>" portion (always two digits), e.g. ".40". */
+  readonly cents: string;
+}
+
+export function formatHeroSpend(spendUsd: number): HeroSpendParts {
+  const value = Number.isFinite(spendUsd) && spendUsd > 0 ? spendUsd : 0;
+  const wholeCents = Math.round(value * 100);
+  const dollars = Math.floor(wholeCents / 100);
+  const cents = wholeCents % 100;
+  return {
+    dollars: '$' + dollars.toString(),
+    cents: '.' + cents.toString().padStart(2, '0'),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tick marks under the hero meter — scale to the real cap. When cap is null
+// we render a generic "no cap set" sweep (the meter is in its empty state).
+// ---------------------------------------------------------------------------
+
+export function heroMeterTicks(
+  capUsd: number | null | undefined,
+): ReadonlyArray<string> {
+  if (capUsd == null || capUsd <= 0) {
+    // Generic sweep — informational only, not lying about cap values.
+    return ['$0', '·', '·', '·', 'no cap'];
+  }
+  const q = (frac: number) => '$' + Math.round(capUsd * frac).toString();
+  return [q(0), q(0.25), q(0.5), q(0.75), '$' + capUsd.toString() + ' cap'];
+}

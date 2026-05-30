@@ -1,26 +1,32 @@
 'use client';
 
-// KillSwitchAi — the AI-futuristic kill switch panel. PRESERVES the wiring
-// of the forge KillSwitchPanel byte-for-byte:
+// KillSwitchAi — the compact design-study kill switch panel. PRESERVES
+// the real wiring byte-for-byte:
 //   POST /api/governance/killswitch { scope:'global', reason:'manual' }  → engage
 //   DELETE /api/governance/killswitch { scope:'global' }                  → clear
-// Native confirm() is preserved (the prompt is part of the real safety
-// posture — clicking the lever must not silently engage). Only the SHELL
-// changes: LiquidGlass surface, lq.* tokens, font-ui, AI palette.
+// Native confirm() is preserved on both sides (the prompt is part of the
+// real safety posture). Only the SHELL + layout changes — compact rose-
+// tinted panel with a power glyph on the left + a single Pull lever
+// LiquidGlass rose button on the right.
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { LiquidGlass } from '@/components/lq/LiquidGlass';
 import { KILL_SWITCH_COPY } from '@/lib/governance-zones';
 import { useForgeStore } from '@/lib/store';
+import styles from './governance.module.css';
 
 interface Props {
   active: boolean;
   reason: string | null;
   setBy: string | null;
+  /** When the active kill-switch row was created — surfaced as "last
+   *  pulled: <time>". Null when the system is in standby (no historical
+   *  row is surfaced; we don't guess). */
+  engagedAtIso: string | null;
 }
 
-export function KillSwitchAi({ active, reason, setBy }: Props) {
+export function KillSwitchAi({ active, reason, setBy, engagedAtIso }: Props) {
   const router = useRouter();
   const setCoreState = useForgeStore((s) => s.setCoreState);
   const [busy, setBusy] = useState(false);
@@ -73,52 +79,99 @@ export function KillSwitchAi({ active, reason, setBy }: Props) {
     }
   }
 
+  // "last pulled" sub-line — real timestamp when active; "currently
+  // standby" when not (the loader only surfaces ACTIVE rows, so we don't
+  // claim "never" historically — we just describe the current state).
+  const subLine = active
+    ? engagedAtIso
+      ? 'freezes every running project instantly · engaged ' +
+        new Date(engagedAtIso).toLocaleString()
+      : 'freezes every running project instantly · engaged'
+    : 'freezes every running project instantly · currently standby';
+
   return (
     <LiquidGlass
       as="div"
       className={
-        'flex flex-col gap-4 p-6 font-ui ' +
-        (active
-          ? 'border-l-2 border-l-lq-rose shadow-[0_0_44px_-8px_rgba(244,63,94,0.55)]'
-          : 'border-l-2 border-l-lq-amber/60')
+        'flex flex-col gap-3 p-5 font-ui ' +
+        (active ? styles.killSwitchPanelActive : styles.killSwitchPanel)
       }
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="font-code text-[10px] uppercase tracking-[0.4em] text-lq-amber">
-          {KILL_SWITCH_COPY.eyebrow}
-        </span>
-        <span
-          className={
-            'rounded-full border px-3 py-1 font-code text-[10px] uppercase tracking-[0.3em] ' +
-            (active
-              ? 'border-lq-rose/60 bg-lq-rose/10 text-lq-rose'
-              : 'border-lq-mint/40 bg-lq-mint/5 text-lq-mint')
-          }
-        >
-          {active ? 'engaged' : 'standby'}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <span
+            aria-hidden
+            className={
+              'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] ' +
+              styles.killSwitchGlyph
+            }
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5 text-lq-rose"
+            >
+              <path d="M12 2v10" />
+              <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+            </svg>
+          </span>
+          <div className="flex min-w-0 flex-col gap-1">
+            <h2 className="font-ui text-lg font-bold tracking-tight text-lq-ink">
+              Kill switch
+            </h2>
+            <p className="font-code text-[11px] uppercase tracking-[0.25em] text-lq-ink-dim">
+              {subLine}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className={
+              'rounded-full border px-2.5 py-0.5 font-code text-[10px] uppercase tracking-[0.3em] ' +
+              (active
+                ? 'border-lq-rose/60 bg-lq-rose/10 text-lq-rose'
+                : 'border-lq-mint/40 bg-lq-mint/5 text-lq-mint')
+            }
+          >
+            {active ? 'engaged' : 'standby'}
+          </span>
+          {active ? (
+            <LiquidGlass
+              as="button"
+              type="button"
+              onClick={release}
+              disabled={busy}
+              variant="aurora"
+              className="inline-flex items-center rounded-[12px] px-4 py-2 font-code text-[11px] uppercase tracking-[0.25em]"
+            >
+              {busy ? 'releasing…' : KILL_SWITCH_COPY.clearCta}
+            </LiquidGlass>
+          ) : (
+            <LiquidGlass
+              as="button"
+              type="button"
+              onClick={engage}
+              disabled={busy}
+              variant="rose"
+              className="inline-flex items-center rounded-[12px] px-4 py-2 font-code text-[11px] uppercase tracking-[0.25em]"
+            >
+              {busy ? 'engaging…' : KILL_SWITCH_COPY.engageCta}
+            </LiquidGlass>
+          )}
+        </div>
       </div>
 
-      <h2 className="font-ui text-xl font-bold tracking-tight text-lq-ink">
-        {KILL_SWITCH_COPY.headline}
-      </h2>
-
       {active ? (
-        <div className="rounded-[14px] border border-lq-rose/40 bg-lq-rose/[0.08] p-4">
-          <p className="font-code text-[10px] uppercase tracking-[0.3em] text-lq-rose">
-            system paused
-          </p>
-          <p className="mt-1.5 text-sm leading-relaxed text-lq-ink-dim">
-            {KILL_SWITCH_COPY.engagedNow}
-            {reason ? ' Reason: ' + reason + '.' : ''}
-            {setBy ? ' Set by ' + setBy.slice(0, 8) + '.' : ''}
-          </p>
-        </div>
-      ) : (
         <p className="text-sm leading-relaxed text-lq-ink-dim">
-          {KILL_SWITCH_COPY.engagedMechanism}
+          {KILL_SWITCH_COPY.engagedNow}
+          {reason ? ' Reason: ' + reason + '.' : ''}
+          {setBy ? ' Set by ' + setBy.slice(0, 8) + '.' : ''}
         </p>
-      )}
+      ) : null}
 
       {error ? (
         <p
@@ -128,32 +181,6 @@ export function KillSwitchAi({ active, reason, setBy }: Props) {
           {error}
         </p>
       ) : null}
-
-      <div className="flex items-center justify-end">
-        {active ? (
-          <LiquidGlass
-            as="button"
-            type="button"
-            onClick={release}
-            disabled={busy}
-            variant="aurora"
-            className="inline-flex items-center rounded-[14px] px-5 py-2 font-code text-[11px] uppercase tracking-[0.25em]"
-          >
-            {busy ? 'releasing…' : KILL_SWITCH_COPY.clearCta}
-          </LiquidGlass>
-        ) : (
-          <LiquidGlass
-            as="button"
-            type="button"
-            onClick={engage}
-            disabled={busy}
-            variant="rose"
-            className="inline-flex items-center rounded-[14px] px-5 py-2 font-code text-[11px] uppercase tracking-[0.25em]"
-          >
-            {busy ? 'engaging…' : KILL_SWITCH_COPY.engageCta}
-          </LiquidGlass>
-        )}
-      </div>
     </LiquidGlass>
   );
 }
