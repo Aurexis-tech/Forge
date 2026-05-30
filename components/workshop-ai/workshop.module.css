@@ -1,0 +1,41 @@
+/* Workshop AI — scoped styles. ONE infinite loop: a slow aurora breathing
+   rim used to mark the SINGLE active stage of the journey pipeline (and
+   the gate-awaiting state). Everything else is bounded transitions. The
+   global prefers-reduced-motion rule freezes the breathing to a static
+   glow. Keyframes stay HERE so globals.css's "≤4 infinite animations"
+   enforcer keeps reflecting only the forge backdrop's ambient set. */
+
+.activeRim {
+  animation: workshopActiveRim 3.2s var(--ease) infinite;
+}
+
+@keyframes workshopActiveRim {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 191, 100, 0.42),
+      0 0 18px -6px rgba(255, 154, 77, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 191, 100, 0.72),
+      0 0 28px -4px rgba(255, 154, 77, 0.7);
+  }
+}
+
+/* Pipeline connector — drawn between consecutive dots. The completed
+   leading edge is aurora; the trailing edge is dim. Bounded width
+   transition (no animation loop). */
+.pipelineConnector {
+  height: 1px;
+  flex: 1;
+  background: linear-gradient(90deg, var(--aurora), var(--ink-faint));
+  opacity: 0.45;
+  transition: opacity 600ms var(--ease);
+}
+
+/* Phase indicator pill — bounded color transition between active/inactive,
+   driven by class changes (no infinite). */
+.phasePill {
+  transition: color 320ms var(--ease), border-color 320ms var(--ease), background-color 320ms var(--ease);
+}

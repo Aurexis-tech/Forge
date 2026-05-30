@@ -1,12 +1,6 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { GlassPanel } from '@/components/GlassPanel';
-import { EmberCard } from '@/components/forge/EmberCard';
-import { HeatBadge } from '@/components/forge/HeatBadge';
-import { SectionHeader } from '@/components/forge/SectionHeader';
-import { StagePipeline } from '@/components/forge/StagePipeline';
-import { Reveal } from '@/components/Reveal';
-import { MOTION } from '@/lib/forge-motion';
+import { WorkshopShell } from '@/components/workshop-ai/WorkshopShell';
 import { GenerateBuildPanel } from '@/components/build/GenerateBuildPanel';
 import { GeneratedBuildPanel } from '@/components/build/GeneratedBuildPanel';
 import type { StaticStatus } from '@/components/build/FileTree';
@@ -638,54 +632,16 @@ export default async function ProjectDetailPage({
   const shipped = journey.isLive;
 
   return (
-    <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 py-12">
-      <Reveal>
-        <div className="flex flex-col gap-4">
-          <Link
-            href="/projects"
-            className="font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim hover:text-forge-text"
-          >
-            ← archive
-          </Link>
-          <SectionHeader
-            level={1}
-            eyebrow={'project · ' + project.id.slice(0, 8)}
-            title={project.name}
-            action={
-              <HeatBadge tone={journey.isLive ? 'cool' : 'dim'} dot={journey.isLive}>
-                {journey.isLive ? 'live' : project.status}
-              </HeatBadge>
-            }
-          />
-        </div>
-      </Reveal>
-
-      {/* Mirror the page's journey into the persistent 3D world. */}
+    <WorkshopShell
+      project={project}
+      spec={spec}
+      journey={journey}
+      costToDateUsd={costToDateUsd}
+    >
+      {/* Mirror the page's journey into the persistent 3D world (kept so
+          the un-migrated 3D layer keeps tracking real journey state for
+          users on routes that still wear ForgeBackdrop). */}
       <JourneyBridge journey={journey} />
-
-      {/* The cooling spine — the ACTUAL journey stage in brand language:
-          the just-acted stage is molten, everything behind it has cooled
-          to cyan, everything ahead is dim; a live project settles cool.
-          Warm card while still forging, cool once it's live. Readable
-          regardless of WebGL availability. */}
-      <Reveal delayMs={MOTION.revealStep}>
-        <EmberCard tone={journey.isLive ? 'cool' : 'warm'}>
-          <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.4em] text-cool-cyan">
-            journey · stage {String(journey.cursor.index).padStart(2, '0')} ·{' '}
-            {journey.cursor.label}
-            {journey.cursor.detail ? (
-              <span className="text-forge-dim"> · {journey.cursor.detail}</span>
-            ) : null}
-          </p>
-          <StagePipeline
-            stages={journey.stages.map((s) => ({ id: s.id, label: s.label }))}
-            activeIndex={Math.max(
-              0,
-              journey.stages.findIndex((s) => s.id === journey.cursor.id),
-            )}
-          />
-        </EmberCard>
-      </Reveal>
 
       {/* Shipped agents get the dashboard up top, before all the workshop panels. */}
       {shipped && validAgentSpec && build ? (
@@ -699,15 +655,6 @@ export default async function ProjectDetailPage({
           isRuntimeMode={journey.isRuntimeMode}
         />
       ) : null}
-
-      <EmberCard tone="none">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.3em] text-cool-cyan">
-          raw intent
-        </h2>
-        <p className="mt-3 whitespace-pre-wrap font-mono text-sm leading-relaxed text-forge-text">
-          {spec?.raw_prompt ?? '—'}
-        </p>
-      </EmberCard>
 
       <SpecArea projectId={project.id} spec={spec} />
 
@@ -884,11 +831,11 @@ export default async function ProjectDetailPage({
         />
       ) : null}
 
-      <GlassPanel className="border-dashed">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.3em] text-forge-dim">
+      <GlassPanel className="border-dashed border-lq-line bg-lq-elev-1">
+        <h2 className="font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint">
           cross-project dashboard · reserved
         </h2>
-        <p className="mt-3 text-sm text-forge-dim">
+        <p className="mt-3 text-sm text-lq-ink-dim">
           Future: cross-project runtime telemetry, alerts, and cost
           governance. The per-project runtime view above is live now.
         </p>
@@ -897,9 +844,12 @@ export default async function ProjectDetailPage({
       {/* FORGE TIMELINE — observability data layer. Always-visible,
           collapsed by default. The disclosure header carries the total
           cost as a teaser. Live-tail polls every 5s when expanded AND
-          the latest build is in-progress; idle otherwise. */}
+          the latest build is in-progress; idle otherwise. The panel
+          itself is un-migrated forge styling; the next prompt restyles it
+          alongside the gate modal. PRESERVED here so the real-time poll
+          mechanism keeps working. */}
       {await renderForgeTimeline(project.id)}
-    </section>
+    </WorkshopShell>
   );
 }
 

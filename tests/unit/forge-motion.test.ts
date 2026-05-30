@@ -185,10 +185,9 @@ describe('components consult the central tokens, not magic numbers', () => {
 
   it('un-migrated forge page-load reveals stagger off the revealStep token', () => {
     // Migrated to the AI-futuristic system (no longer use the forge Reveal):
-    //   /projects, /settings/keys, /governance.
+    //   /projects, /settings/keys, /governance, /projects/[id] (workshop).
     for (const p of [
       'components/MoldSpacePage.tsx',
-      'app/(app)/projects/[id]/page.tsx',
     ]) {
       const s = read(p);
       expect(s, p).toMatch(/MOTION\.revealStep/);

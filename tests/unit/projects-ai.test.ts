@@ -277,9 +277,12 @@ describe('MIGRATED_ROUTES now covers /projects (exact match)', () => {
     expect(MIGRATED_ROUTES).toContain('/projects');
   });
 
-  it('matches /projects EXACTLY and never a child (the detail page stays un-migrated)', () => {
+  it('matches /projects EXACTLY; /projects/[id] is migrated via pattern; deeper children stay un-migrated', () => {
     expect(isMigratedRoute('/projects')).toBe(true);
-    expect(isMigratedRoute('/projects/abc-123')).toBe(false);
+    // /projects/[id] (the workshop) is now migrated via MIGRATED_PATTERNS.
+    expect(isMigratedRoute('/projects/abc-123')).toBe(true);
+    // Deeper hypothetical children still opt in deliberately.
+    expect(isMigratedRoute('/projects/abc-123/runs')).toBe(false);
     expect(isMigratedRoute('/forge')).toBe(true);
     expect(isMigratedRoute('/forge/anything')).toBe(false);
     expect(isMigratedRoute('/settings/connections')).toBe(false);

@@ -150,28 +150,20 @@ describe('ProjectCard is a forge surface', () => {
 });
 
 // ===========================================================================
-// 4. Project detail — SectionHeader + the cooling spine + EmberCards
+// 4. Project detail — MIGRATED to AI-futuristic (the workshop shell)
 // ===========================================================================
-describe('project detail adopts the forge language', () => {
-  const detail = read('app/(app)/projects/[id]/page.tsx');
+describe('the forge project-detail primitives are preserved (orphaned by the migration)', () => {
+  // /projects/[id] has MIGRATED to the AI-futuristic workshop shell — see
+  // tests/unit/workshop-ai.test.ts for the new structural assertions. The
+  // five forge primitives (SectionHeader / HeatBadge / EmberCard / StagePipeline
+  // / Reveal) keep functioning for other un-migrated pages; this check just
+  // confirms they were not touched.
+  const stagePipeline = read('components/forge/StagePipeline.tsx');
 
-  it('the header is a SectionHeader with a HeatBadge status (cool when live)', () => {
-    expect(detail).toMatch(/<SectionHeader/);
-    expect(detail).toMatch(/<HeatBadge tone=\{journey\.isLive \? 'cool' : 'dim'\}/);
-  });
-
-  it('renders a StagePipeline mapped from the ACTUAL journey (stages + cursor)', () => {
-    expect(detail).toMatch(/<StagePipeline/);
-    // The stages come from the live journey, and the active index is the
-    // cursor — so the cooling colors reflect the real current stage.
-    expect(detail).toMatch(/journey\.stages\.map\(\(s\) => \(\{ id: s\.id, label: s\.label \}\)\)/);
-    expect(detail).toMatch(/journey\.cursor\.id/);
-  });
-
-  it('the cooling spine + raw-intent sit on EmberCards, and the redundant 2D overlay is gone', () => {
-    expect(detail).toMatch(/<EmberCard tone=\{journey\.isLive \? 'cool' : 'warm'\}>/);
-    expect(detail).toMatch(/<EmberCard tone="none">/);
-    expect(detail).not.toMatch(/JourneyOverlay/); // StagePipeline replaces it
+  it('the forge StagePipeline + HeatBadge primitives are still present', () => {
+    expect(stagePipeline).toMatch(/forge-stage-dot/);
+    const heatBadge = read('components/forge/HeatBadge.tsx');
+    expect(heatBadge).toMatch(/HeatBadge/);
   });
 });
 
