@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { GlassPanel } from '@/components/GlassPanel';
 import { WorkshopShell } from '@/components/workshop-ai/WorkshopShell';
+import { SpecEarlyState } from '@/components/workshop-ai/SpecEarlyState';
 import { GenerateBuildPanel } from '@/components/build/GenerateBuildPanel';
 import { GeneratedBuildPanel } from '@/components/build/GeneratedBuildPanel';
 import type { StaticStatus } from '@/components/build/FileTree';
@@ -887,13 +888,16 @@ function SpecArea({
   spec: Spec | null;
 }) {
   if (!spec) {
+    // Edge: a project row with no spec row (creation always inserts a
+    // pending spec, so this is an anomaly, not the normal early state).
+    // Keep it calm + honest in the migrated aesthetic, not an alarm.
     return (
-      <GlassPanel className="border-dashed">
-        <p className="text-sm text-forge-dim">
-          No spec row exists for this project. (Re-create the project from the
-          intake page.)
-        </p>
-      </GlassPanel>
+      <SpecEarlyState
+        eyebrow="spec · waiting"
+        headline="Your spec will appear here."
+        body="This project doesn't have a spec on file yet. If it doesn't appear shortly, re-create it from the intake."
+        live={false}
+      />
     );
   }
 
@@ -912,19 +916,15 @@ function SpecArea({
       );
 
     case 'extracting':
+      // The genuine "mid-classify" state — the forge is reading the
+      // prompt right now. Calm, intentional, migrated; fills into the
+      // real spec review automatically when extraction completes.
       return (
-        <GlassPanel>
-          <div className="flex items-center gap-3">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-forge-amber shadow-amber" />
-            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-forge-amber">
-              extracting…
-            </p>
-          </div>
-          <p className="mt-3 text-sm text-forge-dim">
-            The Forge is parsing your intent. This usually takes a few
-            seconds. Refresh if it stalls.
-          </p>
-        </GlassPanel>
+        <SpecEarlyState
+          eyebrow="spec · detecting"
+          headline="Reading your intent…"
+          body="The forge is extracting a structured spec from your prompt — usually a few seconds. Your spec will appear here automatically; no need to refresh."
+        />
       );
 
     case 'needs_clarification': {

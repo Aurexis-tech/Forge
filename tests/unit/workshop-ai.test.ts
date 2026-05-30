@@ -288,6 +288,21 @@ describe('/projects/[id] page wiring', () => {
     // The page must not hard-code a code snippet pretending to be generated.
     expect(page).not.toMatch(/const\s+demoCode\s*=/);
   });
+
+  it('renders the migrated SpecEarlyState for the early/Detecting states (not forge GlassPanel)', () => {
+    // The freshly-created / mid-classify spec states now use the lq early
+    // treatment instead of the old forge-styled bare boxes.
+    expect(page).toMatch(/import \{ SpecEarlyState \}/);
+    expect(page).toMatch(/<SpecEarlyState/);
+    // The honest "reading your intent" copy is present (no fabricated spec),
+    // plus the "spec will appear here" placeholder phrasing.
+    expect(page).toMatch(/Reading your intent/);
+    expect(page).toMatch(/spec will appear here/i);
+    // The SpecArea extracting branch specifically no longer emits the old
+    // forge "extracting…" lozenge (other downstream areas are out of scope
+    // for this early-state task and keep their own styling for now).
+    expect(page).not.toMatch(/>\s*extracting…\s*</);
+  });
 });
 
 // ===========================================================================
@@ -319,6 +334,39 @@ describe('WorkshopShell component', () => {
     expect(src).not.toMatch(/tokens?\s*[:=]\s*\d/i);
     expect(src).not.toMatch(/latency\s*[:=]/i);
     expect(src).not.toMatch(/cache\s*hit/i);
+  });
+});
+
+// ===========================================================================
+// 7b. SpecEarlyState — calm, intentional early/Detecting treatment
+// ===========================================================================
+describe('SpecEarlyState component', () => {
+  const src = read('components/workshop-ai/SpecEarlyState.tsx');
+
+  it('uses LiquidGlass + lq tokens + font-ui (migrated, not forge styling)', () => {
+    expect(src).toMatch(/LiquidGlass/);
+    expect(src).toMatch(/font-ui/);
+    expect(src).toMatch(/text-lq-ink/);
+    expect(src).toMatch(/border-l-lq-aurora/);
+    // No forge tokens leak into the migrated early state.
+    expect(src).not.toMatch(/forge-amber|forge-dim|GlassPanel/);
+  });
+
+  it('reuses the module active rim for the live dot (no NEW infinite loop)', () => {
+    // The breathing dot reuses styles.activeRim — the workshop module
+    // stays at exactly one infinite loop (asserted below).
+    expect(src).toMatch(/styles\.activeRim/);
+    // Gated on the `live` flag so a static edge state has no motion.
+    expect(src).toMatch(/live \? styles\.activeRim : ''/);
+  });
+
+  it('is honest — promises only what the real pipeline delivers (no fabricated spec)', () => {
+    // It renders caller-supplied copy; the component itself must not
+    // invent spec content or fake progress numbers.
+    expect(src).not.toMatch(/\d+%/);
+    expect(src).not.toMatch(/setInterval|setTimeout/);
+    expect(src).toMatch(/headline/);
+    expect(src).toMatch(/body/);
   });
 });
 
