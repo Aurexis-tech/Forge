@@ -19,6 +19,8 @@ import {
   formatRelativeTime,
   KEYS_PROVIDERS,
   KEYS_SECURITY,
+  OAUTH_FLOW_HREF,
+  OAUTH_PROVIDERS,
   PROVIDER_DESTINATION,
   PROVIDER_ICON,
   keyStatsVm,
@@ -37,8 +39,9 @@ describe('KEYS_PROVIDERS — exactly the providers the API enforces', () => {
       'anthropic',
       'e2b',
     ]);
-    // GitHub / Vercel / Supabase OAuth live on /settings/connections; Brave /
-    // OpenAI / Resend are not wired at all — none of these may appear here.
+    // GitHub / Vercel / Supabase live in OAUTH_PROVIDERS (the Connections
+    // section), NOT in KEYS_PROVIDERS — the two arrays must not overlap.
+    // Brave / OpenAI / Resend are not wired anywhere.
     const providers = KEYS_PROVIDERS.map((p) => p.provider);
     for (const sneaky of [
       'github',
@@ -72,6 +75,50 @@ describe('PROVIDER_ICON — public-fact brand glyph per real provider', () => {
   it('anthropic = amber "A", e2b = violet "E"', () => {
     expect(PROVIDER_ICON.anthropic).toEqual({ letter: 'A', tint: 'amber' });
     expect(PROVIDER_ICON.e2b).toEqual({ letter: 'E', tint: 'violet' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OAUTH_PROVIDERS — the 3 platform integrations that share the
+// `connections` table with BYOK keys. The Keys page READS their status
+// server-side and renders them in a separate "Connections" section; the
+// Connect / Manage affordance LINKS OUT to /settings/connections.
+// ---------------------------------------------------------------------------
+describe('OAUTH_PROVIDERS — exactly the 3 real OAuth integrations', () => {
+  it('is exactly github + vercel + supabase (in that order on screen)', () => {
+    expect(OAUTH_PROVIDERS.map((p) => p.provider)).toEqual([
+      'github',
+      'vercel',
+      'supabase',
+    ]);
+  });
+
+  it('each entry has a label, a one-letter glyph, a tint, and "unlocks" copy', () => {
+    for (const p of OAUTH_PROVIDERS) {
+      expect(p.label.length, p.provider).toBeGreaterThan(0);
+      expect(p.letter.length, p.provider).toBe(1);
+      expect(['ink', 'mint']).toContain(p.tint);
+      expect(p.unlocks.length, p.provider).toBeGreaterThan(0);
+    }
+  });
+
+  it('brief icon tints: github=ink, vercel=ink, supabase=mint', () => {
+    const tintFor = (id: string) =>
+      OAUTH_PROVIDERS.find((p) => p.provider === id)?.tint;
+    expect(tintFor('github')).toBe('ink');
+    expect(tintFor('vercel')).toBe('ink');
+    expect(tintFor('supabase')).toBe('mint');
+  });
+
+  it('Connect / Manage links route to the real /settings/connections flow', () => {
+    expect(OAUTH_FLOW_HREF).toBe('/settings/connections');
+  });
+
+  it('OAuth providers do NOT bleed into the BYOK list', () => {
+    const byok = new Set(KEYS_PROVIDERS.map((p) => p.provider));
+    for (const o of OAUTH_PROVIDERS) {
+      expect(byok.has(o.provider as never)).toBe(false);
+    }
   });
 });
 
@@ -186,6 +233,49 @@ describe('keyStatsVm — header stat strip binds to REAL counts only', () => {
     });
     expect(r.errors).toBe(0);
   });
+
+  it('with an oauth snapshot, counts BOTH BYOK + OAuth toward the totals', () => {
+    // 1 of 2 BYOK + 2 of 3 OAuth = 3 connected / 2 missing out of 5 total.
+    const r = keyStatsVm({
+      status: {
+        anthropic: { connected: true },
+        e2b: { connected: false },
+      },
+      loading: false,
+      oauth: {
+        github: { connected: true, account_login: null, connected_at: null },
+        vercel: { connected: false, account_login: null, connected_at: null },
+        supabase: { connected: true, account_login: null, connected_at: null },
+      },
+    });
+    expect(r).toEqual({ connected: 3, missing: 2, errors: 0, loading: false });
+  });
+
+  it('loading + oauth snapshot — only the OAuth side contributes to "connected"', () => {
+    // BYOK is still loading; OAuth is already known. Honest total = 5,
+    // OAuth-only connected = 1, missing = 4.
+    const r = keyStatsVm({
+      status: null,
+      loading: true,
+      oauth: {
+        github: { connected: true, account_login: null, connected_at: null },
+        vercel: { connected: false, account_login: null, connected_at: null },
+        supabase: { connected: false, account_login: null, connected_at: null },
+      },
+    });
+    expect(r).toEqual({ connected: 1, missing: 4, errors: 0, loading: true });
+  });
+
+  it('caller that omits oauth still gets the BYOK-only totals (no silent inflation)', () => {
+    // Back-compat: when no oauth is passed, the helper must NOT secretly
+    // count OAuth providers as "missing" — that would inflate the total
+    // for any caller that only manages BYOK.
+    const r = keyStatsVm({
+      status: { anthropic: { connected: true }, e2b: { connected: true } },
+      loading: false,
+    });
+    expect(r).toEqual({ connected: 2, missing: 0, errors: 0, loading: false });
+  });
 });
 
 describe('formatRelativeTime — pure, deterministic with injected nowMs', () => {
@@ -232,13 +322,29 @@ describe('/settings/keys page wiring', () => {
   const page = read('app/(app)/settings/keys/page.tsx');
 
   it('renders the KeysAi client component (not the forge KeysForm)', () => {
-    expect(page).toMatch(/<KeysAi\s*\/>/);
+    // The page now hands oauthInitial down; allow optional props on
+    // the element while still asserting it's KeysAi and not the forge
+    // KeysForm.
+    expect(page).toMatch(/<KeysAi(\s+[^/>]*?)?\s*\/>/);
     expect(page).not.toMatch(/from '@\/components\/keys\/KeysForm'/);
-    expect(page).not.toMatch(/SectionHeader/);
   });
 
   it('still gates on requireUser (same auth)', () => {
     expect(page).toMatch(/requireUser/);
+  });
+
+  it('loads REAL OAuth status server-side via the existing engine helper', () => {
+    // The page must use loadConnectionPublic (the engine's public-safe
+    // OAuth reader) and pass the result down — not refetch on the
+    // client, not invent state, not run OAuth here.
+    expect(page).toMatch(/loadConnectionPublic/);
+    expect(page).toMatch(/oauthInitial/);
+    // The 3 OAuth providers all get loaded (in parallel).
+    expect(page).toMatch(/Promise\.all/);
+    expect(page).toMatch(/OAUTH_PROVIDERS/);
+    // Page is dynamic (per-request) so the snapshot reflects the
+    // current session every navigation.
+    expect(page).toMatch(/force-dynamic/);
   });
 });
 
@@ -364,22 +470,95 @@ describe('KeysAi component — header + card chrome', () => {
     expect(src).not.toMatch(/last\s+tested/i);
   });
 
-  it('does NOT mention any of the phantom providers (Brave / OpenAI / GitHub / Vercel / Supabase / Resend)', () => {
-    // The page surfaces ONLY anthropic + e2b. Any phantom name appearing
-    // here would be a regression toward the study's fabricated set.
+  it('does NOT mention any UN-WIRED phantom providers (Brave / OpenAI / Resend)', () => {
+    // GitHub / Vercel / Supabase now legitimately appear in the OAuth
+    // Connections section (real integrations with rows in the
+    // `connections` table). Brave / OpenAI / Resend remain unwired
+    // anywhere in the app — they must not show up as either a BYOK
+    // card or an OAuth card.
     expect(src).not.toMatch(/\bBrave\b/);
     expect(src).not.toMatch(/\bOpenAI\b/);
     expect(src).not.toMatch(/\bResend\b/);
-    // GitHub / Vercel / Supabase have their own OAuth on
-    // /settings/connections; they must not be re-introduced here.
-    expect(src).not.toMatch(/\bGitHub\b/);
-    expect(src).not.toMatch(/\bVercel\b/);
-    expect(src).not.toMatch(/\bSupabase\b/);
   });
 
-  it('does NOT include an "Add custom provider" tile (the app supports exactly anthropic + e2b)', () => {
+  it('does NOT include an "Add custom provider" tile (the app supports a fixed set)', () => {
     expect(src).not.toMatch(/add\s+custom\s+provider/i);
     expect(src).not.toMatch(/new\s+provider/i);
+  });
+});
+
+// ===========================================================================
+// 6b. OAuth Connections section — real fields only, NO masked-key field,
+//      Connect / Manage routes to /settings/connections
+// ===========================================================================
+describe('KeysAi component — OAuth Connections section', () => {
+  const src = read('components/keys-ai/KeysAi.tsx');
+
+  it('accepts a server-loaded oauthInitial snapshot prop', () => {
+    expect(src).toMatch(/oauthInitial/);
+    expect(src).toMatch(/OAuthSnapshotByProvider/);
+  });
+
+  it('renders an OAuthCard per OAUTH_PROVIDERS entry', () => {
+    expect(src).toMatch(/OAUTH_PROVIDERS\.map/);
+    expect(src).toMatch(/function OAuthCard/);
+  });
+
+  it('the section is labeled "Connections" (separate from API keys)', () => {
+    // Both a section header and a clear visual break — the OAuth grid
+    // must not get folded into the BYOK grid where Test/Rotate live.
+    expect(src).toMatch(/eyebrow="Connections"/);
+    expect(src).toMatch(/title="Connections"/);
+    expect(src).toMatch(/eyebrow="API keys"/);
+  });
+
+  it('connected → "Connected as @<handle>" + relative connected_at; empty → "unlocks ..." copy', () => {
+    // Real fields only: account_login + formatRelativeTime(connected_at).
+    expect(src).toMatch(/Connected as @/);
+    expect(src).toMatch(/snapshot\?\.account_login/);
+    expect(src).toMatch(/snapshot\?\.connected_at/);
+    // Empty-state copy is per-provider "unlocks" copy from the config,
+    // not invented marketing text.
+    expect(src).toMatch(/info\.unlocks/);
+    expect(src).toMatch(/unlocks /);
+  });
+
+  it('OAuth cards have NO masked-key field, NO paste form, NO Test/Rotate', () => {
+    const oauthBlock = src.slice(src.indexOf('function OAuthCard'));
+    // The OAuth card body must never reference the BYOK masking helper
+    // or the BYOK status fields. These are OAuth tokens — masking them
+    // like API keys would be dishonest.
+    expect(oauthBlock).not.toMatch(/formatMaskedKey/);
+    expect(oauthBlock).not.toMatch(/key_last4/);
+    expect(oauthBlock).not.toMatch(/paste to connect/);
+    expect(oauthBlock).not.toMatch(/'test'|'rotate'/);
+    expect(oauthBlock).not.toMatch(/onSubmit/);
+  });
+
+  it('Connect / Manage affordance links out to the REAL /settings/connections flow', () => {
+    // We do NOT run OAuth on the Keys page. The button is a link to the
+    // existing flow page; no inline handshake; no disconnect logic here.
+    expect(src).toMatch(/OAUTH_FLOW_HREF/);
+    const oauthBlock = src.slice(src.indexOf('function OAuthCard'));
+    expect(oauthBlock).toMatch(/href=\{OAUTH_FLOW_HREF\}/);
+    expect(oauthBlock).toMatch(/Manage →/);
+    expect(oauthBlock).toMatch(/Connect →/);
+    // No fetch / no disconnect call from inside the OAuth card.
+    expect(oauthBlock).not.toMatch(/fetch\(/);
+    expect(oauthBlock).not.toMatch(/disconnect/i);
+  });
+
+  it('connected OAuth cards wear the breathing rim (visual parity with verified BYOK)', () => {
+    const oauthBlock = src.slice(src.indexOf('function OAuthCard'));
+    expect(oauthBlock).toMatch(/styles\.verifiedRim/);
+    expect(oauthBlock).toMatch(/styles\.statusPulseDot/);
+  });
+
+  it('the header stat strip counts BOTH BYOK + OAuth via keyStatsVm({status, loading, oauth})', () => {
+    // The page-level keyStatsVm call must pass the oauth snapshot so
+    // the Connected / Missing strip reflects the real total of
+    // integrations (today: 5).
+    expect(src).toMatch(/keyStatsVm\(\s*\{\s*status,\s*loading,\s*oauth:\s*oauthInitial/);
   });
 });
 

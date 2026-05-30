@@ -150,18 +150,108 @@ export interface KeyStatsVm {
 }
 
 export function keyStatsVm(input: {
+  /** BYOK status as returned by GET /api/connections/keys. */
   status: Record<string, { connected: boolean }> | null;
   loading?: boolean;
+  /** OAuth connection status loaded server-side from `connections` rows.
+   *  Each entry is present when the provider has a row on file. The
+   *  helper only reads `.connected` — `account_login` / `connected_at`
+   *  are part of the snapshot but irrelevant to the stat strip. */
+  oauth?: OAuthSnapshotByProvider | null;
 }): KeyStatsVm {
-  const total = KEYS_PROVIDERS.length;
+  const byokTotal = KEYS_PROVIDERS.length;
+  // The OAuth side participates in the totals only when the caller
+  // actually hands in an oauth snapshot — otherwise we'd be silently
+  // counting providers the caller never said it wanted to display
+  // (callers that only manage BYOK still expect the BYOK-only totals).
+  const oauthTotal = input.oauth ? OAUTH_PROVIDERS.length : 0;
+  const total = byokTotal + oauthTotal;
+  // OAuth status comes from the server snapshot — it doesn't participate
+  // in the client BYOK loading state.
+  const oauthConnected = input.oauth
+    ? OAUTH_PROVIDERS.filter((p) => input.oauth?.[p.provider]?.connected).length
+    : 0;
   if (input.loading || !input.status) {
-    return { connected: 0, missing: total, errors: 0, loading: !!input.loading };
+    // BYOK side hasn't loaded yet; report only what we know honestly.
+    return {
+      connected: oauthConnected,
+      missing: total - oauthConnected,
+      errors: 0,
+      loading: !!input.loading,
+    };
   }
-  const connected = KEYS_PROVIDERS.filter(
+  const byokConnected = KEYS_PROVIDERS.filter(
     (p) => input.status?.[p.provider]?.connected,
   ).length;
+  const connected = byokConnected + oauthConnected;
   return { connected, missing: total - connected, errors: 0, loading: false };
 }
+
+// ---------------------------------------------------------------------------
+// OAuth connections — the 3 platform integrations that live alongside the
+// BYOK keys in the unified `connections` table. The Keys page READS their
+// status server-side via loadConnectionPublic; the Connect / Manage
+// affordance LINKS OUT to /settings/connections (which is where the real
+// OAuth handshake + disconnect logic lives). We never run OAuth here.
+// ---------------------------------------------------------------------------
+
+export type OAuthProvider = 'github' | 'vercel' | 'supabase';
+export type OAuthIconTint = 'ink' | 'mint';
+
+export interface OAuthProviderInfo {
+  readonly provider: OAuthProvider;
+  readonly label: string;
+  /** One-letter glyph for the tinted icon tile. */
+  readonly letter: string;
+  /** Icon tile tint (brief: github = ink, vercel = ink, supabase = mint). */
+  readonly tint: OAuthIconTint;
+  /** Brief "what this unlocks" copy — only shown when not connected,
+   *  because the empty state has nothing else honest to say. */
+  readonly unlocks: string;
+}
+
+export const OAUTH_PROVIDERS: ReadonlyArray<OAuthProviderInfo> = [
+  {
+    provider: 'github',
+    label: 'GitHub',
+    letter: 'G',
+    tint: 'ink',
+    unlocks: 'private repos for builds',
+  },
+  {
+    provider: 'vercel',
+    label: 'Vercel',
+    letter: 'V',
+    tint: 'ink',
+    unlocks: 'deploys',
+  },
+  {
+    provider: 'supabase',
+    label: 'Supabase',
+    letter: 'S',
+    tint: 'mint',
+    unlocks: 'managed Postgres',
+  },
+];
+
+/** Where every Connect / Manage button on an OAuth card sends the user.
+ *  The real flow lives there — we don't run OAuth on the Keys page. */
+export const OAUTH_FLOW_HREF = '/settings/connections';
+
+/** Public-safe OAuth snapshot the server loads with loadConnectionPublic
+ *  and hands to KeysAi as initial props. Only the fields the UI actually
+ *  uses are kept — everything else (encrypted token, ids) stays server-
+ *  side. `key_last4` is intentionally absent (OAuth tokens are not masked
+ *  keys; conflating the two would be dishonest). */
+export interface OAuthConnectionSnapshot {
+  readonly connected: boolean;
+  readonly account_login: string | null;
+  readonly connected_at: string | null;
+}
+
+export type OAuthSnapshotByProvider = Readonly<
+  Partial<Record<OAuthProvider, OAuthConnectionSnapshot>>
+>;
 
 // ---------------------------------------------------------------------------
 // Relative timestamp — for the "added <X ago>" line on connected cards.

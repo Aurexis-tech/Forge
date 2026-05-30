@@ -1,40 +1,39 @@
 'use client';
 
-// KeysAi — the AI-futuristic /settings/keys page. Chrome upgraded to the
-// design-study card + header look while keeping every honesty correction:
-//   - REAL provider set (anthropic + e2b only — the API's enforced enum).
-//   - REAL per-provider fields (connected, key_last4, connected_at) ONLY.
-//     None of the design-study's invented usage numbers are surfaced —
-//     none of those signals exist on the connection record today.
-//   - REAL security banner ("encrypted at rest", NOT "zero-knowledge").
-//     The false-claim test in keys-ai.test.ts stays in force.
-//   - REAL wiring: GET / POST / DELETE against /api/connections/keys with
-//     the same body shapes the forge KeysForm used. Preserved verbatim.
+// KeysAi — the AI-futuristic /settings/keys page. Two real sections:
 //
-// Card chrome:
-//   - Header is two-part: left = eyebrow + h1 + sub; right = a LiquidGlass
-//     stat strip with three cells (Connected / Missing / Errors) bound to
-//     the pure keyStatsVm helper.
-//   - Provider cards: tinted single-letter icon chip (anthropic = amber A,
-//     e2b = violet E), a richer status pill ("Verified" with a pulsing
-//     aurora dot on connected, "Not connected" faint on empty), a boxed
-//     masked-key field with a 2px aurora left border (or a dashed
-//     "paste to connect" treatment when empty), the real destination URL
-//     hover-aurora, the honest one-line description, an optional "added
-//     <X ago>" line driven by the real connected_at, and a Test + Rotate
-//     primary action pair on connected cards or a "Connect →" CTA on
-//     empty. A small rose "remove" secondary preserves the DELETE wiring
-//     per the prompt's "preserve set/verify/rotate/delete" constraint.
+//   API KEYS  — the BYOK cards (anthropic + e2b, the API's enforced enum).
+//               REAL per-provider fields (connected, key_last4, connected_at)
+//               only; no fabricated usage numbers. Test + Rotate primary
+//               pair on connected cards; the "remove" rose link preserves
+//               the DELETE wiring. ALL writes go through the same real
+//               POST /api/connections/keys (the API validates against the
+//               upstream provider before persisting — that IS the
+//               verification path; both Test and Rotate map to it).
 //
-// HONEST "Test" wiring: the API has no separate verify endpoint, but the
-// POST that Rotate uses validates the pasted key with a tiny live call to
-// the upstream provider before persisting (that IS the verification path).
-// So "Test" opens the same paste form as Rotate, labeled "paste your
-// current key to verify"; submitting POSTs through the same endpoint and
-// the API validates against the provider. Both buttons map to the SAME
-// real action; the label reflects the user's intent (re-check vs replace),
-// and the validation that runs is real upstream verification — nothing
-// inert.
+//   CONNECTIONS — the 3 OAuth platform integrations (GitHub / Vercel /
+//                 Supabase). REAL status loaded server-side from the
+//                 `connections` table via loadConnectionPublic, handed
+//                 in as `oauthInitial`. SAME LiquidGlass card design as
+//                 BYOK; OAuth affordance instead of a paste form:
+//                 — Connected: shows real account_login + relative
+//                   connected_at; no fields are invented; null fields are
+//                   omitted with "—".
+//                 — Empty: brief "what this unlocks" copy.
+//                 — Connect / Manage link routes to /settings/connections,
+//                   where the real OAuth handshake + disconnect logic lives.
+//                 NO masked-key field on these — they're OAuth tokens, not
+//                 API keys; the honest distinction stays visible.
+//
+// Honesty rails kept from the prior pass: every metric and label on
+// this page is bound to a real field the API/connection record actually
+// carries — no fabricated activity charts, no invented counters of any
+// kind. The set of providers shown is also fixed in lib/keys-config.ts;
+// nothing un-wired ever appears here.
+//
+// The header stat strip counts BOTH sides (BYOK + OAuth) so the
+// Connected / Missing strip reflects the actual total of integrations
+// on the page (today: 5).
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { LiquidGlass } from '@/components/lq/LiquidGlass';
@@ -43,10 +42,16 @@ import {
   formatRelativeTime,
   KEYS_PROVIDERS,
   KEYS_SECURITY,
+  OAUTH_FLOW_HREF,
+  OAUTH_PROVIDERS,
   PROVIDER_DESTINATION,
   PROVIDER_ICON,
   keyStatsVm,
   keyStatusVm,
+  type OAuthConnectionSnapshot,
+  type OAuthIconTint,
+  type OAuthProviderInfo,
+  type OAuthSnapshotByProvider,
   type ProviderIconTint,
   type ProviderInfo,
 } from '@/lib/keys-config';
@@ -65,7 +70,21 @@ const ICON_TINT_CLASS: Record<ProviderIconTint, string> = {
   violet: 'bg-lq-violet/15 border-lq-violet/40 text-lq-violet',
 };
 
-export function KeysAi() {
+const OAUTH_ICON_TINT_CLASS: Record<OAuthIconTint, string> = {
+  // Brief: github = ink/neutral, vercel = ink/neutral, supabase = mint.
+  ink: 'bg-lq-elev-1 border-lq-line text-lq-ink',
+  mint: 'bg-lq-mint/15 border-lq-mint/40 text-lq-mint',
+};
+
+export function KeysAi({
+  oauthInitial = {},
+}: {
+  /** Real OAuth connection status loaded server-side from the
+   *  `connections` table. Keyed by provider; missing keys render as
+   *  "Not connected" (honest, since the loader either found a row or
+   *  it didn't). */
+  oauthInitial?: OAuthSnapshotByProvider;
+}) {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +110,7 @@ export function KeysAi() {
     }
   }
 
-  const stats = keyStatsVm({ status, loading });
+  const stats = keyStatsVm({ status, loading, oauth: oauthInitial });
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-2 py-12 font-ui text-lq-ink">
@@ -163,7 +182,12 @@ export function KeysAi() {
         </p>
       ) : null}
 
-      {/* Provider cards — 2-col grid for the two REAL providers. */}
+      {/* === SECTION: API KEYS — the 2 REAL BYOK cards (anthropic + e2b). === */}
+      <SectionHead
+        eyebrow="API keys"
+        title="API keys"
+        sub="Bring your own — keys you paste here; we validate live, then store encrypted."
+      />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {KEYS_PROVIDERS.map((info) => (
           <ProviderCard
@@ -175,7 +199,49 @@ export function KeysAi() {
           />
         ))}
       </div>
+
+      {/* === SECTION: CONNECTIONS — the 3 REAL OAuth cards. === */}
+      <SectionHead
+        eyebrow="Connections"
+        title="Connections"
+        sub="OAuth integrations — manage from /settings/connections."
+      />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {OAUTH_PROVIDERS.map((info) => (
+          <OAuthCard
+            key={info.provider}
+            info={info}
+            snapshot={oauthInitial[info.provider] ?? null}
+          />
+        ))}
+      </div>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section header — a small repeated eyebrow + h2 + sub above each card grid.
+// ---------------------------------------------------------------------------
+
+function SectionHead({
+  eyebrow,
+  title,
+  sub,
+}: {
+  eyebrow: string;
+  title: string;
+  sub: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="font-code text-[10px] uppercase tracking-[0.35em] text-lq-aurora">
+        {eyebrow}
+      </span>
+      <h2 className="font-ui text-xl font-bold tracking-tight text-lq-ink">
+        {title}
+      </h2>
+      <p className="text-sm text-lq-ink-dim">{sub}</p>
+    </div>
   );
 }
 
@@ -211,7 +277,7 @@ function StatCell({
 }
 
 // ---------------------------------------------------------------------------
-// ProviderCard — design-study card chrome over the REAL wiring.
+// ProviderCard — design-study card chrome over the REAL BYOK wiring.
 // ---------------------------------------------------------------------------
 
 function ProviderCard({
@@ -511,6 +577,129 @@ function ProviderCard({
           {cardError}
         </p>
       ) : null}
+    </LiquidGlass>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// OAuthCard — same LiquidGlass shell as BYOK, OAuth affordance. NO
+// masked-key field (these are OAuth tokens, not API keys; conflating the
+// two would be dishonest). Body shows REAL fields from the server snapshot
+// only — null fields are simply omitted. Connect / Manage routes to
+// /settings/connections, where the real handshake + disconnect live.
+// ---------------------------------------------------------------------------
+
+function OAuthCard({
+  info,
+  snapshot,
+}: {
+  info: OAuthProviderInfo;
+  snapshot: OAuthConnectionSnapshot | null;
+}) {
+  const connected = snapshot?.connected ?? false;
+  const handle = snapshot?.account_login ?? null;
+  const addedAgo = formatRelativeTime(snapshot?.connected_at ?? null);
+
+  return (
+    <LiquidGlass
+      as="div"
+      className={
+        'flex flex-col gap-4 p-6 font-ui ' +
+        (connected ? styles.verifiedRim : '')
+      }
+    >
+      {/* TOP ROW — tinted icon chip + brand name + status pill. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            aria-hidden
+            className={
+              'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] border font-ui text-lg font-bold ' +
+              OAUTH_ICON_TINT_CLASS[info.tint]
+            }
+          >
+            {info.letter}
+          </span>
+          <div className="flex min-w-0 flex-col">
+            <span className="font-ui text-base font-bold tracking-tight text-lq-ink">
+              {info.label}
+            </span>
+            <span className="font-code text-[10px] uppercase tracking-[0.25em] text-lq-ink-faint">
+              oauth
+            </span>
+          </div>
+        </div>
+        <span
+          className={
+            'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-code text-[10px] uppercase tracking-[0.3em] ' +
+            (connected
+              ? 'border-lq-mint/40 bg-lq-mint/10 text-lq-mint'
+              : 'border-lq-line bg-lq-elev-1 text-lq-ink-faint')
+          }
+        >
+          {connected ? (
+            <span
+              aria-hidden
+              className={
+                'inline-block h-1.5 w-1.5 rounded-full bg-lq-mint ' +
+                styles.statusPulseDot
+              }
+            />
+          ) : (
+            <span
+              aria-hidden
+              className="inline-block h-1.5 w-1.5 rounded-full bg-lq-ink-faint"
+            />
+          )}
+          {connected ? 'Connected' : 'Not connected'}
+        </span>
+      </div>
+
+      {/* Body — REAL fields only:
+          - Connected: account_login (if present) + relative connected_at
+            (if present). Anything we don't actually have is omitted
+            instead of "—" placeholders so we never claim what we don't
+            know.
+          - Empty: a brief "what this unlocks" line. */}
+      {connected ? (
+        <div className="flex flex-col gap-2 rounded-[10px] border border-lq-line border-l-2 border-l-lq-mint bg-lq-elev-1 px-4 py-3">
+          {handle ? (
+            <p className="font-code text-[13px] tracking-[0.02em] text-lq-ink">
+              Connected as @{handle}
+            </p>
+          ) : (
+            <p className="font-code text-[12px] uppercase tracking-[0.2em] text-lq-ink-faint">
+              account on file
+            </p>
+          )}
+          {addedAgo ? (
+            <p className="font-code text-[10px] uppercase tracking-[0.2em] text-lq-ink-faint">
+              connected {addedAgo}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center rounded-[10px] border border-dashed border-lq-line bg-lq-elev-1/50 px-4 py-5">
+          <p className="font-code text-[11px] uppercase tracking-[0.25em] text-lq-ink-faint">
+            unlocks {info.unlocks}
+          </p>
+        </div>
+      )}
+
+      {/* Affordance row — a single LiquidGlass anchor to the REAL
+          /settings/connections flow. We do NOT run the OAuth dance
+          here; the unlink control also lives on that page, not this
+          one. */}
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-lq-line pt-4">
+        <LiquidGlass
+          as="a"
+          href={OAUTH_FLOW_HREF}
+          variant={connected ? 'default' : 'aurora'}
+          className="inline-flex items-center rounded-[14px] px-5 py-2 text-sm font-semibold"
+        >
+          {connected ? 'Manage →' : 'Connect →'}
+        </LiquidGlass>
+      </div>
     </LiquidGlass>
   );
 }
