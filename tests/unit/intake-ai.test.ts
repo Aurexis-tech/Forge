@@ -70,7 +70,7 @@ describe('isMigratedRoute', () => {
     expect(isMigratedRoute('/forge')).toBe(true);
     // Exact match: /forge/anything is NOT migrated (each child opts in).
     expect(isMigratedRoute('/forge/anything')).toBe(false);
-    expect(isMigratedRoute('/governance')).toBe(false);
+    expect(isMigratedRoute('/settings/connections')).toBe(false);
     expect(isMigratedRoute('/')).toBe(false);
     expect(isMigratedRoute(null)).toBe(false);
   });

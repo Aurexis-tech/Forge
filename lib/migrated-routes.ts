@@ -15,6 +15,7 @@ export const MIGRATED_ROUTES: readonly string[] = [
   '/software',
   '/infrastructure',
   '/settings/keys',
+  '/governance',
 ];
 
 /**

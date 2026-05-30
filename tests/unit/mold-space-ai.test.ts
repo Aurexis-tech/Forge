@@ -196,7 +196,7 @@ describe('MIGRATED_ROUTES now covers the four mold spaces', () => {
       expect(isMigratedRoute(r + '/something')).toBe(false);
     }
     // A representative un-migrated route still goes to ForgeBackdrop.
-    expect(isMigratedRoute('/governance')).toBe(false);
+    expect(isMigratedRoute('/settings/connections')).toBe(false);
   });
 });
 

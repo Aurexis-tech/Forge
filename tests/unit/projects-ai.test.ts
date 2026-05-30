@@ -282,7 +282,7 @@ describe('MIGRATED_ROUTES now covers /projects (exact match)', () => {
     expect(isMigratedRoute('/projects/abc-123')).toBe(false);
     expect(isMigratedRoute('/forge')).toBe(true);
     expect(isMigratedRoute('/forge/anything')).toBe(false);
-    expect(isMigratedRoute('/governance')).toBe(false);
+    expect(isMigratedRoute('/settings/connections')).toBe(false);
   });
 });
 

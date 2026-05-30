@@ -1,0 +1,37 @@
+/* Governance AI — scoped styles. The meter fill is a BOUNDED CSS transition
+   (one-shot 0 → real pct on mount; the bar then sits statically at the real
+   value). There are NO infinite loops in this module — the brief explicitly
+   forbids the design-study's "looping fake spend" demo. The kill-switch
+   armed indicator uses a single static color, not a pulse. globals.css
+   stays at exactly 4 infinite loops (the forge backdrop's ambient set). */
+
+.meterTrack {
+  position: relative;
+  height: 0.5rem;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.meterFill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  border-radius: 9999px;
+  /* One-shot bounded transition. The bar fills from 0 to the real
+     percentage on mount, then sits still. NO infinite animation. */
+  transition: width 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.meterFillMint   { background: linear-gradient(90deg, rgba(110, 240, 200, 0.45), rgba(110, 240, 200, 0.85)); }
+.meterFillAurora { background: linear-gradient(90deg, rgba(95, 230, 255, 0.45), rgba(95, 230, 255, 0.9)); }
+.meterFillAmber  { background: linear-gradient(90deg, rgba(255, 191, 100, 0.55), rgba(255, 154, 77, 0.95)); }
+.meterFillRose   { background: linear-gradient(90deg, rgba(255, 130, 160, 0.6), rgba(244, 63, 94, 1)); }
+
+/* Ambient warm-glow ring on a card whose meter is in the warming/over zone.
+   Static box-shadow — NOT an infinite pulse. */
+.zoneGlowAmber { box-shadow: 0 0 38px -10px rgba(255, 154, 77, 0.45); }
+.zoneGlowRose  { box-shadow: 0 0 44px -8px rgba(244, 63, 94, 0.55); }

@@ -198,25 +198,17 @@ describe('the forge KeysForm component is preserved (orphaned by the migration)'
 });
 
 // ===========================================================================
-// 6. Governance — SectionHeader + EmberCards + spend that heats up
+// 6. Governance — the forge SpendMeter component is preserved (orphaned)
 // ===========================================================================
-describe('governance shows the budget heating up', () => {
-  const page = read('app/(app)/governance/page.tsx');
+describe('the forge governance components are preserved (orphaned by the migration)', () => {
+  // /governance has MIGRATED to the AI-futuristic system — see
+  // tests/unit/governance-ai.test.ts for the new structural assertions. The
+  // forge SpendMeter / KillSwitchPanel / BudgetForm component files are left
+  // in place (cleanup will delete them later); these checks confirm they
+  // weren't touched.
   const meter = read('components/governance/SpendMeter.tsx');
 
-  it('the page header is a SectionHeader and surfaces sit on EmberCards', () => {
-    expect(page).toMatch(/<SectionHeader/);
-    expect(page).toMatch(/<EmberCard/);
-    expect(page).not.toMatch(/GlassPanel/);
-  });
-
-  it('runtime status is a HeatBadge (active glows; errored stays alarming)', () => {
-    expect(page).toMatch(/<HeatBadge/);
-    expect(page).toMatch(/rt\.status === 'active'/);
-    expect(page).toMatch(/border-rose-400\/50 text-rose-300/); // errored stays red
-  });
-
-  it('the SpendMeter wires a HeatBadge to the warming helper (cool→…→molten)', () => {
+  it('the forge SpendMeter still wires HeatBadge → spendHeatTone (unchanged)', () => {
     expect(meter).toMatch(/<HeatBadge/);
     expect(meter).toMatch(/spendHeatTone\(spendUsd, limitUsd\)/);
     expect(meter).toMatch(/spendHeatLabel\(spendUsd, limitUsd\)/);
