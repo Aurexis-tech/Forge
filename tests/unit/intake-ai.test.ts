@@ -5,57 +5,129 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { detectMoldHint } from '@/lib/mold-hint';
+import { detectMoldHint, scoreMoldSignals } from '@/lib/mold-hint';
 import { isMigratedRoute, MIGRATED_ROUTES } from '@/lib/migrated-routes';
 
 const read = (p: string) => readFileSync(p, 'utf8');
 
 // ===========================================================================
-// 1. detectMoldHint — the PURE provisional guess
+// 1. detectMoldHint — pure scoring + ABSTAIN on conflict
 // ===========================================================================
-describe('detectMoldHint', () => {
-  it('guesses agents from watch/scan/brief/schedule language', () => {
+describe('detectMoldHint — confident cases', () => {
+  it('agents — one ongoing automation (scrape / notify / cadence)', () => {
+    // Canonical agent prompt from the brief.
     expect(
       detectMoldHint('Scan new arXiv papers daily and email me a 5-bullet brief'),
     ).toBe('agents');
+    // Monitor + notify + cadence — agent-only signals dominate.
     expect(detectMoldHint('monitor my mentions and notify me weekly')).toBe(
       'agents',
     );
   });
 
-  it('guesses systems from coordination language', () => {
+  it('systems — multiple things coordinated or aggregated', () => {
+    // Coordination + aggregation; "watch" fires agent once but system
+    // dominates by 3 vs 1.
     expect(detectMoldHint('coordinate multiple agents to watch competitors')).toBe(
       'systems',
     );
+    // One strong system signal with zero competitors elsewhere — second
+    // == 0 so the helper commits.
     expect(detectMoldHint('orchestrate a swarm of workers')).toBe('systems');
-  });
-
-  it('guesses systems when 3+ broad nouns co-occur', () => {
+    // The brief's canonical system prompt — coordinate + digest + a
+    // numeric multi-target ("5 competitors"); no agent verbs fire.
     expect(
-      detectMoldHint('an agent, a system, an app, and a database working together'),
+      detectMoldHint('coordinate three agents into a Monday digest across 5 competitors'),
     ).toBe('systems');
   });
 
-  it('guesses software from app/users/approve language', () => {
+  it('software — people use a UI (app / users / approve)', () => {
+    expect(
+      detectMoldHint('an app where users submit receipts and managers approve'),
+    ).toBe('software');
     expect(
       detectMoldHint('a web app where users sign up and submit expenses'),
     ).toBe('software');
   });
 
-  it('guesses infrastructure from db/rls/backups — and it beats software', () => {
+  it('infrastructure — data plane / IaC primitives', () => {
+    // Brief's canonical infra prompt.
+    expect(detectMoldHint('Postgres with RLS and daily backups')).toBe(
+      'infrastructure',
+    );
+    // Full form — postgres + database + RLS + backups = 4 infra
+    // signals; daily fires agent once. Gap wins.
     expect(
       detectMoldHint('a postgres database with row-level security and daily backups'),
     ).toBe('infrastructure');
-    // "app" (software) + "postgres/database" (infra); infra has priority.
-    expect(detectMoldHint('a postgres database for my app')).toBe(
-      'infrastructure',
-    );
+  });
+});
+
+describe('detectMoldHint — ABSTAIN on conflict (the whole point of the rewrite)', () => {
+  it('the reported borderline: track / weekly fires agent AND competitors / digest / 5 competitors fires system → null', () => {
+    // The exact case that today's keyword-priority helper mis-guesses
+    // as "Agent" on track/weekly. The new helper sees agent (track +
+    // weekly = 2) AND system (competitors + digest + "5 competitors"
+    // + the 3-item comma list = 4) both fire strongly, and refuses to
+    // commit. The intake pill will render the neutral "mold set when
+    // you forge" state instead of confidently picking the wrong mold.
+    expect(
+      detectMoldHint(
+        'Track our top 5 competitors — pricing pages, hiring, social posts — and surface weekly changes in a Monday digest',
+      ),
+    ).toBeNull();
   });
 
-  it('returns null ("detecting") for empty / ambiguous text', () => {
+  it('property: NEVER returns a confident mold when agent AND system both score ≥ 2', () => {
+    // Synthetic that fires ≥2 in each set. Even though the totals
+    // could pick a "winner" by gap, the helper abstains because the
+    // input genuinely reads as both an automation AND a coordination.
+    const text =
+      'Track and monitor competitors across teams and report a weekly digest';
+    const scores = scoreMoldSignals(text);
+    expect(scores.agents).toBeGreaterThanOrEqual(2);
+    expect(scores.systems).toBeGreaterThanOrEqual(2);
+    expect(detectMoldHint(text)).toBeNull();
+  });
+
+  it('returns null for empty / whitespace / off-topic text', () => {
     expect(detectMoldHint('')).toBeNull();
     expect(detectMoldHint('   ')).toBeNull();
     expect(detectMoldHint('hello there friend')).toBeNull();
+  });
+
+  it('returns null when the top mold is only barely ahead (no required gap, second != 0)', () => {
+    // postgres + app — infra 1 / software 1. No mold reaches ≥2, gap
+    // is 0, second != 0 → abstain. (The old keyword-priority helper
+    // would have picked infrastructure here; the new helper correctly
+    // refuses to commit on so little evidence.)
+    expect(detectMoldHint('a postgres database for my app')).toBeNull();
+  });
+});
+
+describe('scoreMoldSignals — the pure tally exposed for tests', () => {
+  it('counts at most +1 per signal pattern, not per occurrence', () => {
+    // "weekly weekly weekly" should still only contribute the single
+    // /weekly/ pattern's +1 to agents (cap on signal-counting, not
+    // word-counting).
+    const s = scoreMoldSignals('weekly weekly weekly');
+    expect(s.agents).toBe(1);
+  });
+
+  it('the 2+ comma rule adds at most +1 to systems (capped, not unbounded)', () => {
+    // 5 commas should still only add +1 system signal — long sentences
+    // with many commas shouldn't dominate.
+    const s = scoreMoldSignals('a, b, c, d, e, f');
+    expect(s.systems).toBe(1);
+  });
+
+  it('returns all-zeros for empty input (no NaN, no negatives)', () => {
+    expect(scoreMoldSignals('')).toEqual({
+      agents: 0,
+      systems: 0,
+      software: 0,
+      infrastructure: 0,
+    });
   });
 });
 
@@ -142,8 +214,15 @@ describe('IntakeFormAi', () => {
 
   it('renders the live mold hint (detectMoldHint) with text + colour, not motion', () => {
     expect(src).toMatch(/detectMoldHint/);
+    // Confident state: soft "looks like" prefix — still a guess.
     expect(src).toMatch(/looks like/);
-    expect(src).toMatch(/detecting/);
+    // Abstain state: intentional neutral copy — NOT an error look. The
+    // brief calls for "mold set when you forge" so the user reads it as
+    // "the forge decides this for real," not as a failure.
+    expect(src).toMatch(/mold set when you forge/);
+    // The old "detecting" copy must not survive — that read as a
+    // failure / loading state.
+    expect(src).not.toMatch(/>\s*detecting\s*</);
   });
 
   it('renders the 4 starter chips with the four fill texts', () => {

@@ -195,12 +195,18 @@ export function IntakeFormAi() {
                   </span>
                 </>
               ) : (
+                // Neutral / abstain state — NOT an error look. The hint
+                // is provisional; when signals are weak or two molds
+                // both fire strongly (e.g. agent + system on a
+                // competitor-watch prompt), we deliberately refuse to
+                // commit and let the forge classify for real. The pulse
+                // dot keeps it alive; the copy says "the forge decides."
                 <>
                   <span
                     aria-hidden
                     className={`inline-block h-1.5 w-1.5 rounded-full bg-lq-ink-dim ${styles.pulseDot}`}
                   />
-                  <span className="text-lq-ink-faint">detecting</span>
+                  <span className="text-lq-ink-faint">mold set when you forge</span>
                 </>
               )}
             </span>
