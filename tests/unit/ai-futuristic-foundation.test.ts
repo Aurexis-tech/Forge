@@ -230,39 +230,49 @@ describe('LiquidGlass component', () => {
 });
 
 // ===========================================================================
-// 6. AurexisAmbient — Aurora bloom direction, LIVE on every migrated route
+// 6. AurexisAmbient — "Deep field" direction, LIVE on every migrated route
 // ===========================================================================
-describe('AurexisAmbient — Aurora bloom backdrop', () => {
+describe('AurexisAmbient — Deep field backdrop', () => {
   const src = read('components/lq/AurexisAmbient.tsx');
   const css = read('components/lq/AurexisAmbient.module.css');
 
-  it('renders all 5 bloom layers (aurora + violet + grid + grain + vignette)', () => {
+  it('renders the 4 deep-field layers (starfield + focus glow + grain + vignette)', () => {
     expect(src).toMatch(/styles\.ambient/);
-    expect(src).toMatch(/styles\.aurora/);
-    expect(src).toMatch(/styles\.violet/);
-    expect(src).toMatch(/styles\.grid/);
+    expect(src).toMatch(/styles\.starfield/);
+    expect(src).toMatch(/styles\.focus/);
     expect(src).toMatch(/styles\.grain/);
     expect(src).toMatch(/styles\.vignette/);
   });
 
-  it('the bloom layers are radial gradients on the real lq.* tokens', () => {
-    // Root is the void; blooms use the real --aurora and --violet tokens
-    // (no hard-coded hex), masked through radial-gradient.
-    expect(css).toMatch(/background:\s*var\(--void\)/);
-    expect(css).toMatch(/radial-gradient[\s\S]*var\(--aurora\)/);
-    expect(css).toMatch(/radial-gradient[\s\S]*var\(--violet\)/);
-    // The 12-col lattice and the vignette stay built from real tokens.
-    expect(css).toMatch(/var\(--grid\)/);
-    expect(css).toMatch(/radial-gradient\([\s\S]*?transparent\s+\d+%/);
+  it('DROPS the 12-col grid (deep field is minimal — no lattice)', () => {
+    // The grid layer + its --grid token usage are gone; a lattice over a
+    // starfield reads busy, against the deep-field intent.
+    expect(src).not.toMatch(/styles\.grid\b/);
+    expect(css).not.toMatch(/var\(--grid\)/);
   });
 
-  it('blooms are heavily blurred and sized in the brief\'s range (~620–760px)', () => {
-    // The blur is what turns the radial gradient into a soft bloom; the
-    // brief calls for ~120px. The fixed sizes keep the blooms bounded
-    // (no full-viewport gradients).
-    expect(css).toMatch(/filter:\s*blur\(120px\)/);
-    expect(css).toMatch(/width:\s*760px/);
-    expect(css).toMatch(/width:\s*620px/);
+  it('the base is a deepened near-black (darker than --void) so the field reads', () => {
+    expect(css).toMatch(/background:\s*#060709/);
+  });
+
+  it('the starfield is static layered radial-gradient dots (no images, no twinkle)', () => {
+    // Many 1px radial-gradient points, mostly white + a couple aurora,
+    // tiled via background-size. No url() image, no animation on it.
+    const dotCount = (css.match(/radial-gradient\(1px 1px at/g) ?? []).length;
+    expect(dotCount).toBeGreaterThanOrEqual(8);
+    expect(css).toMatch(/\.starfield[\s\S]*?var\(--aurora\)/); // a couple aurora dots
+    expect(css).toMatch(/\.starfield[\s\S]*?background-size:/);
+    // The starfield block must NOT carry an animation (static).
+    const starBlock = css.match(/\.starfield\s*\{[\s\S]*?\}/);
+    expect(starBlock, 'starfield block present').toBeTruthy();
+    expect(starBlock![0]).not.toMatch(/animation/);
+  });
+
+  it('the focus glow is a single centred aurora bloom, heavily blurred (~680×520, blur 140px)', () => {
+    expect(css).toMatch(/\.focus[\s\S]*?radial-gradient[\s\S]*?var\(--aurora\)/);
+    expect(css).toMatch(/width:\s*680px/);
+    expect(css).toMatch(/height:\s*520px/);
+    expect(css).toMatch(/filter:\s*blur\(140px\)/);
   });
 
   it('the grain layer is an inline SVG noise tile, low-opacity overlay blend', () => {
@@ -271,29 +281,31 @@ describe('AurexisAmbient — Aurora bloom backdrop', () => {
     expect(css).toMatch(/opacity:\s*0\.04/);
   });
 
-  it('has exactly TWO infinite loops (auroraDrift + violetDrift), scoped to the module', () => {
-    // Strip CSS comments before counting so the module's own prose
-    // header can't accidentally match (the keys-ai / landing-ai tests
-    // use the same pattern). Counts only real declarations.
-    const cssNoComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
-    const infinites = cssNoComments.match(/animation[^;]*infinite/g) ?? [];
-    expect(infinites.length).toBe(2);
-    expect(css).toMatch(/@keyframes auroraDrift/);
-    expect(css).toMatch(/@keyframes violetDrift/);
-    // Different periods so the two never sync into a single pulse.
-    expect(css).toMatch(/animation:\s*auroraDrift\s+14s/);
-    expect(css).toMatch(/animation:\s*violetDrift\s+17s/);
-    // Each is a translate + scale + opacity drift (not just an opacity
-    // breathe) — the brief calls for actual drift.
-    expect(css).toMatch(/translate3d/);
+  it('the vignette is a strong radial with a tight transparent centre (~38%)', () => {
+    expect(css).toMatch(/radial-gradient\([\s\S]*?transparent\s+38%/);
+    expect(css).toMatch(/rgba\(2,\s*3,\s*5,\s*0?\.85\)/);
   });
 
-  it('respects prefers-reduced-motion at the module level (drift disabled)', () => {
-    // The global rule in app/globals.css collapses durations to ~instant
-    // already, but the module ALSO has its own override so the intent
-    // is local to the component and survives global re-orderings.
+  it('has exactly ONE infinite loop (focusBreathe), scoped to the module', () => {
+    // Strip CSS comments before counting so the module's own prose
+    // header can't accidentally match (same pattern as keys-ai /
+    // landing-ai). The deep field is calmer — one loop, not two.
+    const cssNoComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    const infinites = cssNoComments.match(/animation[^;]*infinite/g) ?? [];
+    expect(infinites.length).toBe(1);
+    expect(css).toMatch(/@keyframes focusBreathe/);
+    expect(css).toMatch(/animation:\s*focusBreathe\s+9s/);
+    // Opacity-only breathe — no movement (no translate in the keyframe).
+    const kf = css.match(/@keyframes focusBreathe\s*\{[\s\S]*?\}\s*\}/);
+    expect(kf, 'focusBreathe keyframe present').toBeTruthy();
+    expect(kf![0]).not.toMatch(/translate/);
+    // The retired drift loops are fully gone.
+    expect(css).not.toMatch(/auroraDrift/);
+    expect(css).not.toMatch(/violetDrift/);
+  });
+
+  it('respects prefers-reduced-motion at the module level (breathe disabled)', () => {
     expect(css).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)/);
-    // Inside the rule, both bloom layers get `animation: none`.
     const reducedBlock = css.match(
       /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\}\s*\}/,
     );
@@ -303,7 +315,8 @@ describe('AurexisAmbient — Aurora bloom backdrop', () => {
 
   it('keeps its keyframes OUT of globals.css (live enforcer stays ≤4)', () => {
     const g = read('app/globals.css');
-    // Neither the new names nor the old (breathe) names leak in.
+    // Neither the current name nor any retired backdrop keyframe leaks in.
+    expect(g).not.toMatch(/focusBreathe/);
     expect(g).not.toMatch(/auroraDrift/);
     expect(g).not.toMatch(/violetDrift/);
     expect(g).not.toMatch(/auroraBreathe/);

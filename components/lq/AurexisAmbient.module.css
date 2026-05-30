@@ -1,21 +1,25 @@
-/* AurexisAmbient — the AI-futuristic global backdrop in the Aurora-bloom
+/* AurexisAmbient — the AI-futuristic global backdrop in the "Deep field"
    direction. Mounted on every migrated route through AppBackdrop and on
    the public landing.
 
    Layers (back → front):
-     .ambient   void canvas (z:-10, fixed, pointer-events:none)
-     .aurora    aurora bloom, upper area (~760px, blur 120px, opacity ~.16)
-     .violet    violet bloom, lower-left (~620px, blur 120px, opacity ~.13)
-     .grid      faint 12-col lattice (~0.018 alpha via --grid)
-     .grain     filmic noise overlay (~.04 opacity, overlay blend)
-     .vignette  radial transparent → ~rgba(5,6,9,.7) edges
+     .ambient    deepened near-black canvas (#060709, fixed, z:-10,
+                 pointer-events:none)
+     .starfield  faint static dots (layered radial-gradients, no images),
+                 mostly white + a couple aurora, ~0.5 overall opacity
+     .focus      single soft aurora bloom centred behind content
+                 (~680×520, blur 140px, opacity ~0.10), opacity breathe
+     .grain      filmic noise overlay (~0.04 opacity, overlay blend)
+     .vignette   strong radial transparent ~38% → rgba(2,3,5,.85) edges
 
-   Two infinite drift loops live HERE — auroraDrift (~14s) + violetDrift
-   (~17s) — different periods so they never sync. They count against the
-   live animation budget once mounted, but they stay OUT of globals.css
-   so the "≤4 infinite animations in globals.css" enforcer keeps reading
-   only the legacy forge backdrop. CSS-modules hashes the keyframe names
-   + rewrites the references in this file. */
+   The faint 12-col grid from the prior treatments is DROPPED — a lattice
+   over a starfield reads busy, against the minimal deep-field intent.
+
+   ONE infinite loop lives HERE — focusBreathe (~9s), opacity-only. It
+   counts against the live animation budget once mounted, but it stays
+   OUT of globals.css so the "≤4 infinite animations in globals.css"
+   enforcer keeps reading only the legacy forge backdrop. CSS-modules
+   hashes the keyframe name + rewrites the reference in this file. */
 
 .ambient {
   position: fixed;
@@ -23,79 +27,55 @@
   z-index: -10;
   overflow: hidden;
   pointer-events: none;
-  background: var(--void);
+  /* Deepened near-black — slightly darker than --void (#08090d) so the
+     faint starfield reads against it. */
+  background: #060709;
 }
 
-/* AURORA BLOOM — large soft radial in the upper area, drifting slowly.
-   Fixed pixel size + heavy blur so the gradient stays a soft round bloom
-   (not a hard-edged radial filling the viewport). */
-.aurora {
-  position: absolute;
-  top: -22%;
-  left: 18%;
-  width: 760px;
-  height: 760px;
-  background: radial-gradient(closest-side, var(--aurora), transparent 70%);
-  opacity: 0.16;
-  filter: blur(120px);
-  animation: auroraDrift 14s var(--ease) infinite alternate;
-  will-change: transform, opacity;
-}
-
-/* VIOLET BLOOM — lower-left companion on a longer drift period (≈17s)
-   so the two never sync up into a single pulse. */
-.violet {
-  position: absolute;
-  bottom: -18%;
-  left: -6%;
-  width: 620px;
-  height: 620px;
-  background: radial-gradient(closest-side, var(--violet), transparent 70%);
-  opacity: 0.13;
-  filter: blur(120px);
-  animation: violetDrift 17s var(--ease) infinite alternate;
-  will-change: transform, opacity;
-}
-
-/* Faint 12-column lattice — quiet "architecture" over the blooms.
-   --grid is rgba(255,255,255,0.012) globally, so we're below the ~.018
-   alpha the brief calls for; that's intentional — the blooms add light,
-   the grid only suggests order. Masked toward the upper centre so the
-   lattice fades out at the edges. */
-.grid {
+/* STARFIELD — a static dot layer. Each radial-gradient paints one ~1px
+   point inside a tile; background-size tiles the whole set across the
+   viewport. Mostly white at low alpha; two points use the aurora token
+   (faint cyan). No twinkle — deliberately static for the premium feel.
+   The ~0.5 layer opacity keeps the whole field a quiet dusting. */
+.starfield {
   position: absolute;
   inset: 0;
+  opacity: 0.5;
   background-image:
-    repeating-linear-gradient(
-      to right,
-      var(--grid) 0,
-      var(--grid) 1px,
-      transparent 1px,
-      transparent calc(100% / 12)
-    ),
-    repeating-linear-gradient(
-      to bottom,
-      var(--grid) 0,
-      var(--grid) 1px,
-      transparent 1px,
-      transparent 96px
-    );
-  -webkit-mask-image: radial-gradient(
-    ellipse 90% 70% at 50% 32%,
-    #000 0%,
-    transparent 80%
-  );
-  mask-image: radial-gradient(
-    ellipse 90% 70% at 50% 32%,
-    #000 0%,
-    transparent 80%
-  );
+    radial-gradient(1px 1px at 24px 38px, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 92px 142px, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1px 1px at 168px 72px, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(1px 1px at 56px 208px, var(--aurora), transparent),
+    radial-gradient(1px 1px at 236px 186px, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(1px 1px at 204px 258px, rgba(255, 255, 255, 0.45), transparent),
+    radial-gradient(1px 1px at 128px 116px, var(--aurora), transparent),
+    radial-gradient(1px 1px at 288px 44px, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1px 1px at 312px 224px, rgba(255, 255, 255, 0.33), transparent),
+    radial-gradient(1px 1px at 348px 132px, rgba(255, 255, 255, 0.42), transparent);
+  background-repeat: repeat;
+  background-size: 380px 320px;
 }
 
-/* FILMIC GRAIN — SVG fractal-noise texture rendered to a tiny tile and
-   repeated. Inline as a data: URI so no extra HTTP fetch and no PNG
-   ships in the bundle. Overlay blend over the void/blooms = subtle
-   "film" texture without any color shift. */
+/* FOCUS GLOW — one soft aurora bloom centred behind the content. Fixed
+   size + heavy blur so it stays a round bloom, not a hard radial. Gently
+   breathes on opacity only (no movement). */
+.focus {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 680px;
+  height: 520px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, var(--aurora), transparent 70%);
+  opacity: 0.1;
+  filter: blur(140px);
+  animation: focusBreathe 9s var(--ease) infinite;
+  will-change: opacity;
+}
+
+/* FILMIC GRAIN — SVG fractal-noise tile, inline data: URI (no extra HTTP,
+   no PNG in the bundle). Overlay blend = subtle film texture, no color
+   shift. */
 .grain {
   position: absolute;
   inset: 0;
@@ -105,53 +85,37 @@
   background-size: 200px 200px;
 }
 
-/* VIGNETTE — radial transparent centre → ~rgba(5,6,9,.7) edges. Sits
-   on top so the corners actually darken; settles the content into the
-   void without crushing the middle. */
+/* VIGNETTE — strong radial: transparent centre (~38%) → near-black edges.
+   Sits on top so the corners actually sink, focusing the eye inward to
+   the central glow. */
 .vignette {
   position: absolute;
   inset: 0;
   background: radial-gradient(
-    ellipse 100% 80% at 50% 50%,
-    transparent 55%,
-    rgba(5, 6, 9, 0.7) 100%
+    ellipse 100% 100% at 50% 50%,
+    transparent 38%,
+    rgba(2, 3, 5, 0.85) 100%
   );
 }
 
-/* DRIFT KEYFRAMES — slow, gentle translate + a small opacity breathe.
-   `alternate` so the bloom drifts forward then back (no teleport).
-   Periods are deliberately different (14s vs 17s) to avoid syncing. */
-@keyframes auroraDrift {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-    opacity: 0.14;
-  }
+/* FOCUS BREATHE — opacity-only drift, no movement. Slow (~9s) so it
+   reads as the field gently respiring, not pulsing. */
+@keyframes focusBreathe {
+  0%,
   100% {
-    transform: translate3d(4%, 3%, 0) scale(1.04);
-    opacity: 0.2;
+    opacity: 0.08;
+  }
+  50% {
+    opacity: 0.12;
   }
 }
 
-@keyframes violetDrift {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-    opacity: 0.11;
-  }
-  100% {
-    transform: translate3d(-3%, -4%, 0) scale(1.05);
-    opacity: 0.16;
-  }
-}
-
-/* Module-local reduced-motion: blooms hold their static start position.
-   The global rule in app/globals.css already collapses durations to
-   ~instant, but this explicit override at the layer itself makes the
-   intent local to the component (and survives any future reshuffling
-   of the global cascade). */
+/* Module-local reduced-motion: the focus glow holds a static opacity
+   (no breathe). The global rule in app/globals.css already collapses
+   durations to ~instant, but this explicit override keeps the intent
+   local to the component. */
 @media (prefers-reduced-motion: reduce) {
-  .aurora,
-  .violet {
+  .focus {
     animation: none;
-    transform: none;
   }
 }
