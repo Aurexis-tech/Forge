@@ -338,20 +338,98 @@ describe('ProjectsAi shell', () => {
     expect(src).toMatch(/counts\.paused/);
   });
 
-  it('renders a PRIMARY empty state when there are zero projects today', () => {
-    expect(src).toMatch(/No projects yet\./);
-    expect(src).toMatch(/Forge your first project/);
-    expect(src).toMatch(/href="\/forge"/);
-  });
-
   it('renders a secondary empty state when filters match nothing', () => {
     expect(src).toMatch(/No projects match/);
     expect(src).toMatch(/Reset filters/);
   });
 
-  it('sort toggle has Newest / Oldest (preserves the loader\'s newest-first order)', () => {
+  it("sort toggle has Newest / Oldest (preserves the loader's newest-first order)", () => {
     expect(src).toMatch(/Newest/);
     expect(src).toMatch(/Oldest/);
+  });
+});
+
+// ===========================================================================
+// 5b. First-run / empty branch — beautiful empty state, REAL-data-only
+// ===========================================================================
+describe('ProjectsAi first-run / empty state', () => {
+  const src = read('components/projects-ai/ProjectsAi.tsx');
+
+  it('forks into the empty branch when cards.length === 0', () => {
+    // The component returns <ProjectsEmptyState /> early — the populated
+    // chrome (header / count summary / chips) never renders at zero.
+    expect(src).toMatch(/cards\.length === 0/);
+    expect(src).toMatch(/<ProjectsEmptyState/);
+  });
+
+  it('renders the new first-run hero (eyebrow + headline + sub)', () => {
+    expect(src).toContain('Your workshop · empty');
+    expect(src).toContain('Nothing forged yet.');
+    expect(src).toMatch(/Describe what you want in a sentence/);
+    expect(src).toMatch(/asks before anything ships/);
+  });
+
+  it('renders the aurora primary CTA pointing at /forge', () => {
+    expect(src).toMatch(/Forge your first project →/);
+    expect(src).toMatch(/href="\/forge"/);
+    expect(src).toMatch(/variant="aurora"/);
+  });
+
+  it('mounts the shared MoldGallery (4 real mold routes — descriptive, not fake projects)', () => {
+    expect(src).toMatch(/from '@\/components\/landing-ai\/MoldGallery'/);
+    expect(src).toMatch(/<MoldGallery/);
+    // Honest framing — these cards describe the molds, not fake projects.
+    expect(src).toMatch(/Start from a mold/);
+  });
+
+  it('does NOT introduce a fabricated project array in the empty branch', () => {
+    // No hard-coded sample projects, no eight-project library, no canned
+    // names. The grid is real-data-only via the populated branch.
+    expect(src).not.toMatch(/FAKE_PROJECTS|SAMPLE_PROJECTS|DEMO_PROJECTS/);
+    // The grid that renders REAL cards is gated behind cards.length > 0.
+    expect(src).toMatch(/sorted\.map\(\(card\) =>[\s\S]*?<ProjectCardAi/);
+  });
+});
+
+// ===========================================================================
+// 5c. The MoldGallery cards target the four real mold routes
+// ===========================================================================
+describe('MoldGallery — shared 4-card grid (landing + projects empty state)', () => {
+  const src = read('components/landing-ai/MoldGallery.tsx');
+
+  it('reads from the PURE MOLD_SHOWCASE data (no fabricated card array)', () => {
+    expect(src).toMatch(/from '@\/lib\/landing-demo'/);
+    expect(src).toMatch(/MOLD_SHOWCASE\.map/);
+    expect(src).not.toMatch(/FAKE_MOLDS|SAMPLE_MOLDS/);
+  });
+
+  it("each card links into its real mold route (anchor uses card.href)", () => {
+    expect(src).toMatch(/href=\{card\.href\}/);
+  });
+
+  it('the landing MoldShowcase wraps the extracted gallery (behavior preserved)', () => {
+    const ms = read('components/landing-ai/MoldShowcase.tsx');
+    expect(ms).toMatch(/from '\.\/MoldGallery'/);
+    expect(ms).toMatch(/<MoldGallery/);
+    // The landing wrapper retains the section + id so the in-page anchor
+    // ("See examples" CTA → #molds) keeps working.
+    expect(ms).toMatch(/id="molds"/);
+  });
+});
+
+// ===========================================================================
+// 5d. The four real mold routes are stable — the gallery links to them
+// ===========================================================================
+describe('MOLD_SHOWCASE → real mold routes', () => {
+  it('the four cards point at /agents, /systems, /software, /infrastructure', async () => {
+    const { MOLD_SHOWCASE } = await import('@/lib/landing-demo');
+    const hrefs = MOLD_SHOWCASE.map((c) => c.href).sort();
+    expect(hrefs).toEqual([
+      '/agents',
+      '/infrastructure',
+      '/software',
+      '/systems',
+    ]);
   });
 });
 

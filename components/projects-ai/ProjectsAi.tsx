@@ -1,15 +1,24 @@
 'use client';
 
-// ProjectsAi — the migrated /projects page client. Renders the count
-// summary (computed from REAL data), the filter bar (preserves
-// filterByMold semantics; chips operate on the already-loaded list), a
-// tiny sort toggle, the responsive 4→2→1 card grid, and the FIRST-CLASS
-// empty state (the app currently has zero projects — that's the state
-// you'll actually see).
+// ProjectsAi — the migrated /projects page client. Two branches:
+//
+//   POPULATED — when the REAL project list has anything: today's header
+//   (eyebrow + h1 + real count summary + Newest/Oldest sort + "+ New
+//   forge" CTA), today's Mold + Status filter chips, today's responsive
+//   4→2→1 ProjectCardAi grid, today's filter-mismatch secondary empty.
+//   UNCHANGED in this commit.
+//
+//   EMPTY (first-run, zero REAL projects) — a centered hero on the
+//   ambient backdrop with eyebrow "Your workshop · empty" + "Nothing
+//   forged yet." + the honest sub + an aurora "Forge your first project
+//   →" CTA, followed by the four-mold quick-start gallery reused from
+//   the landing. The header chrome / count summary / filter chips are
+//   suppressed here — at zero they're inert and read as noise. The molds
+//   are descriptive of the system, NOT fake user projects.
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import { LiquidGlass } from '@/components/lq/LiquidGlass';
+import { MoldGallery } from '@/components/landing-ai/MoldGallery';
 import { ProjectCardAi } from '@/components/projects-ai/ProjectCardAi';
 import { filterByMold, type ProjectMold } from '@/lib/molds';
 import { projectVm, type ProjectVmStatus } from '@/lib/project-vm';
@@ -38,6 +47,84 @@ const STATUS_CHIPS: ReadonlyArray<{ key: StatusKey; label: string }> = [
 type Annotated = ProjectCardData & { _status: ProjectVmStatus };
 
 export function ProjectsAi({ cards }: { cards: ProjectCardData[] }) {
+  // FIRST-RUN BRANCH — render the new beautiful empty/first-run state
+  // and skip all the populated chrome. The grid is REAL-data-only; the
+  // mold cards are descriptive of the molds (not fake user projects).
+  if (cards.length === 0) {
+    return <ProjectsEmptyState />;
+  }
+
+  return <ProjectsPopulated cards={cards} />;
+}
+
+// ===========================================================================
+// First-run / empty state — centered hero + quick-start mold gallery
+// ===========================================================================
+
+function ProjectsEmptyState() {
+  return (
+    <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-12 px-2 py-16 font-ui text-lq-ink">
+      {/* Centered hero. */}
+      <div className="flex flex-col items-center gap-6 text-center">
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden
+            className="h-px w-9 bg-lq-aurora/60"
+          />
+          <span className="font-code text-[11px] uppercase tracking-[0.35em] text-lq-aurora">
+            Your workshop · empty
+          </span>
+          <span
+            aria-hidden
+            className="h-px w-9 bg-gradient-to-l from-lq-aurora/60 to-transparent"
+          />
+        </div>
+
+        <h1 className="font-ui text-5xl font-extrabold tracking-[-0.02em] text-lq-ink sm:text-6xl">
+          Nothing forged yet.
+        </h1>
+
+        <p className="max-w-[620px] text-base leading-relaxed text-lq-ink-dim">
+          Describe what you want in a sentence — an agent, a system, a full
+          app, or a piece of infrastructure — and the forge designs it,
+          builds it in a sandbox, and{' '}
+          <span className="text-lq-ink">asks before anything ships.</span>
+        </p>
+
+        <LiquidGlass
+          as="a"
+          href="/forge"
+          variant="aurora"
+          className="mt-1 inline-flex items-center rounded-[14px] px-7 py-3 text-base font-semibold"
+        >
+          Forge your first project →
+        </LiquidGlass>
+      </div>
+
+      {/* Quick-start gallery — the four mold cards from the landing,
+          adapted via the shared MoldGallery. Descriptive of the molds,
+          not fake user projects. */}
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-3 px-1">
+          <span className="font-code text-[10px] uppercase tracking-[0.35em] text-lq-ink-faint">
+            Start from a mold
+          </span>
+          <span
+            aria-hidden
+            className="h-px flex-1 bg-gradient-to-r from-lq-line to-transparent"
+          />
+        </div>
+        <MoldGallery />
+      </div>
+    </section>
+  );
+}
+
+// ===========================================================================
+// Populated branch — unchanged from the prior commit
+// ===========================================================================
+
+function ProjectsPopulated({ cards }: { cards: ProjectCardData[] }) {
   const [moldKey, setMoldKey] = useState<MoldKey>('all');
   const [statusKey, setStatusKey] = useState<StatusKey>('all');
   const [sort, setSort] = useState<SortKey>('newest');
@@ -95,7 +182,7 @@ export function ProjectsAi({ cards }: { cards: ProjectCardData[] }) {
           <h1 className="font-ui text-4xl font-extrabold tracking-[-0.02em] text-lq-ink sm:text-5xl">
             Projects
           </h1>
-          {/* Count summary — colored numerals; render gracefully at zero. */}
+          {/* Count summary — colored numerals; reflects the REAL annotated data. */}
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-code text-[12px] text-lq-ink-faint">
             <span className="text-lq-ink-dim">
               <span className="text-lq-ink">{counts.total}</span> total
@@ -210,7 +297,7 @@ export function ProjectsAi({ cards }: { cards: ProjectCardData[] }) {
         </div>
       </div>
 
-      {/* Grid or empty state. */}
+      {/* Grid or filter-mismatch secondary empty state. */}
       {sorted.length > 0 ? (
         <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {sorted.map((card) => (
@@ -219,36 +306,9 @@ export function ProjectsAi({ cards }: { cards: ProjectCardData[] }) {
             </li>
           ))}
         </ul>
-      ) : counts.total === 0 ? (
-        // PRIMARY empty state — the one you'll actually see today.
-        <div className="flex flex-1 items-center justify-center py-10">
-          <LiquidGlass
-            as="div"
-            className="flex w-full max-w-lg flex-col items-center gap-5 p-8 text-center font-ui"
-          >
-            <span className="font-code text-[10px] uppercase tracking-[0.4em] text-lq-aurora">
-              Empty
-            </span>
-            <h2 className="font-ui text-2xl font-bold tracking-tight text-lq-ink">
-              No projects yet.
-            </h2>
-            <p className="text-sm leading-relaxed text-lq-ink-dim">
-              Describe what you want and the forge takes it from there —
-              agents, systems, full apps, infrastructure. The forge detects
-              the mold and asks before it ships.
-            </p>
-            <LiquidGlass
-              as="a"
-              href="/forge"
-              variant="aurora"
-              className="mt-1 inline-flex items-center rounded-[14px] px-6 py-3 text-sm font-semibold"
-            >
-              + Forge your first project →
-            </LiquidGlass>
-          </LiquidGlass>
-        </div>
       ) : (
-        // Secondary empty state — there ARE projects, just none match the chips.
+        // Filter-mismatch — there ARE projects, just none match the chips.
+        // (Zero REAL projects renders the first-run hero above, never this.)
         <div className="flex flex-1 items-center justify-center py-10">
           <LiquidGlass
             as="div"
