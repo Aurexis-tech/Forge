@@ -108,3 +108,85 @@ export function keyStatusVm(input: {
   }
   return { status: 'missing', label: 'Not connected', accent: 'ink-dim' };
 }
+
+// ---------------------------------------------------------------------------
+// Provider icon — a tiny tinted letter chip per provider (the design-study
+// card-top glyph). The letter is a public fact about the brand; the tint is
+// the AI palette accent used for this provider's surface treatments. NOT
+// fabricated — the only inputs are the real provider id + brand name.
+// ---------------------------------------------------------------------------
+
+export type ProviderIconTint = 'amber' | 'violet';
+
+export interface ProviderIcon {
+  /** Single letter shown inside the chip. */
+  readonly letter: string;
+  /** AI palette accent for the chip's background + border + text. */
+  readonly tint: ProviderIconTint;
+}
+
+export const PROVIDER_ICON: Readonly<Record<ByokProvider, ProviderIcon>> = {
+  anthropic: { letter: 'A', tint: 'amber' },
+  e2b: { letter: 'E', tint: 'violet' },
+};
+
+// ---------------------------------------------------------------------------
+// Header stat-strip view-model — the three real counts shown beside the H1:
+//   Connected — providers with a real key on file
+//   Missing   — providers without a key yet
+//   Errors    — providers in a known-bad state (today: always 0, because no
+//               per-provider error field exists on the connection record)
+//
+// The `errors` count is HONESTLY 0 right now; it stays in the strip because
+// the surface is part of the design and will reflect the count the day the
+// API begins exposing per-provider error state. Until then it sits at 0.
+// ---------------------------------------------------------------------------
+
+export interface KeyStatsVm {
+  readonly connected: number;
+  readonly missing: number;
+  readonly errors: number;
+  readonly loading: boolean;
+}
+
+export function keyStatsVm(input: {
+  status: Record<string, { connected: boolean }> | null;
+  loading?: boolean;
+}): KeyStatsVm {
+  const total = KEYS_PROVIDERS.length;
+  if (input.loading || !input.status) {
+    return { connected: 0, missing: total, errors: 0, loading: !!input.loading };
+  }
+  const connected = KEYS_PROVIDERS.filter(
+    (p) => input.status?.[p.provider]?.connected,
+  ).length;
+  return { connected, missing: total - connected, errors: 0, loading: false };
+}
+
+// ---------------------------------------------------------------------------
+// Relative timestamp — for the "added <X ago>" line on connected cards.
+// Pure + deterministic (pass a `nowMs` for tests). Falls back to an empty
+// string for null / invalid input so the caller can omit the line.
+// ---------------------------------------------------------------------------
+
+export function formatRelativeTime(
+  iso: string | null | undefined,
+  nowMs?: number,
+): string {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '';
+  const now = nowMs ?? Date.now();
+  const deltaMs = Math.max(0, now - t);
+  const minutes = Math.floor(deltaMs / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return minutes + 'm ago';
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours + 'h ago';
+  const days = Math.floor(hours / 24);
+  if (days < 30) return days + 'd ago';
+  const months = Math.floor(days / 30);
+  if (months < 12) return months + 'mo ago';
+  const years = Math.floor(months / 12);
+  return years + 'y ago';
+}

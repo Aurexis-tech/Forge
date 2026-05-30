@@ -1,16 +1,27 @@
 // Hermetic tests for the Keys migration. The honesty constraints (true
-// security copy, no fabricated activity) are encoded as assertions: the
-// banner copy comes from a single typed constant, the page never emits
-// sparklines/call-counts, and the destination URLs match the real upstream
-// hosts the engine targets.
+// security copy, no fabricated activity, real provider set only) are
+// encoded as assertions: the banner copy comes from a single typed
+// constant; the page never emits sparklines / "N calls today" / MTD /
+// project counts / "tested ago"; phantom providers (Brave / OpenAI /
+// GitHub / Vercel / Supabase / Resend) never appear; the destination
+// URLs match the real upstream hosts the engine targets; "zero-knowledge"
+// stays banned.
+//
+// The card chrome adds a tinted provider icon + a pulsing-dot status pill
+// + a boxed masked-key field with an aurora left border + an optional
+// "added <X ago>" line driven by real connected_at. These are pure
+// chrome — every value comes from the real API.
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   formatMaskedKey,
+  formatRelativeTime,
   KEYS_PROVIDERS,
   KEYS_SECURITY,
   PROVIDER_DESTINATION,
+  PROVIDER_ICON,
+  keyStatsVm,
   keyStatusVm,
 } from '@/lib/keys-config';
 import { isMigratedRoute, MIGRATED_ROUTES } from '@/lib/migrated-routes';
@@ -21,15 +32,22 @@ const read = (p: string) => readFileSync(p, 'utf8');
 // 1. The provider set + destinations are REAL (match the API + upstream hosts)
 // ===========================================================================
 describe('KEYS_PROVIDERS — exactly the providers the API enforces', () => {
-  it('is exactly anthropic + e2b (the route\'s ProviderEnum)', () => {
+  it("is exactly anthropic + e2b (the route's ProviderEnum)", () => {
     expect(KEYS_PROVIDERS.map((p) => p.provider).sort()).toEqual([
       'anthropic',
       'e2b',
     ]);
-    // GitHub / Vercel / Supabase OAuth live on /settings/connections — they
-    // are NOT BYOK keys and must not appear on this page.
+    // GitHub / Vercel / Supabase OAuth live on /settings/connections; Brave /
+    // OpenAI / Resend are not wired at all — none of these may appear here.
     const providers = KEYS_PROVIDERS.map((p) => p.provider);
-    for (const sneaky of ['github', 'vercel', 'supabase', 'brave', 'openai']) {
+    for (const sneaky of [
+      'github',
+      'vercel',
+      'supabase',
+      'brave',
+      'openai',
+      'resend',
+    ]) {
       expect(providers).not.toContain(sneaky);
     }
   });
@@ -50,6 +68,13 @@ describe('PROVIDER_DESTINATION — real upstream API hosts', () => {
   });
 });
 
+describe('PROVIDER_ICON — public-fact brand glyph per real provider', () => {
+  it('anthropic = amber "A", e2b = violet "E"', () => {
+    expect(PROVIDER_ICON.anthropic).toEqual({ letter: 'A', tint: 'amber' });
+    expect(PROVIDER_ICON.e2b).toEqual({ letter: 'E', tint: 'violet' });
+  });
+});
+
 // ===========================================================================
 // 2. The security banner is TRUE — single source, no false claims
 // ===========================================================================
@@ -59,7 +84,12 @@ describe('KEYS_SECURITY — the banner copy is literally true', () => {
     expect(KEYS_SECURITY.mechanism).toMatch(/last four characters/);
   });
 
-  it('does NOT claim browser-session or zero-knowledge (the server can decrypt)', () => {
+  it('the eyebrow STAYS "encrypted at rest" (never flips to "zero-knowledge")', () => {
+    expect(KEYS_SECURITY.eyebrow).toMatch(/encrypted at rest/i);
+    expect(KEYS_SECURITY.eyebrow).not.toMatch(/zero[- ]knowledge/i);
+  });
+
+  it('does NOT claim browser-session / zero-knowledge / never-server-side / end-to-end', () => {
     const joined =
       KEYS_SECURITY.eyebrow +
       ' ' +
@@ -85,7 +115,7 @@ describe('KEYS_SECURITY — the banner copy is literally true', () => {
 });
 
 // ===========================================================================
-// 3. Pure helpers — masking + status mapping
+// 3. Pure helpers — masking, status mapping, stats strip, relative time
 // ===========================================================================
 describe('formatMaskedKey + keyStatusVm', () => {
   it('formatMaskedKey returns dots + last4 (or null when last4 is absent)', () => {
@@ -112,6 +142,75 @@ describe('formatMaskedKey + keyStatusVm', () => {
   });
 });
 
+describe('keyStatsVm — header stat strip binds to REAL counts only', () => {
+  it('loading → 0 connected / total missing / 0 errors', () => {
+    expect(keyStatsVm({ status: null, loading: true })).toEqual({
+      connected: 0,
+      missing: KEYS_PROVIDERS.length,
+      errors: 0,
+      loading: true,
+    });
+  });
+
+  it('both connected → 2 / 0 / 0', () => {
+    expect(
+      keyStatsVm({
+        status: {
+          anthropic: { connected: true },
+          e2b: { connected: true },
+        },
+        loading: false,
+      }),
+    ).toEqual({ connected: 2, missing: 0, errors: 0, loading: false });
+  });
+
+  it('one connected → 1 / 1 / 0', () => {
+    expect(
+      keyStatsVm({
+        status: {
+          anthropic: { connected: true },
+          e2b: { connected: false },
+        },
+        loading: false,
+      }),
+    ).toEqual({ connected: 1, missing: 1, errors: 0, loading: false });
+  });
+
+  it('errors stays at 0 today — no per-provider error field exists', () => {
+    // The "Errors" cell is part of the design strip but the connection
+    // record carries no per-provider error state, so today this count is
+    // always 0. Documented honestly in the helper.
+    const r = keyStatsVm({
+      status: { anthropic: { connected: true }, e2b: { connected: false } },
+      loading: false,
+    });
+    expect(r.errors).toBe(0);
+  });
+});
+
+describe('formatRelativeTime — pure, deterministic with injected nowMs', () => {
+  const now = Date.UTC(2026, 5, 30, 12, 0, 0); // fixed clock
+  const minutesAgo = (n: number) => new Date(now - n * 60_000).toISOString();
+  const hoursAgo = (n: number) => new Date(now - n * 3600_000).toISOString();
+  const daysAgo = (n: number) => new Date(now - n * 86_400_000).toISOString();
+
+  it('< 1 minute → "just now"', () => {
+    expect(formatRelativeTime(minutesAgo(0), now)).toBe('just now');
+  });
+  it('minutes / hours / days / months / years', () => {
+    expect(formatRelativeTime(minutesAgo(5), now)).toBe('5m ago');
+    expect(formatRelativeTime(hoursAgo(3), now)).toBe('3h ago');
+    expect(formatRelativeTime(daysAgo(2), now)).toBe('2d ago');
+    expect(formatRelativeTime(daysAgo(45), now)).toBe('1mo ago');
+    expect(formatRelativeTime(daysAgo(400), now)).toBe('1y ago');
+  });
+  it('null / invalid → "" (caller omits the line)', () => {
+    expect(formatRelativeTime(null, now)).toBe('');
+    expect(formatRelativeTime(undefined, now)).toBe('');
+    expect(formatRelativeTime('not-a-date', now)).toBe('');
+  });
+});
+
 // ===========================================================================
 // 4. /settings/keys is migrated; backdrop switch covers it
 // ===========================================================================
@@ -127,12 +226,12 @@ describe('/settings/keys is in MIGRATED_ROUTES (exact match)', () => {
 });
 
 // ===========================================================================
-// 5. The route page is now KeysAi (no SectionHeader / forge KeysForm)
+// 5. The route page is KeysAi (no SectionHeader / forge KeysForm)
 // ===========================================================================
 describe('/settings/keys page wiring', () => {
   const page = read('app/(app)/settings/keys/page.tsx');
 
-  it('renders the new KeysAi client component (not the forge KeysForm)', () => {
+  it('renders the KeysAi client component (not the forge KeysForm)', () => {
     expect(page).toMatch(/<KeysAi\s*\/>/);
     expect(page).not.toMatch(/from '@\/components\/keys\/KeysForm'/);
     expect(page).not.toMatch(/SectionHeader/);
@@ -144,9 +243,9 @@ describe('/settings/keys page wiring', () => {
 });
 
 // ===========================================================================
-// 6. KeysAi — preserves the wiring + uses real fields only
+// 6. KeysAi — header chrome + card chrome over REAL fields only
 // ===========================================================================
-describe('KeysAi component', () => {
+describe('KeysAi component — header + card chrome', () => {
   const src = read('components/keys-ai/KeysAi.tsx');
 
   it('is a client component on the lq primitives + lq tokens + font-ui', () => {
@@ -160,7 +259,9 @@ describe('KeysAi component', () => {
     expect(src).toMatch(/fetch\('\/api\/connections\/keys'/);
     expect(src).toMatch(/method:\s*'GET'/);
     expect(src).toMatch(/method:\s*'POST'/);
-    expect(src).toMatch(/JSON\.stringify\(\{ provider: info\.provider, key: trimmed \}\)/);
+    expect(src).toMatch(
+      /JSON\.stringify\(\{ provider: info\.provider, key: trimmed \}\)/,
+    );
     expect(src).toMatch(
       /fetch\(\s*'\/api\/connections\/keys\?provider=' \+ info\.provider/,
     );
@@ -174,15 +275,78 @@ describe('KeysAi component', () => {
     expect(src).toMatch(/KEYS_SECURITY\.claims/);
   });
 
-  it('emits NO fabricated activity (no sparklines, no call counts)', () => {
+  it('the header stat strip binds to keyStatsVm (Connected / Missing / Errors)', () => {
+    expect(src).toMatch(/keyStatsVm\(/);
+    expect(src).toMatch(/label="Connected"/);
+    expect(src).toMatch(/label="Missing"/);
+    expect(src).toMatch(/label="Errors"/);
+    // The strip values come from the typed VM — never hard-coded numbers.
+    expect(src).toMatch(/value=\{stats\.connected\}/);
+    expect(src).toMatch(/value=\{stats\.missing\}/);
+    expect(src).toMatch(/value=\{stats\.errors\}/);
+  });
+
+  it('cards mount a tinted provider icon from the PROVIDER_ICON map', () => {
+    expect(src).toMatch(/PROVIDER_ICON\[info\.provider\]/);
+    expect(src).toMatch(/ICON_TINT_CLASS/);
+  });
+
+  it('connected cards: aurora-left-bordered masked-key box + optional "added X ago"', () => {
+    // 2px aurora left border on the connected box.
+    expect(src).toMatch(/border-l-2\s+border-l-lq-aurora/);
+    // Real masked key + real connected_at via formatRelativeTime.
+    expect(src).toMatch(/formatRelativeTime\(/);
+    expect(src).toMatch(/status\?\.connected_at/);
+  });
+
+  it('empty cards: dashed "paste to connect" treatment (no fake numbers)', () => {
+    expect(src).toMatch(/border-dashed/);
+    expect(src).toMatch(/paste to connect/);
+  });
+
+  it('connected → Rotate + Remove; empty → Connect → (the real actions only)', () => {
+    expect(src).toMatch(/rotate/);
+    expect(src).toMatch(/removing/);
+    expect(src).toMatch(/Connect →/);
+    // No inert Test button (the API has no test endpoint today).
+    expect(src).not.toMatch(/>\s*Test\s*</);
+  });
+
+  it('verified pill carries a pulsing aurora-ish dot (.statusPulseDot)', () => {
+    expect(src).toMatch(/styles\.statusPulseDot/);
+  });
+
+  it('verified cards wear the breathing aurora rim (.verifiedRim)', () => {
+    expect(src).toMatch(/styles\.verifiedRim/);
+    expect(src).toMatch(/keyStatusVm/);
+  });
+
+  it('emits NO fabricated activity (no sparklines, no MTD / N calls / projects / tested ago)', () => {
     expect(src).not.toMatch(/sparkline/i);
     expect(src).not.toMatch(/calls?\s+today/i);
     expect(src).not.toMatch(/tokens?\s+last\s+hour/i);
+    expect(src).not.toMatch(/MTD/);
+    expect(src).not.toMatch(/projects?\s+using/i);
+    expect(src).not.toMatch(/tested\s+\d/i);
+    expect(src).not.toMatch(/last\s+tested/i);
   });
 
-  it('verified cards wear the breathing aurora rim (1 documented loop)', () => {
-    expect(src).toMatch(/styles\.verifiedRim/);
-    expect(src).toMatch(/keyStatusVm/);
+  it('does NOT mention any of the phantom providers (Brave / OpenAI / GitHub / Vercel / Supabase / Resend)', () => {
+    // The page surfaces ONLY anthropic + e2b. Any phantom name appearing
+    // here would be a regression toward the study's fabricated set.
+    expect(src).not.toMatch(/\bBrave\b/);
+    expect(src).not.toMatch(/\bOpenAI\b/);
+    expect(src).not.toMatch(/\bResend\b/);
+    // GitHub / Vercel / Supabase have their own OAuth on
+    // /settings/connections; they must not be re-introduced here.
+    expect(src).not.toMatch(/\bGitHub\b/);
+    expect(src).not.toMatch(/\bVercel\b/);
+    expect(src).not.toMatch(/\bSupabase\b/);
+  });
+
+  it('does NOT include an "Add custom provider" tile (the app supports exactly anthropic + e2b)', () => {
+    expect(src).not.toMatch(/add\s+custom\s+provider/i);
+    expect(src).not.toMatch(/new\s+provider/i);
   });
 });
 
@@ -195,12 +359,17 @@ describe('infinite-animation budget', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .match(/animation[^;]*infinite/g) ?? []).length;
 
-  it('the keys module has exactly ONE infinite loop (the verified rim)', () => {
-    expect(countInfinite('components/keys-ai/keys.module.css')).toBe(1);
+  it('the keys module has exactly TWO infinite loops (verified rim + status-pulse dot)', () => {
+    // Both are documented in the module header:
+    //   1. .verifiedRim — slow aurora breathing rim on connected cards
+    //   2. .statusPulseDot — small opacity pulse on the Verified pill dot
+    expect(countInfinite('components/keys-ai/keys.module.css')).toBe(2);
   });
 
   it('globals.css still ≤4 infinite loops (keys keyframes never leaked)', () => {
     expect(countInfinite('app/globals.css')).toBeLessThanOrEqual(4);
-    expect(read('app/globals.css')).not.toMatch(/keysVerifiedRim/);
+    const css = read('app/globals.css');
+    expect(css).not.toMatch(/keysVerifiedRim/);
+    expect(css).not.toMatch(/keysStatusPulse/);
   });
 });

@@ -1,23 +1,47 @@
 'use client';
 
-// KeysAi — the AI-futuristic /settings/keys page. Restyles the shell
-// (LiquidGlass, lq.* tokens, font-ui, the verified breathing rim, the
-// aurora-rimmed security banner) but PRESERVES the key-management wiring
-// byte-for-byte: GET / POST / DELETE against /api/connections/keys, same
-// body shape, same headers, same query params. The banner copy comes from
-// the single KEYS_SECURITY constant — every claim is literally true of
-// the real storage model (AES-256-GCM at rest, scoped per user × provider,
-// never echoed back, audit-logged). No fake activity graphs and no invented
-// numbers — only fields the API actually returns.
+// KeysAi — the AI-futuristic /settings/keys page. Chrome upgraded to the
+// design-study card + header look while keeping every honesty correction:
+//   - REAL provider set (anthropic + e2b only — the API's enforced enum).
+//   - REAL per-provider fields (connected, key_last4, connected_at) ONLY.
+//     None of the design-study's invented usage numbers are surfaced —
+//     none of those signals exist on the connection record today.
+//   - REAL security banner ("encrypted at rest", NOT "zero-knowledge").
+//     The false-claim test in keys-ai.test.ts stays in force.
+//   - REAL wiring: GET / POST / DELETE against /api/connections/keys with
+//     the same body shapes the forge KeysForm used. Preserved verbatim.
+//
+// What changed (chrome only):
+//   - Header is two-part: left = eyebrow + h1 + sub; right = a LiquidGlass
+//     stat strip with three cells (Connected / Missing / Errors) bound to
+//     the pure keyStatsVm helper.
+//   - Provider cards: tinted single-letter icon chip (anthropic = amber A,
+//     e2b = violet E), a richer status pill ("Verified" with a pulsing
+//     aurora dot on connected, "Not connected" faint on empty), a boxed
+//     masked-key field with a 2px aurora left border (or a dashed
+//     "paste to connect" treatment when empty), the real destination URL
+//     hover-aurora, the honest one-line description, an optional "added
+//     <X ago>" line driven by the real connected_at, and Rotate / Remove
+//     actions on connected cards or a "Connect →" CTA on empty.
+//
+// Why NO "Test" button: there is no test/verify endpoint on
+// /api/connections/keys today (POST validates with a tiny live call
+// before saving — that IS the verification path; Rotate goes through the
+// same path). Adding an inert Test button would lie about the action; the
+// API only exposes GET / POST / DELETE today, so we keep Rotate + Remove.
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { LiquidGlass } from '@/components/lq/LiquidGlass';
 import {
   formatMaskedKey,
+  formatRelativeTime,
   KEYS_PROVIDERS,
   KEYS_SECURITY,
   PROVIDER_DESTINATION,
+  PROVIDER_ICON,
+  keyStatsVm,
   keyStatusVm,
+  type ProviderIconTint,
   type ProviderInfo,
 } from '@/lib/keys-config';
 import type { ByokProvider } from '@/lib/types';
@@ -29,6 +53,11 @@ interface ProviderStatus {
   connected_at: string | null;
 }
 type StatusResponse = Record<ByokProvider, ProviderStatus>;
+
+const ICON_TINT_CLASS: Record<ProviderIconTint, string> = {
+  amber: 'bg-lq-amber/15 border-lq-amber/40 text-lq-amber',
+  violet: 'bg-lq-violet/15 border-lq-violet/40 text-lq-violet',
+};
 
 export function KeysAi() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
@@ -56,35 +85,43 @@ export function KeysAi() {
     }
   }
 
-  const connectedCount = status
-    ? KEYS_PROVIDERS.filter((p) => status[p.provider]?.connected).length
-    : 0;
-  const missingCount = KEYS_PROVIDERS.length - connectedCount;
+  const stats = keyStatsVm({ status, loading });
 
   return (
-    <section className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-7 px-2 py-12 font-ui text-lq-ink">
-      {/* Header. */}
-      <header className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <span className="font-code text-[11px] uppercase tracking-[0.35em] text-lq-aurora">
-            {KEYS_SECURITY.eyebrow}
-          </span>
-          <span
-            aria-hidden
-            className="h-px w-12 bg-gradient-to-r from-lq-aurora to-transparent"
-          />
+    <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-2 py-12 font-ui text-lq-ink">
+      {/* Header — two-part: left (eyebrow + h1 + sub) / right (stat strip). */}
+      <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <span className="font-code text-[11px] uppercase tracking-[0.35em] text-lq-aurora">
+              {KEYS_SECURITY.eyebrow}
+            </span>
+            <span
+              aria-hidden
+              className="h-px w-12 bg-gradient-to-r from-lq-aurora to-transparent"
+            />
+          </div>
+          <h1 className="font-ui text-4xl font-extrabold tracking-[-0.02em] text-lq-ink sm:text-5xl">
+            Keys
+          </h1>
+          <p className="font-code text-[12px] text-lq-ink-faint">
+            {stats.loading
+              ? 'loading…'
+              : stats.connected + ' connected · ' + stats.missing + ' missing'}
+          </p>
         </div>
-        <h1 className="font-ui text-4xl font-extrabold tracking-[-0.02em] text-lq-ink sm:text-5xl">
-          Keys
-        </h1>
-        <p className="font-code text-[12px] text-lq-ink-faint">
-          {loading
-            ? 'loading…'
-            : `${connectedCount} connected · ${missingCount} missing`}
-        </p>
+
+        <LiquidGlass
+          as="div"
+          className="flex items-stretch divide-x divide-lq-line rounded-[14px] p-0 font-ui"
+        >
+          <StatCell label="Connected" value={stats.connected} tone="aurora" />
+          <StatCell label="Missing" value={stats.missing} tone="ink-faint" />
+          <StatCell label="Errors" value={stats.errors} tone="mint" />
+        </LiquidGlass>
       </header>
 
-      {/* Security banner — copy comes from the single KEYS_SECURITY constant. */}
+      {/* Security banner — UNCHANGED. Copy comes from KEYS_SECURITY. */}
       <LiquidGlass
         as="div"
         className="flex flex-col gap-3 border-l-2 border-l-lq-aurora p-6 font-ui"
@@ -120,8 +157,8 @@ export function KeysAi() {
         </p>
       ) : null}
 
-      {/* Provider cards — one per REAL provider the API accepts. */}
-      <div className="flex flex-col gap-4">
+      {/* Provider cards — 2-col grid for the two REAL providers. */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {KEYS_PROVIDERS.map((info) => (
           <ProviderCard
             key={info.provider}
@@ -135,6 +172,41 @@ export function KeysAi() {
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Header stat cell — three of these inside the LiquidGlass strip.
+// ---------------------------------------------------------------------------
+
+function StatCell({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: 'aurora' | 'mint' | 'ink-faint';
+}) {
+  const toneTextClass =
+    tone === 'aurora'
+      ? 'text-lq-aurora'
+      : tone === 'mint'
+        ? 'text-lq-mint'
+        : 'text-lq-ink-faint';
+  return (
+    <div className="flex flex-col items-center justify-center gap-1 px-5 py-3 sm:px-7 sm:py-4">
+      <span className={'font-ui text-2xl font-bold tabular-nums ' + toneTextClass}>
+        {value}
+      </span>
+      <span className="font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ProviderCard — design-study card chrome over the REAL wiring.
+// ---------------------------------------------------------------------------
 
 function ProviderCard({
   info,
@@ -209,6 +281,8 @@ function ProviderCard({
 
   const verified = vm.status === 'verified';
   const masked = formatMaskedKey(status?.key_last4 ?? null);
+  const icon = PROVIDER_ICON[info.provider];
+  const addedAgo = connected ? formatRelativeTime(status?.connected_at ?? null) : '';
 
   return (
     <LiquidGlass
@@ -218,69 +292,110 @@ function ProviderCard({
         (verified ? styles.verifiedRim : '')
       }
     >
-      {/* Header row: provider + powers + status pill. */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className={`inline-block h-1.5 w-1.5 rounded-full ${
-                verified ? 'bg-lq-aurora' : 'bg-lq-ink-dim'
-              }`}
-            />
-            <span
-              className={`font-code text-[10px] uppercase tracking-[0.3em] ${
-                verified ? 'text-lq-aurora' : 'text-lq-ink-dim'
-              }`}
-            >
+      {/* TOP ROW — tinted icon chip + brand name + status pill. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            aria-hidden
+            className={
+              'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] border font-ui text-lg font-bold ' +
+              ICON_TINT_CLASS[icon.tint]
+            }
+          >
+            {icon.letter}
+          </span>
+          <div className="flex min-w-0 flex-col">
+            <span className="font-ui text-base font-bold tracking-tight text-lq-ink">
               {info.label}
             </span>
+            <span className="font-code text-[10px] uppercase tracking-[0.25em] text-lq-ink-faint">
+              {info.provider}
+            </span>
           </div>
-          <p className="text-sm text-lq-ink-dim">{info.powers}</p>
         </div>
         <span
-          className={`font-code text-[10px] uppercase tracking-[0.3em] ${
-            verified ? 'text-lq-aurora' : 'text-lq-ink-faint'
-          }`}
+          className={
+            'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-code text-[10px] uppercase tracking-[0.3em] ' +
+            (verified
+              ? 'border-lq-mint/40 bg-lq-mint/10 text-lq-mint'
+              : 'border-lq-line bg-lq-elev-1 text-lq-ink-faint')
+          }
         >
+          {verified ? (
+            <span
+              aria-hidden
+              className={
+                'inline-block h-1.5 w-1.5 rounded-full bg-lq-mint ' +
+                styles.statusPulseDot
+              }
+            />
+          ) : (
+            <span
+              aria-hidden
+              className="inline-block h-1.5 w-1.5 rounded-full bg-lq-ink-faint"
+            />
+          )}
           {vm.label}
         </span>
       </div>
+
+      {/* Honest one-line description (the "powers" sentence). */}
+      <p className="text-sm leading-relaxed text-lq-ink-dim">{info.powers}</p>
+
+      {/* Boxed masked-key field — 2px aurora left border when connected;
+          dashed "paste to connect" treatment when empty. No invented
+          numbers; only fields the API returns. */}
+      {connected ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-lq-line border-l-2 border-l-lq-aurora bg-lq-elev-1 px-4 py-3">
+          <p className="font-code text-[13px] tracking-[0.05em] text-lq-ink">
+            {masked}
+          </p>
+          {addedAgo ? (
+            <p className="font-code text-[10px] uppercase tracking-[0.2em] text-lq-ink-faint">
+              added {addedAgo}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center rounded-[10px] border border-dashed border-lq-line bg-lq-elev-1/50 px-4 py-5">
+          <p className="font-code text-[11px] uppercase tracking-[0.3em] text-lq-ink-faint">
+            paste to connect
+          </p>
+        </div>
+      )}
 
       {/* Real destination URL — static; hover shifts to aurora. */}
       <p className="font-code text-[11px] text-lq-ink-faint transition-colors hover:text-lq-aurora">
         → {PROVIDER_DESTINATION[info.provider]}
       </p>
 
-      {/* Key body — verified shows masked key + timestamp; missing shows a
-          dashed empty placeholder. No invented activity numbers. */}
-      {connected ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-lq-line bg-lq-elev-1 px-3 py-2">
-          <p className="font-code text-[12px] text-lq-ink">{masked}</p>
-          {status?.connected_at ? (
-            <p className="font-code text-[10px] uppercase tracking-[0.2em] text-lq-ink-faint">
-              connected · {new Date(status.connected_at).toLocaleString()}
-            </p>
-          ) : null}
-        </div>
-      ) : (
-        <div className="flex items-center justify-between rounded-[10px] border border-dashed border-lq-line bg-lq-elev-1/50 px-3 py-2">
-          <p className="font-code text-[12px] text-lq-ink-faint">no key on file</p>
-        </div>
-      )}
-
-      {/* Action row. */}
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      {/* Action row. Connected: Rotate (existing replace-key flow, which
+          re-validates via the API's tiny live call) + Remove. Empty:
+          Connect → (the existing set-key flow). NO "Test" button — the
+          API has no separate verify endpoint today. */}
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-lq-line pt-4">
         {connected ? (
-          <LiquidGlass
-            as="button"
-            type="button"
-            onClick={() => setShowForm((s) => !s)}
-            disabled={submitting || removeBusy}
-            className="inline-flex items-center rounded-[14px] px-4 py-1.5 font-code text-[11px] uppercase tracking-[0.25em]"
-          >
-            {showForm ? 'cancel' : 'rotate key'}
-          </LiquidGlass>
+          <>
+            <LiquidGlass
+              as="button"
+              type="button"
+              onClick={() => setShowForm((s) => !s)}
+              disabled={submitting || removeBusy}
+              className="inline-flex items-center rounded-[14px] px-4 py-1.5 font-code text-[11px] uppercase tracking-[0.25em]"
+            >
+              {showForm ? 'cancel' : 'rotate'}
+            </LiquidGlass>
+            <LiquidGlass
+              as="button"
+              type="button"
+              onClick={onRemove}
+              disabled={submitting || removeBusy}
+              variant="rose"
+              className="inline-flex items-center rounded-[14px] px-4 py-1.5 font-code text-[11px] uppercase tracking-[0.25em]"
+            >
+              {removeBusy ? 'removing…' : 'remove'}
+            </LiquidGlass>
+          </>
         ) : (
           <LiquidGlass
             as="button"
@@ -293,21 +408,9 @@ function ProviderCard({
             Connect →
           </LiquidGlass>
         )}
-        {connected ? (
-          <LiquidGlass
-            as="button"
-            type="button"
-            onClick={onRemove}
-            disabled={submitting || removeBusy}
-            variant="rose"
-            className="inline-flex items-center rounded-[14px] px-4 py-1.5 font-code text-[11px] uppercase tracking-[0.25em]"
-          >
-            {removeBusy ? 'removing…' : 'remove'}
-          </LiquidGlass>
-        ) : null}
       </div>
 
-      {/* Paste form — same POST body as the forge KeysForm. */}
+      {/* Paste form — same POST body as before. */}
       {showForm ? (
         <form
           onSubmit={onSubmit}

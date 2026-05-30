@@ -1,9 +1,14 @@
-/* Keys AI — scoped animation module. ONE infinite loop: a slow aurora
-   "breathing rim" applied only to verified provider cards (so a connected
-   key is visibly alive without inventing call counts). Keyframes live HERE,
-   never in globals.css — the "≤4 infinite animations" enforcer keeps
-   reflecting only the forge backdrop's loops. The global prefers-
-   reduced-motion rule freezes this to a calm static glow. */
+/* Keys AI — scoped animation module. TWO infinite loops, both documented:
+     1. .verifiedRim — a slow aurora "breathing rim" applied to connected
+        provider cards (so a verified key is visibly alive without inventing
+        any usage numbers).
+     2. .statusPulseDot — a small opacity pulse on the green "Verified" /
+        "Active" pill dot inside the card header (so the pill clearly
+        signals "live" instead of looking inert).
+   Keyframes live HERE, never in globals.css — the "≤4 infinite animations"
+   enforcer keeps reflecting only the forge backdrop's loops. The global
+   prefers-reduced-motion rule freezes BOTH animations to calm static
+   states for users who opt out of motion. */
 
 .verifiedRim {
   animation: keysVerifiedRim 4s var(--ease) infinite;
@@ -20,5 +25,21 @@
     box-shadow:
       0 0 0 1px rgba(95, 230, 255, 0.48),
       0 0 36px -6px rgba(95, 230, 255, 0.58);
+  }
+}
+
+.statusPulseDot {
+  animation: keysStatusPulse 1.8s var(--ease) infinite;
+}
+
+@keyframes keysStatusPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
   }
 }
