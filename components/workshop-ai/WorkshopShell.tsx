@@ -90,7 +90,7 @@ export function WorkshopShell({
       {/* Back to /projects — the only real header action that exists. */}
       <Link
         href="/projects"
-        className="self-start font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint transition hover:text-lq-aurora"
+        className="self-start rounded font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint transition hover:text-lq-aurora focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60"
       >
         ← projects
       </Link>

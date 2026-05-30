@@ -52,7 +52,7 @@ export function MoldGallery({ className }: Props) {
         <Link
           key={card.mold}
           href={card.href}
-          className="group block h-full"
+          className="group block h-full rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60"
           aria-label={'Explore ' + card.mold}
         >
           <LiquidGlass

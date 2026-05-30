@@ -26,7 +26,14 @@ export function AiNav() {
   return (
     <nav className="relative z-20 flex items-center justify-between gap-6 px-6 py-5 font-ui sm:px-10">
       {/* Brand lockup — preserved /; static (no pulse). */}
-      <Link href="/" className={'group ' + styles.brandLockup} aria-label="Aurexis Forge">
+      <Link
+        href="/"
+        className={
+          'group rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60 ' +
+          styles.brandLockup
+        }
+        aria-label="Aurexis Forge"
+      >
         <svg
           aria-hidden="true"
           viewBox="0 0 24 24"
@@ -60,7 +67,7 @@ export function AiNav() {
           <Link
             key={l.href}
             href={l.href}
-            className="text-sm font-medium text-lq-ink-dim transition-colors duration-200 hover:text-lq-ink"
+            className="rounded text-sm font-medium text-lq-ink-dim transition-colors duration-200 hover:text-lq-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60"
           >
             {l.label}
           </Link>

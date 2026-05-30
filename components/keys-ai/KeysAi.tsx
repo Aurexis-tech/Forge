@@ -507,7 +507,7 @@ function ProviderCard({
             type="button"
             onClick={onRemove}
             disabled={submitting || removeBusy}
-            className="font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint transition-colors hover:text-lq-rose disabled:opacity-60"
+            className="rounded font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint transition-colors hover:text-lq-rose focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-rose/60 disabled:opacity-60"
           >
             {removeBusy ? 'removing…' : 'remove key'}
           </button>

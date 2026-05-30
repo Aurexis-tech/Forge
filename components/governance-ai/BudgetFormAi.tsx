@@ -107,7 +107,7 @@ export function BudgetFormAi({
         type="button"
         onClick={() => setEditing(true)}
         className={
-          'inline-flex items-center gap-1 rounded-[10px] border border-lq-line px-2.5 py-1 font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint transition hover:border-lq-aurora/40 hover:text-lq-aurora ' +
+          'inline-flex items-center gap-1 rounded-[10px] border border-lq-line px-2.5 py-1 font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint transition hover:border-lq-aurora/40 hover:text-lq-aurora focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60 ' +
           (size === 'hero' ? '' : 'text-[9px]')
         }
         aria-label={current ? 'edit ' + period + ' cap' : 'set ' + period + ' cap'}
@@ -170,7 +170,7 @@ export function BudgetFormAi({
             setError(null);
           }}
           disabled={busy != null}
-          className="inline-flex items-center rounded-[10px] border border-lq-line px-3 py-1 font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-dim transition hover:text-lq-ink"
+          className="inline-flex items-center rounded-[10px] border border-lq-line px-3 py-1 font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-dim transition hover:text-lq-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60"
         >
           cancel
         </button>
@@ -179,7 +179,7 @@ export function BudgetFormAi({
             type="button"
             onClick={onClear}
             disabled={busy != null}
-            className="ml-auto inline-flex items-center rounded-[10px] border border-lq-line px-3 py-1 font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint transition hover:text-lq-rose"
+            className="ml-auto inline-flex items-center rounded-[10px] border border-lq-line px-3 py-1 font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint transition hover:text-lq-rose focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-rose/60"
           >
             {busy === 'clear' ? 'clearing…' : 'clear cap'}
           </button>

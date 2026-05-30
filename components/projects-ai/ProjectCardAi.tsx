@@ -58,7 +58,7 @@ export function ProjectCardAi({ card }: { card: ProjectCardData }) {
   return (
     <Link
       href={'/projects/' + card.project.id}
-      className="group block h-full"
+      className="group block h-full rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60"
       aria-label={'Open ' + vm.name}
     >
       <LiquidGlass

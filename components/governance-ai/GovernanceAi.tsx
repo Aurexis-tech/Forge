@@ -90,7 +90,7 @@ export function GovernanceAi({ data, userEmail }: Props) {
             <form action="/api/auth/sign-out" method="POST">
               <button
                 type="submit"
-                className="rounded-[10px] border border-lq-line px-3 py-1 transition hover:border-lq-aurora/50 hover:text-lq-ink"
+                className="rounded-[10px] border border-lq-line px-3 py-1 transition hover:border-lq-aurora/50 hover:text-lq-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60"
               >
                 sign out
               </button>
@@ -319,7 +319,7 @@ function ActiveRuntimesList({
                   </span>
                   <Link
                     href={'/projects/' + rt.project_id}
-                    className="min-w-0 truncate font-ui text-sm font-medium text-lq-ink hover:text-lq-aurora hover:underline"
+                    className="min-w-0 truncate rounded font-ui text-sm font-medium text-lq-ink hover:text-lq-aurora hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60"
                   >
                     {rt.project_name ?? rt.project_id.slice(0, 8)}
                   </Link>

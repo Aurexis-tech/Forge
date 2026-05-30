@@ -134,7 +134,7 @@ export function MoldGrid({
             <button
               type="button"
               onClick={() => setStatusKey('all')}
-              className="font-code text-[11px] uppercase tracking-[0.3em] text-lq-aurora hover:text-lq-ink"
+              className="rounded font-code text-[11px] uppercase tracking-[0.3em] text-lq-aurora transition-colors hover:text-lq-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60"
             >
               Reset
             </button>

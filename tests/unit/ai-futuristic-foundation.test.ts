@@ -227,6 +227,69 @@ describe('LiquidGlass component', () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
     expect(css).toMatch(/transform:\s*none/);
   });
+
+  it('keyboard focus draws a consistent aurora ring (:focus-visible)', () => {
+    // The shared primitive carries the focus ring so every glass button /
+    // link / chip / CTA across the migrated app is keyboard-visible in one
+    // place. :focus-visible (not :focus) so mouse clicks don't draw it; the
+    // transparent outline keeps a ring under forced-colors / High Contrast.
+    expect(css).toMatch(/\.glass:focus-visible/);
+    expect(css).toMatch(/\.glass:focus-visible[\s\S]*outline:\s*2px solid transparent/);
+    expect(css).toMatch(/\.glass:focus-visible[\s\S]*0 0 0 2px rgba\(95, 230, 255/);
+  });
+});
+
+// ===========================================================================
+// 5b. Consistency pass — focus-visible on the bare interactive elements
+//     that AREN'T LiquidGlass (card-link wrappers, nav links, text buttons)
+// ===========================================================================
+describe('focus-visible consistency across migrated surfaces', () => {
+  const read2 = (p: string) => read(p);
+  const RING = /focus-visible:ring-2 focus-visible:ring-lq-(aurora|rose)\/60/;
+
+  it('the project + mold card link wrappers are keyboard-focusable (ring on the anchor)', () => {
+    // The card is a <Link> wrapping a glass DIV, so the ring must live on
+    // the anchor (the focusable element), not the inner glass.
+    expect(read2('components/projects-ai/ProjectCardAi.tsx')).toMatch(RING);
+    expect(read2('components/landing-ai/MoldGallery.tsx')).toMatch(RING);
+  });
+
+  it('the AiNav brand + center links carry focus rings', () => {
+    const nav = read2('components/lq/AiNav.tsx');
+    expect((nav.match(/focus-visible:ring-2/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('the bare text buttons (sort / reset / remove / cap controls) carry focus rings', () => {
+    expect(read2('components/projects-ai/ProjectsAi.tsx')).toMatch(RING);
+    expect(read2('components/projects-ai/MoldGrid.tsx')).toMatch(RING);
+    expect(read2('components/keys-ai/KeysAi.tsx')).toMatch(RING);
+    expect(read2('components/governance-ai/BudgetFormAi.tsx')).toMatch(RING);
+    expect(read2('components/governance-ai/GovernanceAi.tsx')).toMatch(RING);
+    expect(read2('components/workshop-ai/WorkshopShell.tsx')).toMatch(RING);
+  });
+});
+
+// ===========================================================================
+// 5c. Reduced-motion audit — the global rule neutralizes ALL animation so
+//     every infinite/long loop on the migrated pages degrades to static.
+// ===========================================================================
+describe('reduced-motion safety across migrated modules', () => {
+  it('globals.css has the blanket prefers-reduced-motion kill-switch', () => {
+    const g = read('app/globals.css');
+    // Targets every element + pseudo and collapses animation to ~instant.
+    expect(g).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
+    expect(g).toMatch(/animation-duration:\s*0\.001ms\s*!important/);
+    expect(g).toMatch(/animation-iteration-count:\s*1\s*!important/);
+  });
+
+  it('the migrated modules with infinite loops also self-document a reduced-motion path', () => {
+    // Each module either has its own @media reduced-motion override or is
+    // covered by the global rule above; the two with the strongest motion
+    // (backdrop blooms, workshop active rim) hold static explicitly.
+    expect(read('components/lq/AurexisAmbient.module.css')).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)/,
+    );
+  });
 });
 
 // ===========================================================================

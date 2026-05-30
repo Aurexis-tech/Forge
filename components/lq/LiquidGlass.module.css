@@ -76,6 +76,20 @@
   background: rgba(255, 255, 255, 0.12);
 }
 
+/* Keyboard focus — a consistent aurora ring for every focusable glass
+   surface (buttons, glass links, chips, CTAs) across the migrated app.
+   :focus-visible so mouse clicks don't draw the ring; the transparent
+   outline keeps a ring visible under forced-colors / High Contrast. */
+.glass:focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  border-color: rgba(95, 230, 255, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 2px rgba(95, 230, 255, 0.6),
+    0 0 24px -4px rgba(95, 230, 255, 0.55);
+}
+
 /* --- aurora (primary) ------------------------------------------------- */
 .aurora {
   background: linear-gradient(

@@ -214,9 +214,10 @@ function ProjectsPopulated({ cards }: { cards: ProjectCardData[] }) {
               type="button"
               onClick={() => setSort('newest')}
               className={
-                sort === 'newest'
+                'rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60 ' +
+                (sort === 'newest'
                   ? 'text-lq-aurora'
-                  : 'text-lq-ink-dim hover:text-lq-ink'
+                  : 'text-lq-ink-dim hover:text-lq-ink')
               }
             >
               Newest
@@ -226,9 +227,10 @@ function ProjectsPopulated({ cards }: { cards: ProjectCardData[] }) {
               type="button"
               onClick={() => setSort('oldest')}
               className={
-                sort === 'oldest'
+                'rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60 ' +
+                (sort === 'oldest'
                   ? 'text-lq-aurora'
-                  : 'text-lq-ink-dim hover:text-lq-ink'
+                  : 'text-lq-ink-dim hover:text-lq-ink')
               }
             >
               Oldest
@@ -323,7 +325,7 @@ function ProjectsPopulated({ cards }: { cards: ProjectCardData[] }) {
                 setMoldKey('all');
                 setStatusKey('all');
               }}
-              className="font-code text-[11px] uppercase tracking-[0.3em] text-lq-aurora hover:text-lq-ink"
+              className="rounded font-code text-[11px] uppercase tracking-[0.3em] text-lq-aurora transition-colors hover:text-lq-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lq-aurora/60"
             >
               Reset filters
             </button>
