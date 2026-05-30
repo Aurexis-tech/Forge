@@ -106,51 +106,17 @@ describe('keyStatusTone — heat is earned by a verified, in-use key', () => {
   });
 });
 
-// ===========================================================================
-// 2. Home + the four mold spaces compose the foundation
-// ===========================================================================
-describe('un-migrated mold spaces still wear the forge surface', () => {
-  // Home (/projects) has MIGRATED to the AI-futuristic system — see
-  // tests/unit/projects-ai.test.ts for the new structural assertions. The
-  // four mold spaces are still forge-styled, so the propagation assertions
-  // still apply to them.
-  const moldSpace = read('components/MoldSpacePage.tsx');
-
-  it('a mold space composes SectionHeader + ProjectCard + EmberCard + Reveal', () => {
-    expect(moldSpace).toMatch(/SectionHeader/);
-    expect(moldSpace).toMatch(/<ProjectCard/);
-    expect(moldSpace).toMatch(/<EmberCard/);
-    expect(moldSpace).toMatch(/Reveal/);
-    expect(moldSpace).toMatch(/meta\.emptyLine/); // per-mold empty state
-    expect(moldSpace).not.toMatch(/GlassPanel/);
-  });
-});
+// NOTE: the mold-space + ProjectCard structural assertions have been
+// retired alongside the forge MoldSpacePage / ProjectCard / MoldBadge
+// (deleted as orphans). The four mold spaces + Home now render via the
+// AI-futuristic MoldSpaceAi / MoldGrid / ProjectCardAi — see
+// tests/unit/mold-space-ai.test.ts + projects-ai.test.ts. The
+// projectCardTone helper this file tests above is still live in
+// lib/forge-heat.ts (the forge SpendMeter uses spendHeatTone, and the
+// helper is co-located with it).
 
 // ===========================================================================
-// 3. ProjectCard — EmberCard (recency tone) + HeatBadge stage + MoldBadge
-// ===========================================================================
-describe('ProjectCard is a forge surface', () => {
-  const card = read('components/ProjectCard.tsx');
-
-  it('is an EmberCard whose tone is the recency/liveness heat (projectCardTone)', () => {
-    expect(card).toMatch(/<EmberCard/);
-    expect(card).toMatch(/projectCardTone/);
-    expect(card).toMatch(/tone=\{tone\}/);
-  });
-
-  it('the stage pill is a HeatBadge (cool when live, dim otherwise) + keeps the mold badge', () => {
-    expect(card).toMatch(/<HeatBadge/);
-    expect(card).toMatch(/journey\.isLive \? 'cool' : 'dim'/);
-    expect(card).toMatch(/<MoldBadge/);
-  });
-
-  it('lifts to a heat-glow border on hover', () => {
-    expect(card).toMatch(/group-hover:border-heat-glow/);
-  });
-});
-
-// ===========================================================================
-// 4. Project detail — MIGRATED to AI-futuristic (the workshop shell)
+// 2. Project detail — MIGRATED to AI-futuristic (the workshop shell)
 // ===========================================================================
 describe('the forge project-detail primitives are preserved (orphaned by the migration)', () => {
   // /projects/[id] has MIGRATED to the AI-futuristic workshop shell — see

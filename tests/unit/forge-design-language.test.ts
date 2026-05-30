@@ -1,48 +1,15 @@
-// Hermetic structural tests for the FORGE design language foundation.
-//
-// No DOM test env, so these read source: the documented language, the
-// heat-spectrum tokens, the 5 primitives' characteristic classes, the
-// intake showcase wiring, and that motion is governed by reduced-motion
-// (the global kill-switch + class-based motion the primitives use).
+// Hermetic structural tests for the still-live FORGE design-language
+// internals: heat-spectrum tokens, the 5 primitives, and reduced-motion
+// governance. These primitives remain in use inside the un-migrated
+// interior *Area panels on the project detail page; the doc + intake-
+// showcase assertions have moved to the AI design-language doc and the
+// AI intake test (the forge IntakeForm + the old doc structure have
+// been retired alongside this prompt's orphan sweep).
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const read = (p: string) => readFileSync(p, 'utf8');
-
-// ===========================================================================
-// 1. The documented design language exists, with the required sections
-// ===========================================================================
-describe('/docs/design-language.md', () => {
-  const doc = read('docs/design-language.md');
-
-  it('captures the philosophy (forging-as-a-moment, heat with restraint)', () => {
-    expect(doc).toMatch(/moment of forging/i);
-    expect(doc).toMatch(/restraint/i);
-    expect(doc).toMatch(/never amber-everywhere/i);
-  });
-
-  it('documents the heat spectrum + cool palette with values', () => {
-    expect(doc).toMatch(/heat spectrum/i);
-    for (const t of ['--heat-coal', '--heat-ember', '--heat-glow', '--heat-molten', '--heat-spark']) {
-      expect(doc, t).toContain(t);
-    }
-    expect(doc).toContain('--cool-cyan');
-    expect(doc).toContain('#ff9a4d'); // the anchor value
-  });
-
-  it('documents typography, motion, component vocabulary, and what NOT to do', () => {
-    expect(doc).toMatch(/Fraunces/);
-    expect(doc).toMatch(/Spectral/);
-    expect(doc).toMatch(/IBM Plex Mono/);
-    expect(doc).toMatch(/Motion vocabulary/i);
-    expect(doc).toMatch(/Embers/i);
-    expect(doc).toMatch(/Component vocabulary/i);
-    expect(doc).toMatch(/ForgeButton/);
-    expect(doc).toMatch(/StagePipeline/);
-    expect(doc).toMatch(/What NOT to do/i);
-  });
-});
 
 // ===========================================================================
 // 2. Heat-spectrum tokens resolve as CSS variables + Tailwind colors
@@ -126,32 +93,9 @@ describe('the 5 forge primitives', () => {
   });
 });
 
-// ===========================================================================
-// 4. Intake showcase composes the primitives + the new structure
-// ===========================================================================
-describe('intake showcase', () => {
-  const src = read('components/IntakeForm.tsx');
-
-  it('composes SectionHeader + ForgeButton + EmberCard + StagePipeline', () => {
-    expect(src).toMatch(/SectionHeader/);
-    expect(src).toMatch(/<ForgeButton/);
-    expect(src).toMatch(/<EmberCard/);
-    expect(src).toMatch(/<StagePipeline/);
-  });
-
-  it('pipeline starts at INTENT (active index 0 — molten, rest dim)', () => {
-    expect(src).toMatch(/activeIndex=\{0\}/);
-  });
-
-  it('the describe box gets a heat-glow only on FOCUS (calm until you act)', () => {
-    expect(src).toMatch(/focus:border-heat-glow/);
-    expect(src).toMatch(/focus:shadow-\[inset/);
-  });
-
-  it('starter chips carry a restrained heat tint on hover only', () => {
-    expect(src).toMatch(/hover:border-heat-glow\/30/);
-  });
-});
+// NOTE: the intake showcase block (which read components/IntakeForm.tsx)
+// has been retired alongside the forge IntakeForm — the live intake is
+// now the AI-futuristic IntakeFormAi (see tests/unit/intake-ai.test.ts).
 
 // ===========================================================================
 // 5. Motion is governed by prefers-reduced-motion

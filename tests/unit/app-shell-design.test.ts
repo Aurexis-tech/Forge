@@ -97,51 +97,11 @@ describe('SectionHeader primitive', () => {
   });
 });
 
-// ===========================================================================
-// Pages compose the shared foundation (not per-page duplication)
-// ===========================================================================
-describe('un-migrated pages still wear the shared forge foundation', () => {
-  // Home (/projects) has MIGRATED to the AI-futuristic system and no longer
-  // uses SectionHeader / Reveal / max-w-5xl. The mold spaces are still
-  // forge-styled, so the foundation assertions still apply to them.
-  const moldSpace = read('components/MoldSpacePage.tsx');
-
-  it('mold spaces use SectionHeader (brand typography)', () => {
-    expect(moldSpace).toMatch(/SectionHeader/);
-  });
-
-  it('mold spaces use Reveal (reveal-on-scroll motion)', () => {
-    expect(moldSpace).toMatch(/Reveal/);
-  });
-
-  it('mold spaces constrain their column rhythm (max-width)', () => {
-    expect(moldSpace).toMatch(/max-w-5xl/);
-  });
-});
-
-// ===========================================================================
-// Motion / affordances — hover + focus discipline preserved
-// ===========================================================================
-describe('hover + focus affordances', () => {
-  it('project cards keep the heat-glow hover treatment (now an EmberCard)', () => {
-    const card = read('components/ProjectCard.tsx');
-    // Propagated to the forge language: EmberCard surface, heat-glow on hover.
-    expect(card).toMatch(/EmberCard/);
-    expect(card).toMatch(/group-hover:border-heat-glow/);
-    expect(card).toMatch(/group-hover:shadow-amber/);
-  });
-
-  it('the New Forge action on un-migrated mold spaces uses amber + glow hover', () => {
-    // /projects has migrated to the AI-futuristic system; the mold spaces
-    // still wear the forge New Forge button.
-    const moldSpace = read('components/MoldSpacePage.tsx');
-    expect(moldSpace).toMatch(/text-forge-amber/);
-    expect(moldSpace).toMatch(/hover:shadow-amber/);
-  });
-
-  it('Reveal is reduced-motion safe (content shown without motion)', () => {
-    const reveal = read('components/Reveal.tsx');
-    expect(reveal).toMatch(/prefers-reduced-motion/);
-    expect(reveal).toMatch(/motion-reduce:transition-none/);
-  });
-});
+// NOTE: the per-page foundation assertions (SectionHeader / Reveal /
+// max-w-5xl on the mold spaces, the ProjectCard heat-glow hover, and
+// the Reveal reduced-motion check) have been retired alongside the
+// forge page components they read (MoldSpacePage / ProjectCard / Reveal —
+// deleted as orphans once the AI-futuristic mold-space + project-card +
+// reveal surfaces took over). The live SectionHeader primitive coverage
+// stays in this file (above); per-page composition is now exercised by
+// the AI suites (projects-ai.test.ts, mold-space-ai.test.ts).

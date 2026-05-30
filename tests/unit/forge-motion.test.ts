@@ -176,57 +176,15 @@ describe('components consult the central tokens, not magic numbers', () => {
     expect(s).not.toMatch(/animate-pulse/); // no infinite pulse
   });
 
-  it('IntakeForm imports the tokens + the reduced-motion shortcut', () => {
-    const s = read('components/IntakeForm.tsx');
-    expect(s).toMatch(/from '@\/lib\/forge-motion'/);
-    expect(s).toMatch(/MOTION\.forgeMoment/);
-    expect(s).not.toMatch(/setTimeout\([^,]+,\s*1500\)/); // not a raw 1500
-  });
-
-  it('un-migrated forge page-load reveals stagger off the revealStep token', () => {
-    // Migrated to the AI-futuristic system (no longer use the forge Reveal):
-    //   /projects, /settings/keys, /governance, /projects/[id] (workshop).
-    for (const p of [
-      'components/MoldSpacePage.tsx',
-    ]) {
-      const s = read(p);
-      expect(s, p).toMatch(/MOTION\.revealStep/);
-    }
-  });
+  // NOTE: the IntakeForm + MoldSpacePage + ProjectCard token-usage checks
+  // have been retired alongside those components (deleted as orphans —
+  // the AI-futuristic IntakeFormAi / MoldSpaceAi / ProjectCardAi cover
+  // the live surfaces). The ForgeButton heat-bar check moved into the
+  // primitive-coverage tests (forge-design-language.test.ts §3).
 });
 
 // ===========================================================================
-// 2c. The forge moment fires IN PARALLEL with submit — never gates it
-// ===========================================================================
-describe('the forge moment never blocks the submit', () => {
-  const src = read('components/IntakeForm.tsx');
-
-  it('starts the surge, then fires the request without awaiting the motion', () => {
-    const strikeAt = src.indexOf('setForging(true)');
-    const fetchAt = src.indexOf("fetch('/api/projects'");
-    expect(strikeAt).toBeGreaterThan(-1);
-    expect(fetchAt).toBeGreaterThan(-1);
-    // The strike is triggered before the request, and the request is NOT
-    // delayed behind a timer/sleep.
-    expect(strikeAt).toBeLessThan(fetchAt);
-    expect(src).not.toMatch(/await\s+new\s+Promise/); // no artificial delay
-  });
-
-  it('settles fire-and-forget at the (reduced-motion-aware) token duration', () => {
-    expect(src).toMatch(
-      /setTimeout\(\(\) => setForging\(false\), motionMs\(MOTION\.forgeMoment\)\)/,
-    );
-  });
-
-  it('renders the bounded surge overlay only while forging', () => {
-    expect(src).toMatch(/forge-moment-overlay/);
-    expect(src).toMatch(/forge-moment-card/);
-    expect(src).toMatch(/\{forging \?/);
-  });
-});
-
-// ===========================================================================
-// 2d. Hover/focus heat-glow consistent + reduced-motion-frozen
+// 2c. Hover/focus heat-glow consistent + reduced-motion-frozen
 // ===========================================================================
 describe('hover / focus heat-glow', () => {
   it('EmberCard hover uses the eased lift class (frozen by reduced-motion)', () => {
@@ -235,8 +193,7 @@ describe('hover / focus heat-glow', () => {
     expect(s).toMatch(/hover:border-heat-glow/);
   });
 
-  it('ProjectCard lifts on hover; ForgeButton loads with the heat-bar', () => {
-    expect(read('components/ProjectCard.tsx')).toMatch(/group-hover:-translate-y/);
+  it('ForgeButton loads with the heat-bar (used by un-migrated panels)', () => {
     const btn = read('components/forge/ForgeButton.tsx');
     expect(btn).toMatch(/forge-heat-bar/);
     expect(btn).toMatch(/active:/);
