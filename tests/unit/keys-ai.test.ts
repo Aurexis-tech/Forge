@@ -304,12 +304,45 @@ describe('KeysAi component — header + card chrome', () => {
     expect(src).toMatch(/paste to connect/);
   });
 
-  it('connected → Rotate + Remove; empty → Connect → (the real actions only)', () => {
-    expect(src).toMatch(/rotate/);
-    expect(src).toMatch(/removing/);
+  it('connected → Test + Rotate primary pair; empty → Connect →', () => {
+    // The mockup's primary action pair on connected cards. The labels
+    // sit inside a "cancel when open" ternary on each LiquidGlass
+    // button, so we match the source's actual ternary shape rather than
+    // a >Test< substring.
+    expect(src).toMatch(/formMode === 'test' \? 'cancel' : 'Test'/);
+    expect(src).toMatch(/formMode === 'rotate' \? 'cancel' : 'Rotate'/);
+    // The empty card stays "Connect →".
     expect(src).toMatch(/Connect →/);
-    // No inert Test button (the API has no test endpoint today).
-    expect(src).not.toMatch(/>\s*Test\s*</);
+  });
+
+  it("Test + Rotate both route through the same real POST endpoint", () => {
+    // The component should only have ONE fetch with method 'POST' to
+    // /api/connections/keys — the shared verification + persist path the
+    // API exposes today. Test and Rotate set a paste-form mode; their
+    // submit goes through the same onSubmit, the same POST, the same
+    // body shape. No fabricated separate "verify" endpoint anywhere.
+    expect(src).not.toMatch(/\/api\/connections\/keys\/(verify|test)/);
+    expect(src).not.toMatch(/\/api\/verify-key/);
+    // The shared mode state proves it's one form behind two labels.
+    expect(src).toMatch(/setFormMode/);
+    expect(src).toMatch(/formMode === 'test'/);
+    expect(src).toMatch(/formMode === 'rotate'/);
+  });
+
+  it('the Test form labels the action honestly (re-verify, not magic)', () => {
+    // The form's eyebrow when Test is open tells the user EXACTLY what
+    // submitting does — re-paste the key, the server validates against
+    // the upstream provider. Not "click to verify silently."
+    expect(src).toContain('paste your current key to verify');
+  });
+
+  it('DELETE wiring is preserved via a secondary "remove" link (set/verify/rotate/delete intact)', () => {
+    // The prompt's "preserve set/verify/rotate/delete wiring" constraint
+    // means the DELETE call (onRemove) must remain reachable. We don't
+    // put it in the primary pair (the mockup shows Test+Rotate there),
+    // but it stays as a quiet rose secondary so users can disconnect.
+    expect(src).toMatch(/removing/);
+    expect(src).toMatch(/remove key/);
   });
 
   it('verified pill carries a pulsing aurora-ish dot (.statusPulseDot)', () => {

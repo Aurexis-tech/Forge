@@ -11,7 +11,7 @@
 //   - REAL wiring: GET / POST / DELETE against /api/connections/keys with
 //     the same body shapes the forge KeysForm used. Preserved verbatim.
 //
-// What changed (chrome only):
+// Card chrome:
 //   - Header is two-part: left = eyebrow + h1 + sub; right = a LiquidGlass
 //     stat strip with three cells (Connected / Missing / Errors) bound to
 //     the pure keyStatsVm helper.
@@ -21,14 +21,20 @@
 //     masked-key field with a 2px aurora left border (or a dashed
 //     "paste to connect" treatment when empty), the real destination URL
 //     hover-aurora, the honest one-line description, an optional "added
-//     <X ago>" line driven by the real connected_at, and Rotate / Remove
-//     actions on connected cards or a "Connect →" CTA on empty.
+//     <X ago>" line driven by the real connected_at, and a Test + Rotate
+//     primary action pair on connected cards or a "Connect →" CTA on
+//     empty. A small rose "remove" secondary preserves the DELETE wiring
+//     per the prompt's "preserve set/verify/rotate/delete" constraint.
 //
-// Why NO "Test" button: there is no test/verify endpoint on
-// /api/connections/keys today (POST validates with a tiny live call
-// before saving — that IS the verification path; Rotate goes through the
-// same path). Adding an inert Test button would lie about the action; the
-// API only exposes GET / POST / DELETE today, so we keep Rotate + Remove.
+// HONEST "Test" wiring: the API has no separate verify endpoint, but the
+// POST that Rotate uses validates the pasted key with a tiny live call to
+// the upstream provider before persisting (that IS the verification path).
+// So "Test" opens the same paste form as Rotate, labeled "paste your
+// current key to verify"; submitting POSTs through the same endpoint and
+// the API validates against the provider. Both buttons map to the SAME
+// real action; the label reflects the user's intent (re-check vs replace),
+// and the validation that runs is real upstream verification — nothing
+// inert.
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { LiquidGlass } from '@/components/lq/LiquidGlass';
@@ -219,10 +225,17 @@ function ProviderCard({
   loading: boolean;
   onChanged: () => void | Promise<void>;
 }) {
+  // Paste-form open state + a tiny mode so the form's labels reflect the
+  // user's intent. ALL modes POST to the same endpoint — the API validates
+  // against upstream before persisting (that IS the verification path).
+  //   'connect' — empty card; the only entry point.
+  //   'test'    — connected; user wants to re-verify the stored key.
+  //   'rotate'  — connected; user wants to replace the stored key.
+  type FormMode = 'connect' | 'test' | 'rotate';
+  const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [key, setKey] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [removeBusy, setRemoveBusy] = useState(false);
-  const [showForm, setShowForm] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
 
   const connected = status?.connected ?? false;
@@ -251,7 +264,7 @@ function ProviderCard({
         throw new Error(body.error ?? 'request failed (' + res.status + ')');
       }
       setKey('');
-      setShowForm(false);
+      setFormMode(null);
       await onChanged();
     } catch (err) {
       setCardError(err instanceof Error ? err.message : 'connect failed');
@@ -369,38 +382,47 @@ function ProviderCard({
         → {PROVIDER_DESTINATION[info.provider]}
       </p>
 
-      {/* Action row. Connected: Rotate (existing replace-key flow, which
-          re-validates via the API's tiny live call) + Remove. Empty:
-          Connect → (the existing set-key flow). NO "Test" button — the
-          API has no separate verify endpoint today. */}
+      {/* Primary action row — matches the design study:
+            connected → Test + Rotate (both open the paste form; submit
+                        POSTs to /api/connections/keys, where the API
+                        validates against the upstream provider before
+                        persisting — same wiring for both labels).
+            empty     → Connect →
+          A small rose "remove" secondary preserves the DELETE wiring
+          per the prompt's "preserve set/verify/rotate/delete" constraint
+          without crowding the primary pair. */}
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-lq-line pt-4">
         {connected ? (
           <>
             <LiquidGlass
               as="button"
               type="button"
-              onClick={() => setShowForm((s) => !s)}
+              onClick={() =>
+                setFormMode((m) => (m === 'test' ? null : 'test'))
+              }
               disabled={submitting || removeBusy}
               className="inline-flex items-center rounded-[14px] px-4 py-1.5 font-code text-[11px] uppercase tracking-[0.25em]"
             >
-              {showForm ? 'cancel' : 'rotate'}
+              {formMode === 'test' ? 'cancel' : 'Test'}
             </LiquidGlass>
             <LiquidGlass
               as="button"
               type="button"
-              onClick={onRemove}
+              onClick={() =>
+                setFormMode((m) => (m === 'rotate' ? null : 'rotate'))
+              }
               disabled={submitting || removeBusy}
-              variant="rose"
+              variant="aurora"
               className="inline-flex items-center rounded-[14px] px-4 py-1.5 font-code text-[11px] uppercase tracking-[0.25em]"
             >
-              {removeBusy ? 'removing…' : 'remove'}
+              {formMode === 'rotate' ? 'cancel' : 'Rotate'}
             </LiquidGlass>
           </>
         ) : (
           <LiquidGlass
             as="button"
             type="button"
-            onClick={() => setShowForm(true)}
+            onClick={() => setFormMode('connect')}
             disabled={submitting || removeBusy}
             variant="aurora"
             className="inline-flex items-center rounded-[14px] px-5 py-2 text-sm font-semibold"
@@ -410,15 +432,40 @@ function ProviderCard({
         )}
       </div>
 
-      {/* Paste form — same POST body as before. */}
-      {showForm ? (
+      {/* Secondary destructive — preserves DELETE wiring (rose link, not
+          a primary button, so the Test/Rotate pair stays the visual lead
+          per the mockup). Only present on connected cards. */}
+      {connected ? (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={onRemove}
+            disabled={submitting || removeBusy}
+            className="font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint transition-colors hover:text-lq-rose disabled:opacity-60"
+          >
+            {removeBusy ? 'removing…' : 'remove key'}
+          </button>
+        </div>
+      ) : null}
+
+      {/* Paste form — same POST endpoint, same body for every mode. The
+          label / placeholder / submit copy reflect the user's intent
+          (Test re-checks the current key; Rotate replaces with a new
+          one; Connect adds the first key). Verification is real in
+          every case — the API performs the live upstream call before it
+          persists. */}
+      {formMode ? (
         <form
           onSubmit={onSubmit}
           className="flex flex-col gap-3 border-t border-lq-line pt-4"
         >
           <label className="flex flex-col gap-1.5">
             <span className="font-code text-[10px] uppercase tracking-[0.3em] text-lq-ink-faint">
-              {connected ? 'paste replacement key' : 'paste key'}
+              {formMode === 'test'
+                ? 'paste your current key to verify'
+                : formMode === 'rotate'
+                  ? 'paste a new key'
+                  : 'paste key'}
             </span>
             <input
               type="password"
@@ -444,7 +491,13 @@ function ProviderCard({
               variant="aurora"
               className="inline-flex items-center rounded-[14px] px-5 py-2 text-sm font-semibold"
             >
-              {submitting ? 'verifying…' : connected ? 'replace' : 'save'}
+              {submitting
+                ? 'verifying…'
+                : formMode === 'test'
+                  ? 'verify'
+                  : formMode === 'rotate'
+                    ? 'replace'
+                    : 'save'}
             </LiquidGlass>
           </div>
         </form>
