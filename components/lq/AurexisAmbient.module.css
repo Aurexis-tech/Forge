@@ -1,13 +1,21 @@
-/* AurexisAmbient — the AI-futuristic global backdrop. DORMANT: built +
-   tested in isolation, NOT mounted (ForgeBackdrop stays the live backdrop
-   until the Landing prompt flips them together).
+/* AurexisAmbient — the AI-futuristic global backdrop in the Aurora-bloom
+   direction. Mounted on every migrated route through AppBackdrop and on
+   the public landing.
 
-   Its two infinite loops (aurora + violet breathe) live HERE, in a scoped
-   CSS module — deliberately NOT in app/globals.css — so the globals.css
-   "≤4 infinite animations" enforcer keeps reflecting only the mounted
-   forge backdrop's loops. These two count against the live budget only
-   once this component is actually mounted. @keyframes are module-local
-   (css-modules hashes the name + rewrites the reference in this file). */
+   Layers (back → front):
+     .ambient   void canvas (z:-10, fixed, pointer-events:none)
+     .aurora    aurora bloom, upper area (~760px, blur 120px, opacity ~.16)
+     .violet    violet bloom, lower-left (~620px, blur 120px, opacity ~.13)
+     .grid      faint 12-col lattice (~0.018 alpha via --grid)
+     .grain     filmic noise overlay (~.04 opacity, overlay blend)
+     .vignette  radial transparent → ~rgba(5,6,9,.7) edges
+
+   Two infinite drift loops live HERE — auroraDrift (~14s) + violetDrift
+   (~17s) — different periods so they never sync. They count against the
+   live animation budget once mounted, but they stay OUT of globals.css
+   so the "≤4 infinite animations in globals.css" enforcer keeps reading
+   only the legacy forge backdrop. CSS-modules hashes the keyframe names
+   + rewrites the references in this file. */
 
 .ambient {
   position: fixed;
@@ -18,7 +26,42 @@
   background: var(--void);
 }
 
-/* Faint 12-column lattice. */
+/* AURORA BLOOM — large soft radial in the upper area, drifting slowly.
+   Fixed pixel size + heavy blur so the gradient stays a soft round bloom
+   (not a hard-edged radial filling the viewport). */
+.aurora {
+  position: absolute;
+  top: -22%;
+  left: 18%;
+  width: 760px;
+  height: 760px;
+  background: radial-gradient(closest-side, var(--aurora), transparent 70%);
+  opacity: 0.16;
+  filter: blur(120px);
+  animation: auroraDrift 14s var(--ease) infinite alternate;
+  will-change: transform, opacity;
+}
+
+/* VIOLET BLOOM — lower-left companion on a longer drift period (≈17s)
+   so the two never sync up into a single pulse. */
+.violet {
+  position: absolute;
+  bottom: -18%;
+  left: -6%;
+  width: 620px;
+  height: 620px;
+  background: radial-gradient(closest-side, var(--violet), transparent 70%);
+  opacity: 0.13;
+  filter: blur(120px);
+  animation: violetDrift 17s var(--ease) infinite alternate;
+  will-change: transform, opacity;
+}
+
+/* Faint 12-column lattice — quiet "architecture" over the blooms.
+   --grid is rgba(255,255,255,0.012) globally, so we're below the ~.018
+   alpha the brief calls for; that's intentional — the blooms add light,
+   the grid only suggests order. Masked toward the upper centre so the
+   lattice fades out at the edges. */
 .grid {
   position: absolute;
   inset: 0;
@@ -49,66 +92,66 @@
   );
 }
 
-/* Large aurora-cyan glow, breathing slowly. */
-.aurora {
+/* FILMIC GRAIN — SVG fractal-noise texture rendered to a tiny tile and
+   repeated. Inline as a data: URI so no extra HTTP fetch and no PNG
+   ships in the bundle. Overlay blend over the void/blooms = subtle
+   "film" texture without any color shift. */
+.grain {
   position: absolute;
   inset: 0;
-  opacity: 0.16;
-  background: radial-gradient(
-    60% 48% at 50% -6%,
-    var(--aurora),
-    transparent 60%
-  );
-  animation: auroraBreathe 7s var(--ease) infinite;
-  will-change: opacity, transform;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-size: 200px 200px;
 }
 
-/* Cooler violet glow from the lower-right, breathing on a longer period. */
-.violet {
-  position: absolute;
-  inset: 0;
-  opacity: 0.1;
-  background: radial-gradient(
-    52% 46% at 88% 108%,
-    var(--violet),
-    transparent 62%
-  );
-  animation: violetBreathe 9s var(--ease) infinite;
-  will-change: opacity, transform;
-}
-
-/* Soft vignette sinking the corners into the void. */
+/* VIGNETTE — radial transparent centre → ~rgba(5,6,9,.7) edges. Sits
+   on top so the corners actually darken; settles the content into the
+   void without crushing the middle. */
 .vignette {
   position: absolute;
   inset: 0;
   background: radial-gradient(
-    120% 120% at 50% 40%,
+    ellipse 100% 80% at 50% 50%,
     transparent 55%,
-    rgba(3, 4, 8, 0.72) 100%
+    rgba(5, 6, 9, 0.7) 100%
   );
 }
 
-@keyframes auroraBreathe {
-  0%,
-  100% {
-    opacity: 0.16;
-    transform: scale(1);
+/* DRIFT KEYFRAMES — slow, gentle translate + a small opacity breathe.
+   `alternate` so the bloom drifts forward then back (no teleport).
+   Periods are deliberately different (14s vs 17s) to avoid syncing. */
+@keyframes auroraDrift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.14;
   }
-  50% {
-    opacity: 0.24;
-    transform: scale(1.05);
+  100% {
+    transform: translate3d(4%, 3%, 0) scale(1.04);
+    opacity: 0.2;
   }
 }
 
-@keyframes violetBreathe {
-  0%,
-  100% {
-    opacity: 0.1;
+@keyframes violetDrift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.11;
   }
-  50% {
+  100% {
+    transform: translate3d(-3%, -4%, 0) scale(1.05);
     opacity: 0.16;
   }
 }
 
-/* The global prefers-reduced-motion rule in globals.css already freezes
-   these (animation-duration → ~0). */
+/* Module-local reduced-motion: blooms hold their static start position.
+   The global rule in app/globals.css already collapses durations to
+   ~instant, but this explicit override at the layer itself makes the
+   intent local to the component (and survives any future reshuffling
+   of the global cascade). */
+@media (prefers-reduced-motion: reduce) {
+  .aurora,
+  .violet {
+    animation: none;
+    transform: none;
+  }
+}

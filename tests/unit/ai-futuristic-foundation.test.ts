@@ -230,33 +230,82 @@ describe('LiquidGlass component', () => {
 });
 
 // ===========================================================================
-// 6. AurexisAmbient — built, scoped loops, NOT mounted
+// 6. AurexisAmbient — Aurora bloom direction, LIVE on every migrated route
 // ===========================================================================
-describe('AurexisAmbient backdrop (dormant)', () => {
+describe('AurexisAmbient — Aurora bloom backdrop', () => {
   const src = read('components/lq/AurexisAmbient.tsx');
   const css = read('components/lq/AurexisAmbient.module.css');
 
-  it('renders the void + grid + aurora/violet glows + vignette', () => {
+  it('renders all 5 bloom layers (aurora + violet + grid + grain + vignette)', () => {
     expect(src).toMatch(/styles\.ambient/);
-    expect(src).toMatch(/styles\.grid/);
     expect(src).toMatch(/styles\.aurora/);
     expect(src).toMatch(/styles\.violet/);
+    expect(src).toMatch(/styles\.grid/);
+    expect(src).toMatch(/styles\.grain/);
     expect(src).toMatch(/styles\.vignette/);
+  });
+
+  it('the bloom layers are radial gradients on the real lq.* tokens', () => {
+    // Root is the void; blooms use the real --aurora and --violet tokens
+    // (no hard-coded hex), masked through radial-gradient.
     expect(css).toMatch(/background:\s*var\(--void\)/);
-    expect(css).toMatch(/var\(--grid\)/);
     expect(css).toMatch(/radial-gradient[\s\S]*var\(--aurora\)/);
     expect(css).toMatch(/radial-gradient[\s\S]*var\(--violet\)/);
+    // The 12-col lattice and the vignette stay built from real tokens.
+    expect(css).toMatch(/var\(--grid\)/);
+    expect(css).toMatch(/radial-gradient\([\s\S]*?transparent\s+\d+%/);
   });
 
-  it('has at most TWO infinite loops, scoped to its own module', () => {
-    const infinites = css.match(/animation[^;]*infinite/g) ?? [];
+  it('blooms are heavily blurred and sized in the brief\'s range (~620–760px)', () => {
+    // The blur is what turns the radial gradient into a soft bloom; the
+    // brief calls for ~120px. The fixed sizes keep the blooms bounded
+    // (no full-viewport gradients).
+    expect(css).toMatch(/filter:\s*blur\(120px\)/);
+    expect(css).toMatch(/width:\s*760px/);
+    expect(css).toMatch(/width:\s*620px/);
+  });
+
+  it('the grain layer is an inline SVG noise tile, low-opacity overlay blend', () => {
+    expect(css).toMatch(/mix-blend-mode:\s*overlay/);
+    expect(css).toMatch(/feTurbulence/);
+    expect(css).toMatch(/opacity:\s*0\.04/);
+  });
+
+  it('has exactly TWO infinite loops (auroraDrift + violetDrift), scoped to the module', () => {
+    // Strip CSS comments before counting so the module's own prose
+    // header can't accidentally match (the keys-ai / landing-ai tests
+    // use the same pattern). Counts only real declarations.
+    const cssNoComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    const infinites = cssNoComments.match(/animation[^;]*infinite/g) ?? [];
     expect(infinites.length).toBe(2);
-    expect(css).toMatch(/@keyframes auroraBreathe/);
-    expect(css).toMatch(/@keyframes violetBreathe/);
+    expect(css).toMatch(/@keyframes auroraDrift/);
+    expect(css).toMatch(/@keyframes violetDrift/);
+    // Different periods so the two never sync into a single pulse.
+    expect(css).toMatch(/animation:\s*auroraDrift\s+14s/);
+    expect(css).toMatch(/animation:\s*violetDrift\s+17s/);
+    // Each is a translate + scale + opacity drift (not just an opacity
+    // breathe) — the brief calls for actual drift.
+    expect(css).toMatch(/translate3d/);
   });
 
-  it('keeps its keyframes OUT of globals.css (so the live enforcer stays at 4)', () => {
+  it('respects prefers-reduced-motion at the module level (drift disabled)', () => {
+    // The global rule in app/globals.css collapses durations to ~instant
+    // already, but the module ALSO has its own override so the intent
+    // is local to the component and survives global re-orderings.
+    expect(css).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+    // Inside the rule, both bloom layers get `animation: none`.
+    const reducedBlock = css.match(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\}\s*\}/,
+    );
+    expect(reducedBlock, 'reduced-motion block must be present').toBeTruthy();
+    expect(reducedBlock![0]).toMatch(/animation:\s*none/);
+  });
+
+  it('keeps its keyframes OUT of globals.css (live enforcer stays ≤4)', () => {
     const g = read('app/globals.css');
+    // Neither the new names nor the old (breathe) names leak in.
+    expect(g).not.toMatch(/auroraDrift/);
+    expect(g).not.toMatch(/violetDrift/);
     expect(g).not.toMatch(/auroraBreathe/);
     expect(g).not.toMatch(/violetBreathe/);
     const liveInfinites = g.match(/animation[^;]*infinite/g) ?? [];
