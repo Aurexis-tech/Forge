@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { GlassPanel } from '@/components/GlassPanel';
 import { WorkshopShell } from '@/components/workshop-ai/WorkshopShell';
 import { SpecEarlyState } from '@/components/workshop-ai/SpecEarlyState';
+import { ProjectGovernancePanel } from '@/components/governance-ai/ProjectGovernancePanel';
 import { GenerateBuildPanel } from '@/components/build/GenerateBuildPanel';
 import { GeneratedBuildPanel } from '@/components/build/GeneratedBuildPanel';
 import type { StaticStatus } from '@/components/build/FileTree';
@@ -126,6 +127,7 @@ import { ForgeTimelinePanel } from '@/components/observability/ForgeTimelinePane
 import type {
   AgentRun,
   AgentRuntime,
+  AuditLog,
   Build,
   BuildFile,
   BuildLogs,
@@ -849,6 +851,17 @@ export default async function ProjectDetailPage({
           itself is un-migrated forge styling; the next prompt restyles it
           alongside the gate modal. PRESERVED here so the real-time poll
           mechanism keeps working. */}
+      {/* GOVERNANCE — per-project monitor & control, real signals only.
+          Authorization history + spend + activity bind to real sources;
+          the runtime-action panel is an honest empty state (no source
+          exists for post-deploy artifact actions yet). */}
+      {await renderProjectGovernance({
+        project,
+        spec,
+        spendUsd: costToDateUsd,
+        runtimeStatus: runtime?.status ?? null,
+      })}
+
       {await renderForgeTimeline(project.id)}
     </WorkshopShell>
   );
@@ -872,6 +885,36 @@ async function renderForgeTimeline(
     <ForgeTimelinePanel
       timeline={timeline}
       buildStatus={latest?.status ?? null}
+    />
+  );
+}
+
+// Per-project Governance section. Loads the project's REAL audit_log rows
+// (the authorization decisions + activity); spend + runtime status are
+// already loaded by the page and passed through. No new data is invented —
+// the runtime-action feed has no source, so its panel is an honest empty
+// state (see ProjectGovernancePanel / lib/project-governance).
+async function renderProjectGovernance(args: {
+  project: Project;
+  spec: Spec | null;
+  spendUsd: number;
+  runtimeStatus: string | null;
+}): Promise<React.ReactNode> {
+  const supabase = getServerSupabase();
+  const { data } = await supabase
+    .from('audit_log')
+    .select('*')
+    .eq('project_id', args.project.id)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  const auditRows = (data ?? []) as AuditLog[];
+  return (
+    <ProjectGovernancePanel
+      project={args.project}
+      spec={args.spec}
+      auditRows={auditRows}
+      spendUsd={args.spendUsd}
+      runtimeStatus={args.runtimeStatus}
     />
   );
 }
