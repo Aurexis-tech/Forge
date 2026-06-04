@@ -376,11 +376,17 @@ export const email_read: Tool<EmailReadInput, EmailReadOutput> = {
 `;
 
 const EMAIL_SEND_SOURCE = `import type { Tool } from './types.js';
-import { isMockMode, requireEnv } from './types.js';
+import { isMockMode } from './types.js';
 
-// STUB — needs_key. Reads RESEND_API_KEY and fails clearly if unset.
-// Replace the body with a real Resend (or other) send-email call when
-// wiring up the integration.
+// GOVERNED ACTION — email.send is a real side-effect, so this agent does
+// NOT send directly and NEVER holds the email credential. The governed
+// path is: REQUEST the send from Forge's governance broker, a human
+// approves it, and Forge performs the send with its SERVER-HELD key
+// (request-action-and-await-approval). The artifact -> Forge governance
+// transport is not provisioned for deployed artifacts yet (the remaining
+// runtime-governance seam), so the request cannot be delivered from here.
+// Sandbox smoke uses the mock branch below (FORGE_MOCK_TOOLS=1) — a green
+// smoke build is NOT a real send.
 
 export interface EmailSendInput {
   to: string | string[];
@@ -395,16 +401,17 @@ export interface EmailSendOutput {
 
 export const email_send: Tool<EmailSendInput, EmailSendOutput> = {
   id: 'email_send',
-  description: 'Send an email via Resend.',
+  description: 'Send an email (governed: requested + human-approved via Forge).',
   async call(input, ctx) {
     if (isMockMode(ctx)) {
       ctx.log('email_send.mock', { to: input.to, subject: input.subject });
       return { message_id: 'mock-' + Date.now(), sent_at: new Date(0).toISOString() };
     }
-    requireEnv(ctx, 'RESEND_API_KEY');
     throw new Error(
-      '[forge-agent] email_send is not yet wired up in this scaffold. ' +
-        'Implement Resend send-email using RESEND_API_KEY here.',
+      '[forge-agent] email.send is a GOVERNED action: it is requested via ' +
+        "Forge's governance broker and approved by a human; the agent never " +
+        'sends directly and never holds the email credential. The governance ' +
+        'transport is not provisioned for this artifact yet.',
     );
   },
 };

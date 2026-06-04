@@ -68,23 +68,33 @@ const LEGACY_TOOL_NAMES = [
 // the frozen pre-migration baseline.
 const PROVIDER_UPGRADED = 'web_search';
 const OTHER_LEGACY = LEGACY_TOOL_NAMES.filter((n) => n !== PROVIDER_UPGRADED);
+// Scaffold SOURCE bodies that changed on purpose: web_search (Brave
+// provider upgrade) and email_send (rewired behind the runtime governance
+// broker — no longer sends directly / holds the credential). Their
+// INTERFACE signature lines are UNCHANGED, so they remain in OTHER_LEGACY
+// for the interface checks; only their scaffold bodies are excluded from
+// the byte-identity assertions.
+const SCAFFOLD_CHANGED = new Set(['web_search', 'email_send']);
+const scaffoldChangedPaths = new Set(
+  [...SCAFFOLD_CHANGED].map((n) => 'src/lib/tools/' + n + '.ts'),
+);
+const SCAFFOLD_FROZEN = LEGACY_TOOL_NAMES.filter((n) => !SCAFFOLD_CHANGED.has(n));
 
 // ===========================================================================
 // 1 + 2 — SCAFFOLD FILES BYTE-IDENTICAL (the 7 unchanged tools)
 // ===========================================================================
 describe('equivalence — shipped scaffold files', () => {
-  it('every scaffold file EXCEPT web_search.ts is byte-identical to the baseline', () => {
-    const webSearchPath = 'src/lib/tools/web_search.ts';
+  it('every scaffold file EXCEPT the intentionally-changed ones is byte-identical to the baseline', () => {
     for (const pre of baseline.scaffoldFiles) {
-      if (pre.path === webSearchPath) continue;
+      if (scaffoldChangedPaths.has(pre.path)) continue;
       const post = SCAFFOLD_FILES.find((f) => f.path === pre.path);
       expect(post, 'derived has ' + pre.path).toBeDefined();
       expect(post!.content, pre.path + ' byte-identical').toBe(pre.content);
     }
   });
 
-  it('each of the 7 unchanged legacy tool source files ships byte-identical', () => {
-    for (const name of OTHER_LEGACY) {
+  it('each of the 6 byte-frozen legacy tool source files ships byte-identical', () => {
+    for (const name of SCAFFOLD_FROZEN) {
       const filePath = 'src/lib/tools/' + name + '.ts';
       const pre = baseline.scaffoldFiles.find((f) => f.path === filePath);
       const post = SCAFFOLD_FILES.find((f) => f.path === filePath);
@@ -108,6 +118,22 @@ describe('equivalence — shipped scaffold files', () => {
     expect(post.content).toContain('BRAVE_SEARCH_API_KEY');
     expect(post.content).toContain('isMockMode'); // still self-mocks
     expect(post.content).not.toContain('WEB_SEARCH_URL'); // old stub gone
+  });
+
+  it('email_send.ts was DELIBERATELY rewired behind the governance broker', () => {
+    // The governed change: the agent no longer sends directly and no longer
+    // holds the email credential. Its scaffold must NOT reference
+    // RESEND_API_KEY, names the governed model, and its real branch is an
+    // honest governed throw — never a fake send. The mock branch stays for
+    // sandbox smoke and is unmistakably a mock.
+    const path = 'src/lib/tools/email_send.ts';
+    const pre = baseline.scaffoldFiles.find((f) => f.path === path)!;
+    const post = SCAFFOLD_FILES.find((f) => f.path === path)!;
+    expect(post.content).not.toBe(pre.content); // changed on purpose
+    expect(post.content).toContain('GOVERNED'); // names the governed model
+    expect(post.content).not.toContain('RESEND_API_KEY'); // artifact never holds the key
+    expect(post.content).toContain('isMockMode'); // mock branch preserved
+    expect(post.content).toContain("message_id: 'mock-'"); // mock is unmistakably mock
   });
 
   it('the boilerplate files (package.json, tsconfig, README, types, index, runtime) are byte-identical', () => {
