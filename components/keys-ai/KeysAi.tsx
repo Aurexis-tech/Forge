@@ -291,13 +291,14 @@ function ProviderCard({
   loading: boolean;
   onChanged: () => void | Promise<void>;
 }) {
-  // Paste-form open state + a tiny mode so the form's labels reflect the
-  // user's intent. ALL modes POST to the same endpoint — the API validates
-  // against upstream before persisting (that IS the verification path).
-  //   'connect' — empty card; the only entry point.
-  //   'test'    — connected; user wants to re-verify the stored key.
-  //   'rotate'  — connected; user wants to replace the stored key.
-  type FormMode = 'connect' | 'test' | 'rotate';
+  // Re-verify / rotate form state for CONNECTED cards (a tiny mode so the
+  // form's labels reflect intent). Both POST to the same endpoint — the API
+  // validates against upstream before persisting (that IS verification).
+  // The EMPTY card no longer uses this: its box is an always-present paste
+  // input submitted by "Connect →" (see the empty branch below).
+  //   'test'   — connected; user wants to re-verify the stored key.
+  //   'rotate' — connected; user wants to replace the stored key.
+  type FormMode = 'test' | 'rotate';
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [key, setKey] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -421,9 +422,10 @@ function ProviderCard({
       {/* Honest one-line description (the "powers" sentence). */}
       <p className="text-sm leading-relaxed text-lq-ink-dim">{info.powers}</p>
 
-      {/* Boxed masked-key field — 2px aurora left border when connected;
-          dashed "paste to connect" treatment when empty. No invented
-          numbers; only fields the API returns. */}
+      {/* Boxed key field — connected: a 2px aurora-left masked-key readout.
+          Empty: a REAL dashed paste input (the box you click IS the field);
+          "Connect →" below submits it. No invented numbers; only fields the
+          API returns. */}
       {connected ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-lq-line border-l-2 border-l-lq-aurora bg-lq-elev-1 px-4 py-3">
           <p className="font-code text-[13px] tracking-[0.05em] text-lq-ink">
@@ -436,11 +438,32 @@ function ProviderCard({
           ) : null}
         </div>
       ) : (
-        <div className="flex items-center justify-center rounded-[10px] border border-dashed border-lq-line bg-lq-elev-1/50 px-4 py-5">
-          <p className="font-code text-[11px] uppercase tracking-[0.3em] text-lq-ink-faint">
-            paste to connect
-          </p>
-        </div>
+        // The box IS the input. Paste your key here and submit with the
+        // "Connect →" button below (or Enter) — no hidden step. The dashed
+        // treatment is kept, now on a REAL <input>: the field you click is
+        // the field you type into. On focus it firms up to a solid aurora
+        // border and left-aligns so a pasted key is readable.
+        <form
+          id={'connect-' + info.provider}
+          onSubmit={onSubmit}
+          className="flex flex-col gap-1.5"
+        >
+          <input
+            type="password"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            disabled={submitting}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-label={'Paste your ' + info.label + ' API key'}
+            placeholder={'paste your ' + info.provider + ' key'}
+            className="w-full rounded-[10px] border border-dashed border-lq-line bg-lq-elev-1/50 px-4 py-3.5 text-center font-code text-sm tracking-[0.08em] text-lq-ink backdrop-blur-md transition placeholder:uppercase placeholder:tracking-[0.3em] placeholder:text-lq-ink-faint focus:border-solid focus:border-lq-aurora focus:text-left focus:tracking-[0.04em] focus:outline-none focus:shadow-[inset_0_0_44px_-14px_rgba(95,230,255,0.45)] focus:ring-2 focus:ring-[rgba(95,230,255,0.25)] disabled:opacity-60"
+          />
+          <span className="font-code text-[10px] text-lq-ink-faint">
+            {info.hint}
+          </span>
+        </form>
       )}
 
       {/* Real destination URL — static; hover shifts to aurora. */}
@@ -485,15 +508,18 @@ function ProviderCard({
             </LiquidGlass>
           </>
         ) : (
+          // Submits the empty-card paste form above via the HTML `form`
+          // attribute — so the box and this button are one action: paste,
+          // then Connect. (The box also submits on Enter.)
           <LiquidGlass
             as="button"
-            type="button"
-            onClick={() => setFormMode('connect')}
-            disabled={submitting || removeBusy}
+            type="submit"
+            form={'connect-' + info.provider}
+            disabled={submitting}
             variant="aurora"
             className="inline-flex items-center rounded-[14px] px-5 py-2 text-sm font-semibold"
           >
-            Connect →
+            {submitting ? 'verifying…' : 'Connect →'}
           </LiquidGlass>
         )}
       </div>
@@ -514,12 +540,12 @@ function ProviderCard({
         </div>
       ) : null}
 
-      {/* Paste form — same POST endpoint, same body for every mode. The
-          label / placeholder / submit copy reflect the user's intent
-          (Test re-checks the current key; Rotate replaces with a new
-          one; Connect adds the first key). Verification is real in
-          every case — the API performs the live upstream call before it
-          persists. */}
+      {/* Re-verify / rotate form for CONNECTED cards — same POST endpoint,
+          same body. The label / submit copy reflect intent (Test re-checks
+          the stored key; Rotate replaces it). Verification is real in both
+          cases — the API performs the live upstream call before it persists.
+          (The empty card's first-time paste lives in its own inline form
+          above, submitted by "Connect →".) */}
       {formMode ? (
         <form
           onSubmit={onSubmit}

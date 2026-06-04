@@ -405,9 +405,17 @@ describe('KeysAi component — header + card chrome', () => {
     expect(src).toMatch(/status\?\.connected_at/);
   });
 
-  it('empty cards: dashed "paste to connect" treatment (no fake numbers)', () => {
-    expect(src).toMatch(/border-dashed/);
-    expect(src).toMatch(/paste to connect/);
+  it('empty cards: the dashed box IS a real paste input submitted by Connect →', () => {
+    // UX fix: the empty card no longer shows a dead "paste to connect"
+    // placeholder. The dashed box is a REAL <input> the user pastes into,
+    // and "Connect →" submits it (HTML `form` attr) — paste, then Connect.
+    expect(src).toMatch(/border-dashed/); // dashed treatment kept, now on the input
+    expect(src).not.toMatch(/paste to connect/); // no dead placeholder text or stale comment
+    // A real password input wired to the shared per-provider connect form,
+    // and a submit button bound to it by id.
+    expect(src).toMatch(/id=\{'connect-' \+ info\.provider\}/);
+    expect(src).toMatch(/form=\{'connect-' \+ info\.provider\}/);
+    expect(src).toMatch(/type="submit"/);
   });
 
   it('connected → Test + Rotate primary pair; empty → Connect →', () => {
