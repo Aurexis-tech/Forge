@@ -153,11 +153,11 @@ describe('isMigratedRoute', () => {
 // ===========================================================================
 describe('AppBackdrop switch', () => {
   const src = read('components/lq/AppBackdrop.tsx');
-  it('renders AurexisAmbient for migrated routes, Forge backdrop otherwise', () => {
+  it('returns null on migrated routes (global backdrop), Forge backdrop otherwise', () => {
     expect(src).toMatch(/^'use client'/m);
     expect(src).toMatch(/usePathname/);
     expect(src).toMatch(/isMigratedRoute/);
-    expect(src).toMatch(/<AurexisAmbient\s*\/>/);
+    expect(src).toMatch(/return null/);
     expect(src).toMatch(/<ForgeBackdrop\s*\/>/);
     expect(src).toMatch(/<ForgeScene\s*\/>/);
   });

@@ -1,15 +1,14 @@
 'use client';
 
 // AppBackdrop — the (app) backdrop SWITCH. Reads the current route and
-// renders the AI-futuristic AurexisAmbient for MIGRATED routes, or the
-// forge backdrop (ForgeBackdrop + the persistent 3D ForgeScene) for
-// everything else (the default during the transition). Mounted once in
-// app/(app)/layout.tsx in place of the old direct ForgeBackdrop mount.
+// renders NOTHING for MIGRATED routes (the global ConstellationBackground
+// from app/layout.tsx shows through), or the forge backdrop (ForgeBackdrop
+// + the persistent 3D ForgeScene) for everything else (the default during
+// the transition). Mounted once in app/(app)/layout.tsx.
 //
 // This centralizes the transitional state: a future (app) page migration
 // just adds its route to MIGRATED_ROUTES; the final cleanup prompt deletes
-// this switch and ForgeBackdrop. AurexisAmbient is the single aurora
-// backdrop — never double-mounted with ForgeBackdrop.
+// this switch and ForgeBackdrop entirely.
 
 import { usePathname } from 'next/navigation';
 import { ForgeBackdrop } from '@/components/ForgeBackdrop';

@@ -170,11 +170,11 @@ describe('deriveStatus', () => {
 // 2. projectVm — full mapping (mold → accent, stats with "—" fallback, dots)
 // ===========================================================================
 describe('projectVm', () => {
-  it('maps mold → accent + label (Agent=aurora, System=violet, Software=mint, Infrastructure=amber)', () => {
+  it('maps mold → accent + label (Agent=aurora, System=blue, Software=violet, Infrastructure=magenta)', () => {
     expect(projectVm(buildCard({ mold: 'agent' }), { nowMs: NOW }).moldAccent).toBe('aurora');
-    expect(projectVm(buildCard({ mold: 'system' }), { nowMs: NOW }).moldAccent).toBe('violet');
-    expect(projectVm(buildCard({ mold: 'software' }), { nowMs: NOW }).moldAccent).toBe('mint');
-    expect(projectVm(buildCard({ mold: 'infrastructure' }), { nowMs: NOW }).moldAccent).toBe('amber');
+    expect(projectVm(buildCard({ mold: 'system' }), { nowMs: NOW }).moldAccent).toBe('blue');
+    expect(projectVm(buildCard({ mold: 'software' }), { nowMs: NOW }).moldAccent).toBe('violet');
+    expect(projectVm(buildCard({ mold: 'infrastructure' }), { nowMs: NOW }).moldAccent).toBe('magenta');
     const detecting = projectVm(buildCard({ mold: 'unclassified' }), { nowMs: NOW });
     expect(detecting.moldAccent).toBeNull();
     expect(detecting.moldLabel).toMatch(/Detecting/);
@@ -330,12 +330,13 @@ describe('ProjectsAi shell', () => {
     expect(src).toMatch(/STATUS_CHIPS/);
   });
 
-  it('count summary derives from REAL annotated cards (not hard-coded)', () => {
+  it('stat row + filters derive from REAL annotated cards + stats (not hard-coded)', () => {
     expect(src).toMatch(/counts/);
     expect(src).toMatch(/counts\.total/);
     expect(src).toMatch(/counts\.live/);
-    expect(src).toMatch(/counts\.gate/);
     expect(src).toMatch(/counts\.paused/);
+    expect(src).toMatch(/stats\.monthlySpendUsd/);
+    expect(src).toMatch(/stats\.totalBuilds/);
   });
 
   it('renders a secondary empty state when filters match nothing', () => {

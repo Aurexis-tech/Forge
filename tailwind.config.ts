@@ -54,6 +54,8 @@ const config: Config = {
           amber: 'var(--amber)',
           mint: 'var(--mint)',
           rose: 'var(--rose)',
+          blue: 'var(--blue)',
+          magenta: 'var(--magenta)',
           line: 'var(--line)',
           grid: 'var(--grid)',
         },

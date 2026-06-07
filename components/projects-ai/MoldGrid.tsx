@@ -24,15 +24,15 @@ const STATUS_CHIPS: ReadonlyArray<{ key: StatusKey; label: string }> = [
 
 const ACCENT_BORDER: Record<MoldAccent, string> = {
   aurora: 'border-l-lq-aurora',
+  blue: 'border-l-lq-blue',
   violet: 'border-l-lq-violet',
-  mint: 'border-l-lq-mint',
-  amber: 'border-l-lq-amber',
+  magenta: 'border-l-lq-magenta',
 };
 const ACCENT_TEXT: Record<MoldAccent, string> = {
   aurora: 'text-lq-aurora',
+  blue: 'text-lq-blue',
   violet: 'text-lq-violet',
-  mint: 'text-lq-mint',
-  amber: 'text-lq-amber',
+  magenta: 'text-lq-magenta',
 };
 
 type Annotated = ProjectCardData & { _status: ProjectVmStatus };

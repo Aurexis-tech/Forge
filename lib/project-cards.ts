@@ -83,3 +83,48 @@ export async function loadProjectCards(
 
   return opts?.mold ? filterByMold(cards, opts.mold) : cards;
 }
+
+/** Aggregate stats for the dashboard stat row — all REAL: this calendar
+ *  month's spend (sum of the user's cost_events) and the total number of
+ *  builds across the user's projects. */
+export interface DashboardStats {
+  monthlySpendUsd: number;
+  totalBuilds: number;
+}
+
+export async function loadDashboardStats(
+  userId: string,
+  projectIds: string[],
+): Promise<DashboardStats> {
+  const supabase = getServerSupabase();
+  const now = new Date();
+  const monthStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  ).toISOString();
+
+  // Spend this month — cost_events carries user_id + amount_usd (numeric,
+  // which PostgREST serializes as a string, so coerce with Number()).
+  const { data: spendRows } = await supabase
+    .from('cost_events')
+    .select('amount_usd')
+    .eq('user_id', userId)
+    .gte('created_at', monthStart)
+    .limit(10000);
+  const monthlySpendUsd = (spendRows ?? []).reduce(
+    (sum, r) =>
+      sum + Number((r as { amount_usd: number | string | null }).amount_usd ?? 0),
+    0,
+  );
+
+  // Total builds across the user's projects (head count — fetches no rows).
+  let totalBuilds = 0;
+  if (projectIds.length > 0) {
+    const { count } = await supabase
+      .from('builds')
+      .select('id', { count: 'exact', head: true })
+      .in('project_id', projectIds);
+    totalBuilds = count ?? 0;
+  }
+
+  return { monthlySpendUsd, totalBuilds };
+}

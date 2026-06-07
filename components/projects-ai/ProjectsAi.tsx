@@ -2,19 +2,15 @@
 
 // ProjectsAi — the migrated /projects page client. Two branches:
 //
-//   POPULATED — when the REAL project list has anything: today's header
-//   (eyebrow + h1 + real count summary + Newest/Oldest sort + "+ New
-//   forge" CTA), today's Mold + Status filter chips, today's responsive
-//   4→2→1 ProjectCardAi grid, today's filter-mismatch secondary empty.
-//   UNCHANGED in this commit.
+//   POPULATED — when the REAL project list has anything: the v2 "Workspace"
+//   header (eyebrow + h1 + Newest/Oldest sort + "+ New forge" CTA), a v2
+//   STAT ROW (Active forges · Spend this month · Live · Builds total — all
+//   real), the Mold + Status filter chips, and the responsive 4→2→1
+//   ProjectCardAi grid (+ filter-mismatch secondary empty).
 //
-//   EMPTY (first-run, zero REAL projects) — a centered hero on the
-//   ambient backdrop with eyebrow "Your workshop · empty" + "Nothing
-//   forged yet." + the honest sub + an aurora "Forge your first project
-//   →" CTA, followed by the four-mold quick-start gallery reused from
-//   the landing. The header chrome / count summary / filter chips are
-//   suppressed here — at zero they're inert and read as noise. The molds
-//   are descriptive of the system, NOT fake user projects.
+//   EMPTY (first-run, zero REAL projects) — a centered hero on the ambient
+//   backdrop + the four-mold quick-start gallery reused from the landing.
+//   Header chrome / stat row / filters are suppressed (inert at zero).
 
 import { useMemo, useState } from 'react';
 import { LiquidGlass } from '@/components/lq/LiquidGlass';
@@ -22,7 +18,7 @@ import { MoldGallery } from '@/components/landing-ai/MoldGallery';
 import { ProjectCardAi } from '@/components/projects-ai/ProjectCardAi';
 import { filterByMold, type ProjectMold } from '@/lib/molds';
 import { projectVm, type ProjectVmStatus } from '@/lib/project-vm';
-import type { ProjectCardData } from '@/lib/project-cards';
+import type { ProjectCardData, DashboardStats } from '@/lib/project-cards';
 
 type MoldKey = 'all' | Exclude<ProjectMold, 'unclassified'>;
 type StatusKey = 'all' | 'live' | 'forging' | 'gate';
@@ -32,9 +28,9 @@ const MOLD_CHIPS: ReadonlyArray<{ key: MoldKey; label: string; dot?: string }> =
   [
     { key: 'all', label: 'All' },
     { key: 'agent', label: 'Agents', dot: 'bg-lq-aurora' },
-    { key: 'system', label: 'Systems', dot: 'bg-lq-violet' },
-    { key: 'software', label: 'Software', dot: 'bg-lq-mint' },
-    { key: 'infrastructure', label: 'Infrastructure', dot: 'bg-lq-amber' },
+    { key: 'system', label: 'Systems', dot: 'bg-lq-blue' },
+    { key: 'software', label: 'Software', dot: 'bg-lq-violet' },
+    { key: 'infrastructure', label: 'Infrastructure', dot: 'bg-lq-magenta' },
   ];
 
 const STATUS_CHIPS: ReadonlyArray<{ key: StatusKey; label: string }> = [
@@ -46,15 +42,20 @@ const STATUS_CHIPS: ReadonlyArray<{ key: StatusKey; label: string }> = [
 
 type Annotated = ProjectCardData & { _status: ProjectVmStatus };
 
-export function ProjectsAi({ cards }: { cards: ProjectCardData[] }) {
-  // FIRST-RUN BRANCH — render the new beautiful empty/first-run state
-  // and skip all the populated chrome. The grid is REAL-data-only; the
-  // mold cards are descriptive of the molds (not fake user projects).
+export function ProjectsAi({
+  cards,
+  stats,
+}: {
+  cards: ProjectCardData[];
+  stats: DashboardStats;
+}) {
+  // FIRST-RUN BRANCH — render the beautiful empty/first-run state and skip
+  // all populated chrome (header, stat row, filters). REAL-data-only.
   if (cards.length === 0) {
     return <ProjectsEmptyState />;
   }
 
-  return <ProjectsPopulated cards={cards} />;
+  return <ProjectsPopulated cards={cards} stats={stats} />;
 }
 
 // ===========================================================================
@@ -67,10 +68,7 @@ function ProjectsEmptyState() {
       {/* Centered hero. */}
       <div className="flex flex-col items-center gap-6 text-center">
         <div className="flex items-center gap-3">
-          <span
-            aria-hidden
-            className="h-px w-9 bg-lq-aurora/60"
-          />
+          <span aria-hidden className="h-px w-9 bg-lq-aurora/60" />
           <span className="font-code text-[11px] uppercase tracking-[0.35em] text-lq-aurora">
             Your workshop · empty
           </span>
@@ -101,9 +99,7 @@ function ProjectsEmptyState() {
         </LiquidGlass>
       </div>
 
-      {/* Quick-start gallery — the four mold cards from the landing,
-          adapted via the shared MoldGallery. Descriptive of the molds,
-          not fake user projects. */}
+      {/* Quick-start gallery — the four mold cards from the landing. */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3 px-1">
           <span className="font-code text-[10px] uppercase tracking-[0.35em] text-lq-ink-faint">
@@ -121,10 +117,46 @@ function ProjectsEmptyState() {
 }
 
 // ===========================================================================
-// Populated branch — unchanged from the prior commit
+// Stat row — v2 workspace summary. All values REAL.
 // ===========================================================================
 
-function ProjectsPopulated({ cards }: { cards: ProjectCardData[] }) {
+function Stat({
+  value,
+  label,
+  valueClass,
+}: {
+  value: string;
+  label: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="rounded-[14px] border border-lq-line bg-[rgba(255,255,255,0.025)] p-4">
+      <div
+        className={
+          'font-ui text-[26px] font-extrabold leading-none tracking-[-0.02em] text-lq-ink ' +
+          (valueClass ?? '')
+        }
+      >
+        {value}
+      </div>
+      <div className="mt-2 font-code text-[11px] uppercase tracking-[0.12em] text-lq-ink-faint">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+// ===========================================================================
+// Populated branch
+// ===========================================================================
+
+function ProjectsPopulated({
+  cards,
+  stats,
+}: {
+  cards: ProjectCardData[];
+  stats: DashboardStats;
+}) {
   const [moldKey, setMoldKey] = useState<MoldKey>('all');
   const [statusKey, setStatusKey] = useState<StatusKey>('all');
   const [sort, setSort] = useState<SortKey>('newest');
@@ -147,17 +179,13 @@ function ProjectsPopulated({ cards }: { cards: ProjectCardData[] }) {
     return c;
   }, [annotated, cards.length]);
 
-  // Filter: REUSES filterByMold (the same pure helper the loader uses for
-  // mold spaces) — semantics preserved, surface restyled.
   const filtered = useMemo(() => {
     let r: Annotated[] = annotated;
     if (moldKey !== 'all') r = filterByMold(r, moldKey) as Annotated[];
-    if (statusKey !== 'all')
-      r = r.filter((a) => a._status === statusKey);
+    if (statusKey !== 'all') r = r.filter((a) => a._status === statusKey);
     return r;
   }, [annotated, moldKey, statusKey]);
 
-  // Sort. The loader returns newest-first; oldest = reverse.
   const sorted = useMemo(
     () => (sort === 'newest' ? filtered : [...filtered].reverse()),
     [filtered, sort],
@@ -166,13 +194,13 @@ function ProjectsPopulated({ cards }: { cards: ProjectCardData[] }) {
   const isFiltering = moldKey !== 'all' || statusKey !== 'all';
 
   return (
-    <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-2 py-12 font-ui text-lq-ink">
+    <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-7 px-2 py-12 font-ui text-lq-ink">
       {/* Header. */}
       <header className="flex flex-wrap items-end justify-between gap-6">
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
             <span className="font-code text-[11px] uppercase tracking-[0.35em] text-lq-aurora">
-              Overview · /projects
+              Workspace
             </span>
             <span
               aria-hidden
@@ -182,28 +210,6 @@ function ProjectsPopulated({ cards }: { cards: ProjectCardData[] }) {
           <h1 className="font-ui text-4xl font-extrabold tracking-[-0.02em] text-lq-ink sm:text-5xl">
             Projects
           </h1>
-          {/* Count summary — colored numerals; reflects the REAL annotated data. */}
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-code text-[12px] text-lq-ink-faint">
-            <span className="text-lq-ink-dim">
-              <span className="text-lq-ink">{counts.total}</span> total
-            </span>
-            <span>·</span>
-            <span>
-              <span className="text-lq-mint">{counts.live}</span> live
-            </span>
-            <span>·</span>
-            <span>
-              <span className="text-lq-aurora">{counts.forging}</span> forging
-            </span>
-            <span>·</span>
-            <span>
-              <span className="text-lq-amber">{counts.gate}</span> gate
-            </span>
-            <span>·</span>
-            <span>
-              <span className="text-lq-ink-dim">{counts.paused}</span> paused
-            </span>
-          </p>
         </div>
 
         <div className="flex items-center gap-4">
@@ -247,6 +253,21 @@ function ProjectsPopulated({ cards }: { cards: ProjectCardData[] }) {
           </LiquidGlass>
         </div>
       </header>
+
+      {/* Stat row — all REAL: active forges + this-month spend + live + builds. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat value={String(counts.total - counts.paused)} label="Active forges" />
+        <Stat
+          value={'$' + stats.monthlySpendUsd.toFixed(2)}
+          label="Spend · this month"
+        />
+        <Stat
+          value={String(counts.live)}
+          label="Live"
+          valueClass="text-lq-mint"
+        />
+        <Stat value={String(stats.totalBuilds)} label="Builds · total" />
+      </div>
 
       {/* Filter bar — mold chips + status chips. */}
       <div className="flex flex-col gap-3">
@@ -309,8 +330,6 @@ function ProjectsPopulated({ cards }: { cards: ProjectCardData[] }) {
           ))}
         </ul>
       ) : (
-        // Filter-mismatch — there ARE projects, just none match the chips.
-        // (Zero REAL projects renders the first-run hero above, never this.)
         <div className="flex flex-1 items-center justify-center py-10">
           <LiquidGlass
             as="div"

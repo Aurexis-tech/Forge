@@ -25,15 +25,15 @@ import type { ProjectKind } from '@/lib/types';
 
 const ACCENT_BG: Record<MoldAccent, string> = {
   aurora: 'bg-lq-aurora',
+  blue: 'bg-lq-blue',
   violet: 'bg-lq-violet',
-  mint: 'bg-lq-mint',
-  amber: 'bg-lq-amber',
+  magenta: 'bg-lq-magenta',
 };
 const ACCENT_TEXT: Record<MoldAccent, string> = {
   aurora: 'text-lq-aurora',
+  blue: 'text-lq-blue',
   violet: 'text-lq-violet',
-  mint: 'text-lq-mint',
-  amber: 'text-lq-amber',
+  magenta: 'text-lq-magenta',
 };
 
 export async function MoldSpaceAi({ mold }: { mold: ProjectKind }) {

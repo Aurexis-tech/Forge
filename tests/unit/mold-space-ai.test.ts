@@ -47,27 +47,27 @@ describe('MOLD_IDENTITIES', () => {
     expect(a.ctaLabel).toMatch(/Forge a new agent/);
   });
 
-  it('Systems = violet (02/04), tagline "coordinated"', () => {
+  it('Systems = blue (02/04), tagline "coordinated"', () => {
     const s = MOLD_IDENTITIES.system;
-    expect(s.accent).toBe('violet');
+    expect(s.accent).toBe('blue');
     expect(s.ordinal).toBe(2);
     expect(s.name).toBe('Systems');
     expect(s.tagline).toBe('coordinated');
     expect(s.href).toBe('/systems');
   });
 
-  it('Software = mint (03/04), tagline "the apps"', () => {
+  it('Software = violet (03/04), tagline "the apps"', () => {
     const s = MOLD_IDENTITIES.software;
-    expect(s.accent).toBe('mint');
+    expect(s.accent).toBe('violet');
     expect(s.ordinal).toBe(3);
     expect(s.name).toBe('Software');
     expect(s.tagline).toBe('the apps');
     expect(s.href).toBe('/software');
   });
 
-  it('Infrastructure = amber (04/04), tagline "the machinery"', () => {
+  it('Infrastructure = magenta (04/04), tagline "the machinery"', () => {
     const i = MOLD_IDENTITIES.infrastructure;
-    expect(i.accent).toBe('amber');
+    expect(i.accent).toBe('magenta');
     expect(i.ordinal).toBe(4);
     expect(i.name).toBe('Infrastructure');
     expect(i.tagline).toBe('the machinery');

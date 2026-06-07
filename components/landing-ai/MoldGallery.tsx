@@ -16,23 +16,23 @@ import { MOLD_SHOWCASE, type MoldAccent } from '@/lib/landing-demo';
 
 const DOT: Record<MoldAccent, string> = {
   aurora: 'bg-lq-aurora',
+  blue: 'bg-lq-blue',
   violet: 'bg-lq-violet',
-  mint: 'bg-lq-mint',
-  amber: 'bg-lq-amber',
+  magenta: 'bg-lq-magenta',
 };
 const TEXT: Record<MoldAccent, string> = {
   aurora: 'text-lq-aurora',
+  blue: 'text-lq-blue',
   violet: 'text-lq-violet',
-  mint: 'text-lq-mint',
-  amber: 'text-lq-amber',
+  magenta: 'text-lq-magenta',
 };
 // Accent rim glow on hover (Tailwind arbitrary — the lq vars don't carry
 // an alpha channel, so we use explicit rgba here).
 const RIM: Record<MoldAccent, string> = {
   aurora: 'group-hover:shadow-[0_0_44px_-10px_rgba(95,230,255,0.5)]',
+  blue: 'group-hover:shadow-[0_0_44px_-10px_rgba(108,140,255,0.5)]',
   violet: 'group-hover:shadow-[0_0_44px_-10px_rgba(167,139,250,0.5)]',
-  mint: 'group-hover:shadow-[0_0_44px_-10px_rgba(110,231,183,0.5)]',
-  amber: 'group-hover:shadow-[0_0_44px_-10px_rgba(251,191,36,0.5)]',
+  magenta: 'group-hover:shadow-[0_0_44px_-10px_rgba(232,121,249,0.5)]',
 };
 
 interface Props {

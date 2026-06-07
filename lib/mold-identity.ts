@@ -5,12 +5,12 @@
 
 import type { ProjectKind } from '@/lib/types';
 
-export type MoldAccent = 'aurora' | 'violet' | 'mint' | 'amber';
+export type MoldAccent = 'aurora' | 'blue' | 'violet' | 'magenta';
 
 export interface MoldIdentity {
   /** The canonical mold key (matches lib/types ProjectKind). */
   readonly mold: ProjectKind;
-  /** The lq accent: agents=aurora, systems=violet, software=mint, infra=amber. */
+  /** The lq accent: agents=aurora, systems=blue, software=violet, infra=magenta. */
   readonly accent: MoldAccent;
   /** 1..4 — the slot in the 4-mold spine. */
   readonly ordinal: 1 | 2 | 3 | 4;
@@ -51,7 +51,7 @@ const A: ReadonlyArray<MoldIdentity> = [
   },
   {
     mold: 'system',
-    accent: 'violet',
+    accent: 'blue',
     ordinal: 2,
     eyebrow: 'Mold · 02 / 04 · Systems',
     name: 'Systems',
@@ -67,7 +67,7 @@ const A: ReadonlyArray<MoldIdentity> = [
   },
   {
     mold: 'software',
-    accent: 'mint',
+    accent: 'violet',
     ordinal: 3,
     eyebrow: 'Mold · 03 / 04 · Software',
     name: 'Software',
@@ -83,7 +83,7 @@ const A: ReadonlyArray<MoldIdentity> = [
   },
   {
     mold: 'infrastructure',
-    accent: 'amber',
+    accent: 'magenta',
     ordinal: 4,
     eyebrow: 'Mold · 04 / 04 · Infrastructure',
     name: 'Infrastructure',

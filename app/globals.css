@@ -73,6 +73,10 @@
   --amber: #fbbf24;
   --mint: #6ee7b7;
   --rose: #fb7185;
+  /* v2 mold accents (folded from forge-system): System + Infrastructure.
+     aurora=Agent (cyan), violet=Software; mint/amber stay live/gate status. */
+  --blue: #6c8cff;
+  --magenta: #e879f9;
   /* --line reused from the forge set above (identical value). */
   --grid: rgba(255, 255, 255, 0.012);
   --ease: cubic-bezier(0.16, 1, 0.3, 1);

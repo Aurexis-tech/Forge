@@ -8,12 +8,16 @@
 
 import { ProjectsAi } from '@/components/projects-ai/ProjectsAi';
 import { requireUser } from '@/lib/auth';
-import { loadProjectCards } from '@/lib/project-cards';
+import { loadProjectCards, loadDashboardStats } from '@/lib/project-cards';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ProjectsPage() {
   const user = await requireUser();
   const cards = await loadProjectCards(user.id);
-  return <ProjectsAi cards={cards} />;
+  const stats = await loadDashboardStats(
+    user.id,
+    cards.map((c) => c.project.id),
+  );
+  return <ProjectsAi cards={cards} stats={stats} />;
 }

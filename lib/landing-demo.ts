@@ -110,7 +110,7 @@ export const DEMO_LIVE_INDEX = DEMO_STAGES.length - 1;
 // representative example + illustrative stats + a link into that mold space.
 // ---------------------------------------------------------------------------
 
-export type MoldAccent = 'aurora' | 'violet' | 'mint' | 'amber';
+export type MoldAccent = 'aurora' | 'blue' | 'violet' | 'magenta';
 
 export interface MoldShowcaseCard {
   mold: string;
@@ -134,7 +134,7 @@ export const MOLD_SHOWCASE: ReadonlyArray<MoldShowcaseCard> = [
   },
   {
     mold: 'Systems',
-    accent: 'violet',
+    accent: 'blue',
     href: '/systems',
     name: 'Systems',
     example: 'competitor-watch',
@@ -143,7 +143,7 @@ export const MOLD_SHOWCASE: ReadonlyArray<MoldShowcaseCard> = [
   },
   {
     mold: 'Software',
-    accent: 'mint',
+    accent: 'violet',
     href: '/software',
     name: 'Software',
     example: 'expense-flow',
@@ -152,7 +152,7 @@ export const MOLD_SHOWCASE: ReadonlyArray<MoldShowcaseCard> = [
   },
   {
     mold: 'Infrastructure',
-    accent: 'amber',
+    accent: 'magenta',
     href: '/infrastructure',
     name: 'Infrastructure',
     example: 'team-postgres',

@@ -78,9 +78,9 @@ describe('MOLD_SHOWCASE gallery', () => {
     expect(MOLD_SHOWCASE).toHaveLength(4);
     expect(MOLD_SHOWCASE.map((m) => m.accent)).toEqual([
       'aurora',
+      'blue',
       'violet',
-      'mint',
-      'amber',
+      'magenta',
     ]);
     expect(MOLD_SHOWCASE.map((m) => m.href)).toEqual([
       '/agents',
@@ -106,9 +106,7 @@ describe('MOLD_SHOWCASE gallery', () => {
 describe('app/page.tsx — migrated Landing', () => {
   const page = read('app/page.tsx');
 
-  it('mounts AurexisAmbient + composes AiNav + LiveDemo + MoldShowcase', () => {
-    expect(page).toMatch(/import\s*\{\s*AurexisAmbient\s*\}/);
-    expect(page).toMatch(/<AurexisAmbient\s*\/>/);
+  it('composes AiNav + LiveDemo + MoldShowcase (global backdrop now lives in the root layout)', () => {
     expect(page).toMatch(/import\s*\{\s*AiNav\s*\}/);
     expect(page).toMatch(/<AiNav\s*\/>/);
     expect(page).toMatch(/<LiveDemo\s*\/>/);
@@ -226,8 +224,8 @@ describe('components/landing-ai/LiveDemo', () => {
 // 6. Scoped backdrop swap — Landing flips, (app) does NOT
 // ===========================================================================
 describe('scoped backdrop migration', () => {
-  it('Landing mounts AurexisAmbient', () => {
-    expect(read('app/page.tsx')).toMatch(/<AurexisAmbient\s*\/>/);
+  it('the global ConstellationBackground is mounted once in the root layout', () => {
+    expect(read('app/layout.tsx')).toMatch(/<ConstellationBackground\s*\/>/);
   });
 
   it('the (app) shell serves the forge backdrop via the AppBackdrop switch', () => {

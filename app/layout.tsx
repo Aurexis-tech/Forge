@@ -10,7 +10,7 @@ import {
   Fraunces,
   Spectral,
   IBM_Plex_Mono,
-  Inter,
+  Archivo,
   JetBrains_Mono,
 } from 'next/font/google';
 import './globals.css';
@@ -53,9 +53,9 @@ const mono = IBM_Plex_Mono({
 // onto <html> so they're AVAILABLE, but nothing references them yet (the
 // body + forge primitives stay on Fraunces/Spectral/IBM Plex Mono until
 // pages migrate). Loaded now so the migration prompts have them ready.
-const ui = Inter({
+const ui = Archivo({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
+  weight: ['400', '500', '600', '700', '800', '900'],
   style: ['normal'],
   variable: '--font-ui',
   display: 'swap',

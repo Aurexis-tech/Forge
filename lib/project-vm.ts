@@ -19,7 +19,7 @@ export type ProjectVmStatus =
   | 'gate'
   | 'forging';
 
-export type ProjectAccent = 'aurora' | 'violet' | 'mint' | 'amber';
+export type ProjectAccent = 'aurora' | 'blue' | 'violet' | 'magenta';
 
 export type ProjectDotTone =
   | 'aurora'
@@ -51,9 +51,9 @@ export interface ProjectVm {
 
 const MOLD_ACCENT: Record<Exclude<ProjectMold, 'unclassified'>, ProjectAccent> = {
   agent: 'aurora',
-  system: 'violet',
-  software: 'mint',
-  infrastructure: 'amber',
+  system: 'blue',
+  software: 'violet',
+  infrastructure: 'magenta',
 };
 
 const MOLD_LABEL: Record<ProjectMold, string> = {

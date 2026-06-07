@@ -101,8 +101,8 @@ describe('tailwind.config.ts — namespaced lq.* + new fonts', () => {
 describe('app/layout.tsx — new fonts added, forge fonts untouched', () => {
   const layout = read('app/layout.tsx');
 
-  it('loads Inter + JetBrains Mono via next/font with the new var names', () => {
-    expect(layout).toMatch(/Inter,/);
+  it('loads Archivo + JetBrains Mono via next/font with the new var names', () => {
+    expect(layout).toMatch(/Archivo,/);
     expect(layout).toMatch(/JetBrains_Mono,/);
     expect(layout).toMatch(/variable:\s*'--font-ui'/);
     expect(layout).toMatch(/variable:\s*'--font-code'/);
@@ -405,7 +405,8 @@ describe('un-migrated (app) routes still get the forge backdrop (via the switch)
     expect(appBackdrop).toMatch(/isMigratedRoute/);
   });
 
-  it('and AurexisAmbient only on the migrated branch', () => {
-    expect(appBackdrop).toMatch(/<AurexisAmbient\s*\/>/);
+  it('and renders nothing on the migrated branch (global ConstellationBackground shows through)', () => {
+    expect(appBackdrop).toMatch(/return null/);
+    expect(appBackdrop).not.toMatch(/AurexisAmbient/);
   });
 });
