@@ -62,7 +62,7 @@ export const runtime = 'nodejs';
 // `terraform init` + `terraform plan -json` are bounded by the
 // CloudProvider's own timeout (5 min). 600s ceiling here gives
 // headroom for the surrounding DB writes + audit log.
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 interface RouteContext {
   params: { id: string };

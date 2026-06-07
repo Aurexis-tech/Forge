@@ -68,7 +68,7 @@ import { auditEngineError } from '@/lib/engine/observability/audit-engine-error'
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 const SecretsSchema = z.record(z.string().min(1), z.string().max(8000));
 const BodySchema = z.object({

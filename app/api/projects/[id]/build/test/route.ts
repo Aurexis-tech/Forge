@@ -17,7 +17,7 @@ import { auditEngineError } from '@/lib/engine/observability/audit-engine-error'
 import { getServerSupabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 interface RouteContext {
   params: { id: string };

@@ -53,7 +53,7 @@ export const runtime = 'nodejs';
 // Destroy can take longer than apply for resources that have
 // dependent shutdown sequences (RDS final snapshots, S3 lifecycle
 // drains). 10 min ceiling matches apply.
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 const BodySchema = z.object({
   typed_confirm: z.string().trim().min(1).max(200),

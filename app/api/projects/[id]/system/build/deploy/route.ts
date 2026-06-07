@@ -54,7 +54,7 @@ import { getServerSupabase } from '@/lib/supabase';
 import type { BuildPlan } from '@/lib/engine/planner/schema';
 
 export const runtime = 'nodejs';
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 const SecretsSchema = z.record(z.string().min(1), z.string().max(8000));
 const BodySchema = z.object({

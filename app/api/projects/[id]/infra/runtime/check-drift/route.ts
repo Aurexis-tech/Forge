@@ -39,7 +39,7 @@ import { getServerSupabase } from '@/lib/supabase';
 export const runtime = 'nodejs';
 // Drift = `terraform init -input=false` + `terraform plan -json`.
 // Same ceiling as the P4-5a plan route.
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 interface RouteContext {
   params: { id: string };

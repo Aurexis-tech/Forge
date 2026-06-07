@@ -62,7 +62,7 @@ export const runtime = 'nodejs';
 // `terraform apply` against a real-world plan can take tens of
 // minutes for a multi-resource graph. 10 min ceiling matches the
 // CloudProvider's own bounded run.
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 interface RouteContext {
   params: { id: string };

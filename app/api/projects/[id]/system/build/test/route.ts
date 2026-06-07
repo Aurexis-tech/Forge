@@ -31,7 +31,7 @@ import { getServerSupabase } from '@/lib/supabase';
 export const runtime = 'nodejs';
 // Same ceiling as the Phase 1 sandbox route. Self-heal adds at most
 // one extra build+smoke pass, still inside SANDBOX_LIFETIME_MS.
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 interface RouteContext {
   params: { id: string };
