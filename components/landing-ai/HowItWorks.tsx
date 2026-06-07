@@ -1,114 +1,191 @@
-// HowItWorks — landing section 2. The canonical 8-station loop (Intent → Live)
-// with a plain-language lead per station. Stations 6 and 7 are the human GATES
-// (amber) — the only points that wait on the visitor's explicit yes.
+'use client';
 
-import { LiquidGlass } from '@/components/lq/LiquidGlass';
+// HowItWorks — landing section 2. The canonical 8-station loop rendered as an
+// elevated pipeline: a connecting spine, grouped headers ("builds silently" →
+// "your approval" → "live"), and gate lock-nodes on stations 6 & 7 (the only
+// points that wait on the visitor's yes). Steps reveal on scroll. Styling lives
+// in HowItWorks.module.css, mapped to the site's lq.* tokens.
+
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { SectionHeading } from './SectionHeading';
+import styles from './HowItWorks.module.css';
 
 interface Station {
   n: string;
   title: string;
-  body: string;
-  gate?: boolean;
+  tag: string;
+  desc: string;
+  kind?: 'gate' | 'live';
 }
 
-const STATIONS: ReadonlyArray<Station> = [
+interface Group {
+  label: string;
+  tone?: 'gate' | 'live';
+  steps: ReadonlyArray<Station>;
+}
+
+const GROUPS: ReadonlyArray<Group> = [
   {
-    n: '1',
-    title: 'Intent',
-    body: 'You describe the outcome in plain words. Forge asks a few sharp questions until the idea is fully understood.',
+    label: 'Builds silently · no input from you',
+    steps: [
+      {
+        n: '1',
+        title: 'Intent',
+        tag: 'auto',
+        desc: 'You describe the outcome in plain words. Forge asks a few sharp questions until the idea is fully understood.',
+      },
+      {
+        n: '2',
+        title: 'Spec',
+        tag: 'auto',
+        desc: 'Your words become a structured spec — shown to you before anything is built.',
+      },
+      {
+        n: '3',
+        title: 'Plan',
+        tag: 'auto',
+        desc: 'Forge works out how to build it and what kind of thing it is, then routes to the right mold.',
+      },
+      {
+        n: '4',
+        title: 'Code',
+        tag: 'auto',
+        desc: 'The builder generates it on top of vetted scaffolds, then lints and tests it.',
+      },
+      {
+        n: '5',
+        title: 'Sandbox',
+        tag: 'auto',
+        desc: 'It runs in a sealed, single-use environment first. If it breaks, it breaks safely in there — never on you.',
+      },
+    ],
   },
   {
-    n: '2',
-    title: 'Spec',
-    body: 'Your words become a structured spec. You see it before anything is built.',
+    label: 'Your approval · nothing happens without your yes',
+    tone: 'gate',
+    steps: [
+      {
+        n: '6',
+        title: 'Repo',
+        tag: 'Your yes',
+        desc: 'Your yes → a private repo in your GitHub, code pushed. You own it from the first commit.',
+        kind: 'gate',
+      },
+      {
+        n: '7',
+        title: 'Deploy',
+        tag: 'Your yes',
+        desc: 'Your yes → a live URL. Nothing public happens unprompted.',
+        kind: 'gate',
+      },
+    ],
   },
   {
-    n: '3',
-    title: 'Plan',
-    body: 'Forge works out how to build it and what kind of thing it is, then routes to the right mold.',
-  },
-  {
-    n: '4',
-    title: 'Code',
-    body: 'The builder generates it on top of vetted scaffolds, then lints and tests it.',
-  },
-  {
-    n: '5',
-    title: 'Sandbox',
-    body: 'It runs in a sealed, single-use environment first. If it breaks, it breaks safely in there — never on you.',
-  },
-  {
-    n: '6',
-    title: 'Repo',
-    body: 'Your yes → a private repo in your GitHub, code pushed.',
-    gate: true,
-  },
-  {
-    n: '7',
-    title: 'Deploy',
-    body: 'Your yes → a live URL.',
-    gate: true,
-  },
-  {
-    n: '8',
-    title: 'Live',
-    body: "It's yours, running — and kept alive around the clock if it needs to be.",
+    label: 'Live',
+    tone: 'live',
+    steps: [
+      {
+        n: '8',
+        title: 'Live',
+        tag: 'Running',
+        desc: "It's yours, running — and kept alive around the clock if it needs to be.",
+        kind: 'live',
+      },
+    ],
   },
 ];
 
-export function HowItWorks() {
+function LockKey() {
   return (
-    <section className="mx-auto w-full max-w-7xl px-6 py-20 sm:px-10">
+    <span className={styles.key}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="#1a1205" strokeWidth="2.4">
+        <path d="M12 2a5 5 0 00-5 5v3H6v10h12V10h-1V7a5 5 0 00-5-5zm-3 8V7a3 3 0 116 0v3H9z" />
+      </svg>
+    </span>
+  );
+}
+
+export function HowItWorks() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) =>
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            setInView(true);
+            io.disconnect();
+          }
+        }),
+      { threshold: 0.18 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <section className="mx-auto w-full max-w-5xl px-6 py-20 sm:px-10">
       <SectionHeading
         eyebrow="How it works"
-        title="A sentence goes in. A running product comes out."
-        intro="Eight stations, one continuous loop. You only ever touch the two that matter — the moments it asks permission."
+        title={
+          <>
+            A sentence goes in.
+            <br />A running product comes out.
+          </>
+        }
+        intro="Eight stations, one continuous loop. You only ever touch the two that stop and ask."
       />
 
-      <LiquidGlass as="div" className="mt-12 overflow-hidden p-0 font-ui">
-        <ol className="divide-y divide-lq-line">
-          {STATIONS.map((s) => (
-            <li
-              key={s.n}
-              className={
-                'flex items-start gap-5 px-5 py-5 sm:px-7 ' +
-                (s.gate ? 'bg-[rgba(251,191,36,0.045)]' : '')
-              }
+      <div ref={ref} className={inView ? `${styles.pipe} ${styles.in}` : styles.pipe}>
+        {GROUPS.map((g) => (
+          <Fragment key={g.label}>
+            <p
+              className={[
+                styles.pipeGroup,
+                g.tone === 'gate'
+                  ? styles.gGate
+                  : g.tone === 'live'
+                    ? styles.gLive
+                    : undefined,
+              ]
+                .filter(Boolean)
+                .join(' ')}
             >
-              <span
-                aria-hidden
-                className={
-                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-code text-[14px] ' +
-                  (s.gate
-                    ? 'bg-[rgba(251,191,36,0.14)] text-lq-amber'
-                    : 'bg-lq-elev-2 text-lq-ink-dim')
-                }
+              {g.label}
+            </p>
+            {g.steps.map((s) => (
+              <div
+                key={s.n}
+                className={[
+                  styles.step,
+                  s.kind === 'gate'
+                    ? styles.sGate
+                    : s.kind === 'live'
+                      ? styles.sLive
+                      : undefined,
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
               >
-                {s.n}
-              </span>
-              <div className="flex flex-col gap-1">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h3 className="font-ui text-lg font-semibold text-lq-ink">{s.title}</h3>
-                  {s.gate ? (
-                    <span className="rounded-full bg-[rgba(251,191,36,0.14)] px-2.5 py-0.5 font-code text-[9px] uppercase tracking-[0.2em] text-lq-amber">
-                      Gate · your yes
-                    </span>
-                  ) : null}
+                <div className={styles.node}>
+                  {s.n}
+                  {s.kind === 'gate' ? <LockKey /> : null}
                 </div>
-                <p className="text-[15px] leading-relaxed text-lq-ink-dim">{s.body}</p>
+                <div className={styles.stepBody}>
+                  <div className={styles.stepHead}>
+                    <span className={styles.stepTitle}>{s.title}</span>
+                    <span className={styles.stepTag}>{s.tag}</span>
+                  </div>
+                  <p className={styles.stepDesc}>{s.desc}</p>
+                </div>
               </div>
-            </li>
-          ))}
-        </ol>
-      </LiquidGlass>
-
-      <p className="mt-8 max-w-3xl text-[15px] leading-relaxed text-lq-ink-dim">
-        Stations <span className="font-medium text-lq-amber">6</span> and{' '}
-        <span className="font-medium text-lq-amber">7</span> are the only ones that
-        need you. Nothing official or public ever happens without an explicit,
-        in-the-moment yes.
-      </p>
+            ))}
+          </Fragment>
+        ))}
+      </div>
     </section>
   );
 }

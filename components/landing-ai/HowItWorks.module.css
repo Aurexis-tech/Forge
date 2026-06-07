@@ -1,0 +1,194 @@
+/* HowItWorks.module.css — the elevated 8-station pipeline (spine + grouped
+   headers + gate lock-nodes + live node). Colours/fonts mapped to the site's
+   lq.* tokens: var(--amber) for gates, var(--mint) for live, var(--font-ui) /
+   var(--font-code) for type. No background — the page's AurexisAmbient shows
+   through. Box-sizing / margin resets come from Tailwind's preflight. */
+
+.pipe {
+  margin-top: 56px;
+  position: relative;
+}
+
+.pipeGroup {
+  font-family: var(--font-code);
+  font-size: 10.5px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 18px 84px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pipeGroup:not(:first-child) {
+  margin-top: 26px;
+}
+.pipeGroup::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
+.gGate {
+  color: var(--amber);
+}
+.gLive {
+  color: var(--mint);
+}
+
+.step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  align-items: flex-start;
+  padding: 18px 18px 18px 0;
+  border-radius: 14px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.in .step {
+  opacity: 1;
+  transform: none;
+}
+.step:hover {
+  background: rgba(255, 255, 255, 0.022);
+}
+.step + .step {
+  margin-top: 2px;
+}
+
+/* the vertical spine */
+.step::before {
+  content: '';
+  position: absolute;
+  left: 41px;
+  top: -8px;
+  bottom: -8px;
+  width: 2px;
+  background: var(--line);
+}
+.step:first-of-type::before {
+  top: 34px;
+}
+.sLive::before {
+  display: none;
+}
+.sGate::before {
+  background: rgba(251, 191, 36, 0.42);
+}
+
+.node {
+  position: relative;
+  z-index: 2;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-code);
+  font-size: 14px;
+  color: var(--ink-dim);
+  background: #0a0c12;
+  border: 1px solid var(--line);
+  transition: transform 0.3s ease;
+}
+.step:hover .node {
+  transform: scale(1.06);
+}
+.sGate .node {
+  color: var(--amber);
+  border-color: rgba(251, 191, 36, 0.42);
+  background: radial-gradient(circle at 50% 40%, rgba(251, 191, 36, 0.12), #0a0c12 70%);
+  box-shadow: 0 0 0 5px rgba(251, 191, 36, 0.06), 0 0 22px -4px rgba(251, 191, 36, 0.28);
+}
+.sLive .node {
+  color: var(--mint);
+  border-color: rgba(110, 231, 183, 0.4);
+  background: radial-gradient(circle at 50% 40%, rgba(110, 231, 183, 0.12), #0a0c12 70%);
+  box-shadow: 0 0 22px -6px rgba(110, 231, 183, 0.4);
+}
+.key {
+  position: absolute;
+  bottom: -5px;
+  right: -5px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--amber);
+  display: grid;
+  place-items: center;
+}
+.key svg {
+  width: 10px;
+  height: 10px;
+  display: block;
+}
+
+.stepBody {
+  padding-top: 2px;
+}
+.stepHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.stepTitle {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink-base);
+}
+.stepTag {
+  font-family: var(--font-code);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-left: auto;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 100px;
+}
+.sGate .stepTag {
+  color: var(--amber);
+  border-color: rgba(251, 191, 36, 0.42);
+  background: rgba(251, 191, 36, 0.12);
+}
+.sLive .stepTag {
+  color: var(--mint);
+  border-color: rgba(110, 231, 183, 0.35);
+}
+.stepDesc {
+  color: var(--ink-dim);
+  font-size: 15.5px;
+  margin-top: 6px;
+  max-width: 60ch;
+}
+
+@media (max-width: 640px) {
+  .pipeGroup {
+    margin-left: 0;
+  }
+  .step {
+    grid-template-columns: 60px 1fr;
+  }
+  .step::before {
+    left: 29px;
+  }
+  .node {
+    width: 34px;
+    height: 34px;
+    font-size: 12px;
+  }
+  .stepTag {
+    margin-left: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .step {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
