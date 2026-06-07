@@ -5,12 +5,12 @@
 // integration OAuth flows (GitHub, Vercel) live elsewhere and are
 // orthogonal to platform auth.
 
-import { useState, type FormEvent } from 'react';
+import { Suspense, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { GlassPanel } from '@/components/GlassPanel';
 
-export default function SignInPage() {
+function SignInForm() {
   const params = useSearchParams();
   const next = params.get('next') ?? '/projects';
   const [email, setEmail] = useState('');
@@ -116,5 +116,17 @@ export default function SignInPage() {
         </div>
       </GlassPanel>
     </div>
+  );
+}
+
+// useSearchParams() forces a client bail-out, which fails static prerender
+// unless it sits under a Suspense boundary. Wrap the form so /sign-in builds.
+export default function SignInPage() {
+  return (
+    <Suspense
+      fallback={<div className="flex flex-1 items-center justify-center py-12" />}
+    >
+      <SignInForm />
+    </Suspense>
   );
 }
