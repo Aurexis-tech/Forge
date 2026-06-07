@@ -14,6 +14,7 @@ import {
   JetBrains_Mono,
 } from 'next/font/google';
 import './globals.css';
+import { ConstellationBackground } from '@/components/lq/ConstellationBackground';
 
 // THE BRAND TYPE HIERARCHY (forge design language):
 //   display = Fraunces      — headings, the moment-of-arrival serif
@@ -91,7 +92,10 @@ export default function RootLayout({
       className={`${display.variable} ${body.variable} ${mono.variable} ${ui.variable} ${code.variable}`}
     >
       <body className="min-h-screen overflow-x-hidden bg-forge-void font-body text-forge-text">
-        {children}
+        {/* Global backdrop — the persistent constellation behind every page. */}
+        <ConstellationBackground />
+        {/* All page content sits above the zIndex-0 backdrop. */}
+        <div className="relative z-[1]">{children}</div>
       </body>
     </html>
   );

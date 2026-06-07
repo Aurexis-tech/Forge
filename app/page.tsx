@@ -6,7 +6,6 @@
 
 import Link from 'next/link';
 import { AiNav } from '@/components/lq/AiNav';
-import { AurexisAmbient } from '@/components/lq/AurexisAmbient';
 import { LiquidGlass } from '@/components/lq/LiquidGlass';
 import { LiveDemo } from '@/components/landing-ai/LiveDemo';
 import { MoldShowcase } from '@/components/landing-ai/MoldShowcase';
@@ -26,10 +25,6 @@ export const metadata = {
 export default function LandingPage() {
   return (
     <>
-      {/* Scoped backdrop: AurexisAmbient lives on the Landing route only.
-          The (app) routes keep ForgeBackdrop (untouched). */}
-      <AurexisAmbient />
-
       <div className="relative z-10 flex min-h-screen flex-col font-ui text-lq-ink">
         <AiNav />
 

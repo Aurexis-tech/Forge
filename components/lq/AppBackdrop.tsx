@@ -14,13 +14,14 @@
 import { usePathname } from 'next/navigation';
 import { ForgeBackdrop } from '@/components/ForgeBackdrop';
 import { ForgeScene } from '@/components/ForgeScene';
-import { AurexisAmbient } from '@/components/lq/AurexisAmbient';
 import { isMigratedRoute } from '@/lib/migrated-routes';
 
 export function AppBackdrop() {
   const pathname = usePathname();
   if (isMigratedRoute(pathname)) {
-    return <AurexisAmbient />;
+    // Migrated routes defer to the global ConstellationBackground (mounted in
+    // app/layout.tsx) — render nothing here so it shows through.
+    return null;
   }
   return (
     <>
