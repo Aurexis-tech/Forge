@@ -488,6 +488,58 @@ export interface KillSwitch {
   created_at: string;
 }
 
+// ---------- Token wallet (platform-billing backbone) -----------------------
+// A per-user prepaid balance denominated in TOKENS. The single meter for the
+// whole platform: LLM debits real tokens 1:1; sandbox / runtime / infra cost
+// converts into the same token unit at the platform reference rate. Only
+// PLATFORM-key usage debits it — BYOK never touches it.
+
+export interface TokenWallet {
+  user_id: string;
+  balance_tokens: number;
+  lifetime_granted: number;
+  lifetime_spent: number;
+  low_balance_tokens: number;
+  updated_at: string;
+  created_at: string;
+}
+
+export type TokenEntryKind = 'topup' | 'grant' | 'debit' | 'refund' | 'adjustment';
+export type TokenSource =
+  | 'llm'
+  | 'sandbox'
+  | 'runtime'
+  | 'infra'
+  | 'manual'
+  | 'promo'
+  | 'payment'
+  | 'adjustment';
+
+export interface TokenLedgerEntry {
+  id: string;
+  user_id: string;
+  delta_tokens: number;
+  balance_after: number;
+  entry_kind: TokenEntryKind | string;
+  source: TokenSource | string;
+  project_id: string | null;
+  cost_event_id: string | null;
+  ref: string | null;
+  metadata: Json;
+  created_at: string;
+}
+
+// A purchasable top-up bundle. Defined in code (lib/engine/governance/
+// token-packages.ts) — prices include platform margin and are editable.
+export interface TokenPackage {
+  id: string;
+  name: string;
+  tokens: number;
+  price_usd: number;
+  price_inr: number;
+  badge?: string | null;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -662,6 +714,24 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<KillSwitch>;
+        Relationships: [];
+      };
+      token_wallets: {
+        Row: TokenWallet;
+        Insert: Omit<TokenWallet, 'updated_at' | 'created_at'> & {
+          updated_at?: string;
+          created_at?: string;
+        };
+        Update: Partial<TokenWallet>;
+        Relationships: [];
+      };
+      token_ledger: {
+        Row: TokenLedgerEntry;
+        Insert: Omit<TokenLedgerEntry, 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<TokenLedgerEntry>;
         Relationships: [];
       };
     };

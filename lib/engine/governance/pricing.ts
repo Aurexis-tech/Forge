@@ -203,3 +203,39 @@ export function projectedComputeCostUsd(
     ? sandboxCostUsd(expectedMs)
     : runtimeCostUsd(expectedMs);
 }
+
+// ============================================================================
+//                       TOKEN WALLET — USD ↔ tokens
+// ============================================================================
+// The prepaid wallet is denominated in TOKENS. LLM usage debits the real
+// token count 1:1. Everything else the platform meters (sandbox, runtime,
+// infra) is naturally priced in USD, so it converts into the SAME token unit
+// at this reference rate — one balance meters the whole platform.
+//
+// This rate is ALSO the implied sell price you set top-up packages against:
+// at $8 / 1M tokens, a 5M-token package "costs" ~$40 of platform value. Put
+// your margin in the package price (lib/engine/governance/token-packages.ts).
+// Override at deploy time with PRICING_TOKENS_USD_PER_MTOK.
+
+export const TOKENS_USD_PER_MTOK = 8.0;
+
+export function tokensUsdPerMtok(): number {
+  return envNum('PRICING_TOKENS_USD_PER_MTOK') ?? TOKENS_USD_PER_MTOK;
+}
+
+/**
+ * Convert a USD cost into wallet token-equivalents. Rounds UP so the platform
+ * never under-bills compute, and never returns negative.
+ */
+export function usdToTokens(usd: number): number {
+  if (!Number.isFinite(usd) || usd <= 0) return 0;
+  const perMtok = tokensUsdPerMtok();
+  if (perMtok <= 0) return 0;
+  return Math.ceil((usd / perMtok) * 1_000_000);
+}
+
+/** Inverse: a token balance expressed as an approximate USD value (display). */
+export function tokensToUsd(tokens: number): number {
+  if (!Number.isFinite(tokens) || tokens <= 0) return 0;
+  return (tokens / 1_000_000) * tokensUsdPerMtok();
+}
