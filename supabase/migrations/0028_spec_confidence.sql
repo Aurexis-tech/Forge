@@ -19,6 +19,4 @@
 alter table specs add column if not exists confidence_json jsonb;
 
 comment on column specs.confidence_json is
-  'Per-top-level-field confidence map (stated | inferred | guessed | missing). ' ||
-  'Optional metadata produced by lib/engine/spec/confidence.ts; consumed by the ' ||
-  'clarification loop + the show-spec gate. Existing reads ignore this column.';
+  'Per-top-level-field confidence map (stated | inferred | guessed | missing). Optional metadata produced by lib/engine/spec/confidence.ts; consumed by the clarification loop + the show-spec gate. Existing reads ignore this column.';

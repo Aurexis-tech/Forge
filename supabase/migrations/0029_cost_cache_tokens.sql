@@ -23,9 +23,7 @@ alter table public.cost_events
   add column if not exists cache_read_input_tokens integer not null default 0;
 
 comment on column public.cost_events.cache_creation_input_tokens is
-  'Anthropic prompt-cache: tokens WRITTEN to the cache on this call ' ||
-  '(billed at 1.25x base input, 5-minute TTL). Default 0.';
+  'Anthropic prompt-cache: tokens WRITTEN to the cache on this call (billed at 1.25x base input, 5-minute TTL). Default 0.';
 
 comment on column public.cost_events.cache_read_input_tokens is
-  'Anthropic prompt-cache: tokens READ from the cache on this call ' ||
-  '(billed at 0.1x base input — the savings lever). Default 0.';
+  'Anthropic prompt-cache: tokens READ from the cache on this call (billed at 0.1x base input — the savings lever). Default 0.';
