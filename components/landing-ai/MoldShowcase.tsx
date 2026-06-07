@@ -9,11 +9,20 @@
 // come from the shared MoldGallery.
 
 import { MoldGallery } from './MoldGallery';
+import { SectionHeading } from './SectionHeading';
 
 export function MoldShowcase() {
   return (
     <section id="molds" className="mx-auto w-full max-w-7xl px-6 py-20 sm:px-10">
-      <MoldGallery />
+      <SectionHeading
+        eyebrow="The four molds"
+        title="Four molds, rising in power."
+        intro="Examples of what a finished forge looks like — real run metrics land here after launch."
+        accent="mint"
+      />
+      <div className="mt-12">
+        <MoldGallery />
+      </div>
     </section>
   );
 }

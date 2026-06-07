@@ -82,7 +82,7 @@ export function AiNav() {
         variant="aurora"
         className="inline-flex items-center rounded-[14px] px-5 py-2.5 text-sm font-medium"
       >
-        Open
+        Launch
       </LiquidGlass>
     </nav>
   );

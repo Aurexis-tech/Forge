@@ -10,6 +10,12 @@ import { AurexisAmbient } from '@/components/lq/AurexisAmbient';
 import { LiquidGlass } from '@/components/lq/LiquidGlass';
 import { LiveDemo } from '@/components/landing-ai/LiveDemo';
 import { MoldShowcase } from '@/components/landing-ai/MoldShowcase';
+import { HowItWorks } from '@/components/landing-ai/HowItWorks';
+import { WhySafe } from '@/components/landing-ai/WhySafe';
+import { OneRun } from '@/components/landing-ai/OneRun';
+import { Pricing } from '@/components/landing-ai/Pricing';
+import { Faq } from '@/components/landing-ai/Faq';
+import { FinalCta } from '@/components/landing-ai/FinalCta';
 
 export const metadata = {
   title: 'Aurexis Forge — describe it, it builds itself',
@@ -81,8 +87,26 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Mold showcase. */}
+        {/* 2 · How it works — the eight-station loop. */}
+        <HowItWorks />
+
+        {/* 3 · The four molds. */}
         <MoldShowcase />
+
+        {/* 4 · Why it's safe — the three structural guarantees. */}
+        <WhySafe />
+
+        {/* 5 · One run, start to finish. */}
+        <OneRun />
+
+        {/* 6 · Pricing & BYOK. */}
+        <Pricing />
+
+        {/* 7 · FAQ. */}
+        <Faq />
+
+        {/* 8 · Final CTA. */}
+        <FinalCta />
 
         {/* Quiet footer. */}
         <footer className="mx-auto w-full max-w-7xl px-6 py-10 sm:px-10">
