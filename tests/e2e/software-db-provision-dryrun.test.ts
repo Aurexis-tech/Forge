@@ -515,6 +515,56 @@ describe('Phase 3-5a SOFTWARE db provisioning hermetic dry-run', () => {
   });
 
   // ========================================================================
+  // STORAGE MIGRATION (0002) — when the build has file uploads, the private
+  // bucket + owner-scoped storage RLS MUST also reach the live project, not
+  // just 0001. (Regression guard for the gap where 0002 was generated but
+  // never applied — leaving the live bucket + storage isolation absent.)
+  // ========================================================================
+  it('applies 0002_storage.sql too when the build has file uploads — bucket + storage RLS reach the live DB', async () => {
+    const db = createInMemoryDb();
+    dbHolder.current = db;
+    const { build } = seedSoftwareTested(db, 'tested');
+
+    // Add the storage migration to build_files (as codegen emits it when the
+    // spec declares file-upload slots).
+    const STORAGE_SQL =
+      "insert into storage.buckets (id, name, public) values ('user_files','user_files', false) on conflict (id) do nothing;\n" +
+      "create policy user_files_select on storage.objects for select to authenticated using (bucket_id = 'user_files' and (storage.foldername(name))[1] = auth.uid()::text);\n";
+    (db.tables.build_files as Array<Record<string, unknown>>).push({
+      id: 'f-storage',
+      build_id: build.id,
+      path: 'supabase/migrations/0002_storage.sql',
+      content: STORAGE_SQL,
+      source: 'generated',
+      bytes: STORAGE_SQL.length,
+      created_at: new Date().toISOString(),
+    });
+
+    vi.mocked(loadConnectionWithToken).mockResolvedValue(
+      fakeSupabaseConnection(),
+    );
+    const { provider, spies } = makeFakeProvider({ kind: 'managed' });
+    vi.mocked(selectDbProvider).mockReturnValue(provider);
+
+    const res = await provisionPOST(
+      makePost({ authorized: true, provider_kind: 'managed' }),
+      { params: { id: PROJECT_ID } },
+    );
+    expect(res.status).toBe(200);
+
+    // The applied SQL carries BOTH migrations — 0001 schema AND the storage
+    // bucket + owner-scoped storage RLS. Without this, the deployed app's
+    // uploads would have no bucket and no isolation.
+    const appliedSql = spies.applyMigration.mock.calls[0]?.[1] as string;
+    expect(appliedSql).toContain(MIGRATION_SQL.trim());
+    expect(appliedSql).toContain('insert into storage.buckets');
+    expect(appliedSql).toContain('user_files_select');
+    expect(appliedSql).toContain(
+      '(storage.foldername(name))[1] = auth.uid()::text',
+    );
+  });
+
+  // ========================================================================
   // HAPPY PATH (byo) — user-supplied env accepted, migration applied,
   // same secret hygiene.
   // ========================================================================

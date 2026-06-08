@@ -24,6 +24,7 @@ import {
   SoftwareBuildPlanSchema,
   type SoftwareBuildPlan,
 } from '../planner/schema';
+import type { PreDeployIsolationResult } from '../sandbox/storage-isolation';
 
 // ---------------------------------------------------------------------------
 // Shared chain loader — returns the project + software build + spec +
@@ -458,6 +459,41 @@ export async function logSoftwareDeployFailed(
       build_id: build.id,
       error: message,
       log_tail: logTail ? logTail.slice(-2000) : null,
+    },
+  });
+}
+
+// The LIVE pre-deploy cross-user isolation probe outcome. SURFACED, not just
+// logged — the deploy route also returns it on the response. The detail blob
+// carries ONLY outcomes / static reasons / leak directions — never bytes,
+// keys, paths, or user ids (the probe's observations contain no secrets).
+export async function logSoftwareIsolationProbe(
+  supabase: ForgeSupabase,
+  build: Build,
+  result: PreDeployIsolationResult,
+): Promise<void> {
+  await supabase.from('audit_log').insert({
+    project_id: build.project_id,
+    action: result.blocking
+      ? 'software.isolation_probe_blocked'
+      : 'software.isolation_probe_passed',
+    actor: 'engine.software.isolation',
+    detail: {
+      build_id: build.id,
+      outcome: result.outcome,
+      summary: result.summary,
+      storage: {
+        outcome: result.storage.outcome,
+        vacuous: result.storage.vacuous,
+        reason: result.storage.reason,
+        leak: result.storage.leak,
+      },
+      admin: {
+        outcome: result.admin.outcome,
+        vacuous: result.admin.vacuous,
+        reason: result.admin.reason,
+        leak: result.admin.leak,
+      },
     },
   });
 }

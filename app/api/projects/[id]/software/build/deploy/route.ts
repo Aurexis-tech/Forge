@@ -58,12 +58,15 @@ import {
   logSoftwareDeployAuthorized,
   logSoftwareDeployFailed,
   logSoftwareDeployed,
+  logSoftwareIsolationProbe,
   markSoftwareBuildDeployFailed,
   markSoftwareBuildDeployed,
   markSoftwareBuildDeploying,
   markSoftwareDeploymentFailed,
   markSoftwareDeploymentReady,
 } from '@/lib/engine/software/integrations/persistence';
+import { runPreDeployIsolationProbes } from '@/lib/engine/software/sandbox/storage-isolation-live';
+import type { PreDeployIsolationResult } from '@/lib/engine/software/sandbox/storage-isolation';
 import { auditEngineError } from '@/lib/engine/observability/audit-engine-error';
 import { getServerSupabase } from '@/lib/supabase';
 
@@ -184,7 +187,7 @@ export async function POST(req: Request, { params }: RouteContext) {
   if ('error' in guard) {
     return NextResponse.json({ error: guard.error }, { status: guard.status });
   }
-  const { build, files } = guard;
+  const { build, files, spec } = guard;
 
   // --- Concurrency --------------------------------------------------------
   const conc = await checkSoftwareDeployConcurrency(supabase, build.id);
@@ -208,6 +211,57 @@ export async function POST(req: Request, { params }: RouteContext) {
       {
         error:
           'provisioned database has not had its migration applied; re-run provisioning before deploying',
+      },
+      { status: 409 },
+    );
+  }
+
+  // --- PRE-DEPLOY CROSS-USER ISOLATION PROBE (live, fail-closed) ----------
+  //
+  // The §13 RUNTIME proof the hermetic sandbox structurally cannot give: as
+  // user A vs user B, attempt to read across owners against the LIVE Supabase
+  // Storage (and, for an admin-dashboard app, the admin-role boundary). The
+  // pglite sandbox proves DB-row isolation; this proves FILE-storage isolation
+  // (B can't download A's bytes) + the admin-role crossing, which only exist
+  // against real services. A proven leak OR an unprovable result BLOCKS the
+  // deploy — better to refuse than to ship a tenant data leak. The result is
+  // SURFACED (response + audit), not just logged. The runner uses the
+  // service-role ONLY to set up/tear down ephemeral probe users; the
+  // cross-user reads run under real per-user RLS.
+  let isolation: PreDeployIsolationResult;
+  try {
+    isolation = await runPreDeployIsolationProbes({
+      supabaseUrl: dbRow.supabase_url,
+      anonKey: dbRow.anon_key,
+      serviceRoleKey: decryptServiceRole(dbRow),
+      spec,
+    });
+  } catch (err) {
+    // The runner is built not to throw; treat any escape as fail-closed.
+    const message = err instanceof Error ? err.message : String(err);
+    isolation = {
+      outcome: 'errored',
+      blocking: true,
+      storage: { probe: 'storage', outcome: 'errored', vacuous: false, reason: 'probe runner threw', leak: null },
+      admin: { probe: 'admin', outcome: 'errored', vacuous: false, reason: 'probe runner threw', leak: null },
+      summary: 'pre-deploy isolation errored (probe runner threw: ' + message + ')',
+    };
+  }
+  await logSoftwareIsolationProbe(supabase, build, isolation);
+  if (isolation.blocking) {
+    await auditEngineError({
+      supabase,
+      projectId,
+      action: 'software.isolation_probe_blocked',
+      err: new Error(isolation.summary),
+      actor: 'engine.software.isolation',
+      extra: { build_id: build.id, isolation_outcome: isolation.outcome },
+    });
+    return NextResponse.json(
+      {
+        error:
+          'pre-deploy cross-user isolation probe did not pass — deploy blocked (fail-closed)',
+        isolation: surfaceIsolation(isolation),
       },
       { status: 409 },
     );
@@ -363,6 +417,8 @@ export async function POST(req: Request, { params }: RouteContext) {
       deployment_id: result.deployment_id,
       env_public_keys: publicKeys,
       env_server_only_keys: serverOnlyKeys,
+      // SURFACED — the pre-deploy isolation proof the user can see.
+      isolation: surfaceIsolation(isolation),
     });
   } catch (err) {
     const isV = err instanceof VercelDeployError;
@@ -395,4 +451,26 @@ function parseTeamId(scopes: string | null): string | null {
   if (!scopes) return null;
   if (scopes.startsWith('team:')) return scopes.slice('team:'.length);
   return null;
+}
+
+// Client-safe view of the isolation probe result. Every field is already
+// non-secret (outcomes, static reasons, leak directions), but curate
+// explicitly so a future field can't accidentally surface a value.
+function surfaceIsolation(r: PreDeployIsolationResult) {
+  return {
+    outcome: r.outcome,
+    summary: r.summary,
+    storage: {
+      outcome: r.storage.outcome,
+      vacuous: r.storage.vacuous,
+      reason: r.storage.reason,
+      leak: r.storage.leak,
+    },
+    admin: {
+      outcome: r.admin.outcome,
+      vacuous: r.admin.vacuous,
+      reason: r.admin.reason,
+      leak: r.admin.leak,
+    },
+  };
 }
