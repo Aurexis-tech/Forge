@@ -14,6 +14,28 @@
 //   block. Providers must tolerate being destroyed before create() or
 //   after create() failed.
 
+/**
+ * Outbound-network policy for a sandbox. When set, the provider MUST enforce it
+ * at the INFRASTRUCTURE layer (host firewall), never inside the guest —
+ * untrusted code in the sandbox must have no knob to disable it.
+ *
+ * `allowInternetAccess:false` denies ALL egress; `allowOut` then carves
+ * exceptions (allow rules take precedence over the block). `allowInternetAccess:
+ * false` with no `allowOut` = fully air-gapped.
+ *
+ * SECURITY: the allowlist is itself an exfiltration channel — every host you
+ * permit is a host hostile code can phone out to, and domain rules implicitly
+ * open DNS. Keep it MINIMAL. Prove egress is blocked from the CONFIG you set
+ * here, NEVER from in-sandbox telemetry (the firewall can make a blocked TCP
+ * connect look successful inside the guest).
+ */
+export interface SandboxEgress {
+  /** false = deny all outbound, then allow only `allowOut`. */
+  readonly allowInternetAccess: boolean;
+  /** CIDR / IP / hostname allowlist (hostnames support `*.example.com`). */
+  readonly allowOut?: ReadonlyArray<string>;
+}
+
 export interface SandboxCreateOptions {
   // Free-form labels for observability. Never used for code paths.
   metadata?: Record<string, string>;
@@ -25,6 +47,18 @@ export interface SandboxCreateOptions {
   // before calling create(), so a missing key reads as NeedsKeyError up
   // top rather than a sandbox-level surprise.
   auth?: { apiKey: string };
+  // Pinned sandbox template id. CPU/mem caps are baked into a template at BUILD
+  // time (e2b sets resource limits at template-build, not at create), so a
+  // hardened template is selected by id here. Undefined = the provider's
+  // default base template.
+  template?: string;
+  // Outbound-network policy. Undefined = provider DEFAULT (today: internet ON —
+  // the existing builder relies on this for `npm install` / `next build`, and
+  // its smoke runs with mock tools so it makes no real calls). UNTRUSTED /
+  // Sentinel runs MUST set this to deny-all + a minimal allowlist (see
+  // lib/engine/sandbox/egress.ts). Left unset here, so this change adds the
+  // capability without restricting the existing builder.
+  egress?: SandboxEgress;
 }
 
 export interface SandboxFile {
