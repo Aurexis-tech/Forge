@@ -25,6 +25,7 @@ import type {
   Spec,
 } from '@/lib/types';
 import { SoftwareSpecSchema, type SoftwareSpec } from '../spec';
+import { STORAGE_MIGRATION_PATH } from '../codegen/file-upload';
 import {
   SoftwareBuildPlanSchema,
   type SoftwareBuildPlan,
@@ -147,12 +148,35 @@ export async function loadTestedSoftwareBuildForProvision(
     };
   }
 
+  // Pull the STORAGE migration (0002_storage.sql) too. The codegen emits it
+  // ONLY when the spec has file-upload slots (it carries the PRIVATE bucket +
+  // the owner-scoped storage.objects RLS). It is a SEPARATE file so the
+  // DB-only pglite isolation driver never trips on it — but it MUST be applied
+  // to the live project, or the bucket + storage RLS never exist and the
+  // deployed app's uploads have no isolation. Apply 0001 THEN 0002 (verbatim,
+  // no edits) so storage isolation is real on the provisioned DB; the live
+  // pre-deploy storage probe then proves it before the app goes live.
+  const { data: storageFiles } = await supabase
+    .from('build_files')
+    .select('*')
+    .eq('build_id', build.id)
+    .eq('path', STORAGE_MIGRATION_PATH)
+    .limit(1);
+  const storageFile = (storageFiles?.[0] as BuildFile | undefined) ?? null;
+  const storageSql = storageFile?.content?.trim() ? storageFile.content : '';
+
+  const migrationSql = storageSql
+    ? migrationFile.content +
+      '\n\n-- ===== 0002_storage.sql (PRIVATE bucket + owner-scoped storage RLS) =====\n\n' +
+      storageSql
+    : migrationFile.content;
+
   return {
     project: project as Project,
     build,
     spec: parsedSpec.data,
     plan: parsedPlan.data,
-    migrationSql: migrationFile.content,
+    migrationSql,
   };
 }
 

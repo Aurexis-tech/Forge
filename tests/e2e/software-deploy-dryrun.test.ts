@@ -116,6 +116,14 @@ vi.mock('@/lib/supabase', async (importOriginal) => {
   };
 });
 
+// The LIVE pre-deploy isolation probe hits real Supabase Auth + Storage — mock
+// it (like deployBuildToVercel) so the dry-run stays hermetic. Default is a
+// passing (vacuous) verdict; blocking tests override per-case. The PURE verdict
+// logic is unit-tested separately in software-storage-isolation.test.ts.
+vi.mock('@/lib/engine/software/sandbox/storage-isolation-live', () => ({
+  runPreDeployIsolationProbes: vi.fn(),
+}));
+
 import { pushBuildToGitHub } from '@/lib/engine/integrations/github';
 import {
   deployBuildToVercel,
@@ -125,6 +133,33 @@ import {
   loadConnectionWithToken,
   type ConnectionPublic,
 } from '@/lib/engine/integrations/connections';
+import { runPreDeployIsolationProbes } from '@/lib/engine/software/sandbox/storage-isolation-live';
+import {
+  combineIsolationProbes,
+  evaluateAdminProbe,
+  evaluateStorageProbe,
+  type PreDeployIsolationResult,
+} from '@/lib/engine/software/sandbox/storage-isolation';
+
+// --- Isolation-probe verdict builders (use the REAL pure verdict logic) -----
+function passingIsolation(): PreDeployIsolationResult {
+  return combineIsolationProbes(
+    evaluateStorageProbe({ ran: false, setupError: null, aReadOwn: 'denied', bReadA: 'denied', aReadB: 'denied' }),
+    evaluateAdminProbe({ ran: false, setupError: null, nonAdminReadOther: 'denied', spoofedReadOther: 'denied', adminReadOther: 'allowed' }),
+  );
+}
+function storageLeakIsolation(): PreDeployIsolationResult {
+  return combineIsolationProbes(
+    evaluateStorageProbe({ ran: true, setupError: null, aReadOwn: 'allowed', bReadA: 'allowed', aReadB: 'denied' }),
+    evaluateAdminProbe({ ran: false, setupError: null, nonAdminReadOther: 'denied', spoofedReadOther: 'denied', adminReadOther: 'allowed' }),
+  );
+}
+function erroredIsolation(): PreDeployIsolationResult {
+  return combineIsolationProbes(
+    evaluateStorageProbe({ ran: true, setupError: 'bucket missing (0002 not applied)', aReadOwn: 'error', bReadA: 'error', aReadB: 'error' }),
+    evaluateAdminProbe({ ran: false, setupError: null, nonAdminReadOther: 'denied', spoofedReadOther: 'denied', adminReadOther: 'allowed' }),
+  );
+}
 
 function fakeGithubConn(): { row: ConnectionPublic; token: string } {
   return {
@@ -346,6 +381,9 @@ beforeEach(() => {
   vi.mocked(pushBuildToGitHub).mockReset();
   vi.mocked(deployBuildToVercel).mockReset();
   vi.mocked(loadConnectionWithToken).mockReset();
+  vi.mocked(runPreDeployIsolationProbes).mockReset();
+  // Default: the isolation probe passes (vacuous). Blocking tests override.
+  vi.mocked(runPreDeployIsolationProbes).mockResolvedValue(passingIsolation());
   dbHolder.current = null;
 });
 
@@ -427,6 +465,7 @@ describe('Phase 3-5b SOFTWARE push + deploy hermetic dry-run', () => {
       url: string;
       env_public_keys: string[];
       env_server_only_keys: string[];
+      isolation?: { outcome: string; summary: string };
     };
     expect(deployBody.status).toBe('deployed');
     expect(deployBody.kind).toBe('software');
@@ -520,9 +559,96 @@ describe('Phase 3-5b SOFTWARE push + deploy hermetic dry-run', () => {
     expect(vi.mocked(pushBuildToGitHub)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(deployBuildToVercel)).toHaveBeenCalledTimes(1);
 
+    // === PRE-DEPLOY ISOLATION PROBE — ran, passed, SURFACED on the response
+    // + audited. (Vacuous here: the canned spec has no uploads / admin.) ===
+    expect(vi.mocked(runPreDeployIsolationProbes)).toHaveBeenCalledTimes(1);
+    expect(deployBody.isolation?.outcome).toBe('passed');
+    expect(
+      audit.some((r) => r.action === 'software.isolation_probe_passed'),
+    ).toBe(true);
+
     // STOP — software runtime activation is NOT a Phase 3-5b entry point.
     expect((db.tables.agent_runtimes ?? []).length).toBe(0);
     expect((db.tables.runs ?? []).length).toBe(0);
+  });
+
+  // ========================================================================
+  // PRE-DEPLOY ISOLATION GATE — fail-closed. A storage leak OR an unprovable
+  // probe BLOCKS the deploy: Vercel is never called, the build stays 'pushed',
+  // and the result is surfaced on the response + audit.
+  // ========================================================================
+  it('a STORAGE LEAK blocks the deploy (409); deployBuildToVercel never called; build stays pushed', async () => {
+    const db = createInMemoryDb();
+    dbHolder.current = db;
+    const { build } = seedSoftware(db, 'pushed', {
+      repoUrl: 'https://github.com/forge-tester/team-expenses',
+    });
+    vi.mocked(loadConnectionWithToken).mockResolvedValue(fakeVercelConn());
+    vi.mocked(runPreDeployIsolationProbes).mockResolvedValue(storageLeakIsolation());
+
+    const res = await softwareDeployPOST(makePost({ authorized: true }), {
+      params: { id: PROJECT_ID },
+    });
+    expect(res.status).toBe(409);
+    const body = JSON.parse(await res.text()) as {
+      error: string;
+      isolation?: { outcome: string; storage: { leak: { direction: string } | null } };
+    };
+    expect(body.error).toMatch(/isolation probe/i);
+    expect(body.isolation?.outcome).toBe('failed');
+    expect(body.isolation?.storage.leak).toEqual({ direction: 'b_read_a' });
+
+    // Vercel NEVER touched; build NOT advanced.
+    expect(vi.mocked(deployBuildToVercel)).toHaveBeenCalledTimes(0);
+    const after = (db.tables.builds ?? []).find((r) => r.id === build.id) as
+      | Build
+      | undefined;
+    expect(after?.status).toBe('pushed');
+    expect(after?.deploy_url).toBeNull();
+
+    // Surfaced, not just logged — a blocked audit row exists.
+    const audit = (db.tables.audit_log ?? []) as Array<Record<string, unknown>>;
+    expect(
+      audit.some((r) => r.action === 'software.isolation_probe_blocked'),
+    ).toBe(true);
+  });
+
+  it('an UNPROVABLE probe (errored — e.g. bucket missing) blocks the deploy fail-closed', async () => {
+    const db = createInMemoryDb();
+    dbHolder.current = db;
+    const { build } = seedSoftware(db, 'pushed', {
+      repoUrl: 'https://github.com/forge-tester/team-expenses',
+    });
+    vi.mocked(loadConnectionWithToken).mockResolvedValue(fakeVercelConn());
+    vi.mocked(runPreDeployIsolationProbes).mockResolvedValue(erroredIsolation());
+
+    const res = await softwareDeployPOST(makePost({ authorized: true }), {
+      params: { id: PROJECT_ID },
+    });
+    expect(res.status).toBe(409);
+    const body = JSON.parse(await res.text()) as { isolation?: { outcome: string } };
+    expect(body.isolation?.outcome).toBe('errored');
+    expect(vi.mocked(deployBuildToVercel)).toHaveBeenCalledTimes(0);
+    const after = (db.tables.builds ?? []).find((r) => r.id === build.id) as
+      | Build
+      | undefined;
+    expect(after?.status).toBe('pushed');
+  });
+
+  it('if the probe runner THROWS, the deploy fails closed (blocked, not deployed)', async () => {
+    const db = createInMemoryDb();
+    dbHolder.current = db;
+    seedSoftware(db, 'pushed', {
+      repoUrl: 'https://github.com/forge-tester/team-expenses',
+    });
+    vi.mocked(loadConnectionWithToken).mockResolvedValue(fakeVercelConn());
+    vi.mocked(runPreDeployIsolationProbes).mockRejectedValue(new Error('kaboom'));
+
+    const res = await softwareDeployPOST(makePost({ authorized: true }), {
+      params: { id: PROJECT_ID },
+    });
+    expect(res.status).toBe(409);
+    expect(vi.mocked(deployBuildToVercel)).toHaveBeenCalledTimes(0);
   });
 
   // ========================================================================
