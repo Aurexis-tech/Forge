@@ -54,13 +54,21 @@ export function buildE2bCreateOptions(
     e2bOpts.template = opts.template;
   }
   if (opts.egress) {
-    // allowInternetAccess:false == denyOut ['0.0.0.0/0'] (block all). allowOut
-    // rules take PRECEDENCE over the block, so the allowlist punches through.
-    // With allowInternetAccess:false and no allowOut, the sandbox is fully
-    // air-gapped (no exfil channel at all).
-    e2bOpts.allowInternetAccess = opts.egress.allowInternetAccess;
-    if (opts.egress.allowOut && opts.egress.allowOut.length > 0) {
-      e2bOpts.network = { allowOut: [...opts.egress.allowOut] };
+    const allowOut = opts.egress.allowOut;
+    if (allowOut && allowOut.length > 0) {
+      // Deny ALL outbound, then allow only the allowlist (allow rules take
+      // precedence over deny). e2b's API REQUIRES `denyOut` to include
+      // ALL_TRAFFIC ('0.0.0.0/0') whenever `allowOut` is set — `allowInternet
+      // Access:false` alone is REJECTED at create() with a 400 ("must include
+      // ALL_TRAFFIC in deny out"). Verified against the LIVE e2b API, not just
+      // the type docs.
+      e2bOpts.network = {
+        denyOut: ({ allTraffic }) => [allTraffic],
+        allowOut: [...allowOut],
+      };
+    } else if (!opts.egress.allowInternetAccess) {
+      // Full air-gap — no allowlist, so block all outbound with the coarse flag.
+      e2bOpts.allowInternetAccess = false;
     }
   }
   return e2bOpts;

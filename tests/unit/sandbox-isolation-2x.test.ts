@@ -14,16 +14,28 @@ import {
 } from '@/lib/engine/sandbox/egress';
 
 describe('e2b create-options translation — egress proven from CONFIG', () => {
-  it('UNTRUSTED_EGRESS -> allowInternetAccess:false + network.allowOut = [registry, supabase]', () => {
+  it('UNTRUSTED_EGRESS -> network.denyOut(ALL_TRAFFIC) + allowOut allowlist (LIVE-validated idiom)', () => {
     const o = buildE2bCreateOptions(
       { egress: UNTRUSTED_EGRESS, auth: { apiKey: 'k' } },
       'k',
     );
-    // Deny all, then carve the minimal allowlist (allow rules take precedence).
-    expect(o.allowInternetAccess).toBe(false);
-    expect(o.network).toEqual({
-      allowOut: [NPM_REGISTRY_HOST, SUPABASE_WILDCARD_HOST],
-    });
+    // e2b REQUIRES denyOut to include ALL_TRAFFIC when allowOut is set — a bare
+    // allowInternetAccess:false + allowOut is rejected at create() with a 400.
+    // So the deny-all lives in network.denyOut, NOT the top-level flag (this was
+    // caught only by the live smoke; the type-doc idiom was wrong).
+    expect(o.allowInternetAccess).toBeUndefined();
+    expect(o.network?.allowOut).toEqual([
+      NPM_REGISTRY_HOST,
+      SUPABASE_WILDCARD_HOST,
+    ]);
+    const deny = o.network?.denyOut;
+    expect(typeof deny).toBe('function');
+    expect(
+      (deny as (c: { allTraffic: string; rules: Map<string, unknown> }) => string[])({
+        allTraffic: '0.0.0.0/0',
+        rules: new Map(),
+      }),
+    ).toEqual(['0.0.0.0/0']);
   });
 
   it('the allowlist is MINIMAL — exactly the npm registry + Supabase, nothing else', () => {
